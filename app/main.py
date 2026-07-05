@@ -32,11 +32,14 @@ def db() -> sqlite3.Connection:
 
 class LinkIn(BaseModel):
     mode: str = "month"
-    theme: str = "obsidian"
+    color: str = "#f2f2f2"
+    bg: str = "black"
     shape: str = "circle"
     title: str = ""
     footer: bool = True
     birth: str = "2000-01-01"
+    start: str = ""
+    end: str = ""
 
 
 app = FastAPI(title="vita")

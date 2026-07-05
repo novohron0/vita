@@ -1,21 +1,38 @@
 // Превью и скачивание рендерятся на канвасе 1:1 с серверным рендером (app/render.py).
 const W = 1179, H = 2556, GAP = 0.45, LIFE_YEARS = 90;
 
-const THEMES = {
-  obsidian: { bg: '#000000', filled: '#f2f2f2', empty: '#262626', text: '#8e8e8e' },
-  ivory:    { bg: '#f4f1e8', filled: '#141414', empty: '#d9d4c7', text: '#8a857a' },
-  ocean:    { bg: '#020407', filled: '#4aa8ff', empty: '#0e2338', text: '#57748f' },
-  forest:   { bg: '#020604', filled: '#3ddc84', empty: '#0e2c1b', text: '#5e8a71' },
-  sunset:   { bg: '#070302', filled: '#ff8c42', empty: '#33190c', text: '#8f6a55' },
+const COLORS = ['#f2f2f2', '#3da9fc', '#34c759', '#ff9500', '#c7c7cc', '#a78bfa', '#ff6b81', '#ff5fa2'];
+const BGS = { black: '#000000', white: '#f4f1ec', navy: '#0d1526' };
+const TITLES = { month: 'ТВОЙ МЕСЯЦ', year: 'ТВОЙ ГОД', life: 'ТВОЯ ЖИЗНЬ', goal: 'ДО ЦЕЛИ' };
+const STAT_LABELS = {
+  month: ['дней позади', 'впереди'],
+  year: ['дней позади', 'впереди'],
+  life: ['недель прожито', 'впереди'],
+  goal: ['дней прошло', 'осталось'],
 };
-const COLS = { month: 6, year: 14, life: 52 };
-const TITLES = { month: 'ТВОЙ МЕСЯЦ', year: 'ТВОЙ ГОД', life: 'ТВОЯ ЖИЗНЬ' };
 
-const state = { mode: 'month', theme: 'obsidian', shape: 'circle', title: TITLES.month, footer: true, birth: '2000-01-01' };
+const todayISO = new Date().toISOString().slice(0, 10);
+const plus30 = new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10);
+
+const state = {
+  mode: 'month', color: '#f2f2f2', bg: 'black', shape: 'circle',
+  title: TITLES.month, footer: true, birth: '2000-01-01',
+  start: todayISO, end: plus30,
+};
 let customTitle = false;
 
 const $ = id => document.getElementById(id);
 const cv = $('cv'), ctx = cv.getContext('2d');
+
+const rgb = hx => [1, 3, 5].map(i => parseInt(hx.slice(i, i + 2), 16));
+const blend = (fg, bg, a) => {
+  const f = rgb(fg), b = rgb(bg);
+  return `rgb(${f.map((v, i) => Math.round(v * a + b[i] * (1 - a))).join(',')})`;
+};
+const lum = hx => {
+  const [r, g, b] = rgb(hx);
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+};
 
 function counts() {
   const now = new Date();
@@ -28,10 +45,21 @@ function counts() {
     const total = new Date(now.getFullYear(), 1, 29).getDate() === 29 ? 366 : 365;
     return { total, done: doy - 1, current: doy - 1 };
   }
+  if (state.mode === 'goal') {
+    const start = new Date(state.start), end = new Date(state.end);
+    const total = Math.max(1, Math.round((end - start) / 864e5));
+    const done = Math.min(Math.max(Math.floor((now - start) / 864e5), 0), total);
+    return { total, done, current: done < total ? done : null };
+  }
   const total = LIFE_YEARS * 52;
   const birth = new Date(state.birth || '2000-01-01');
   const done = Math.min(total, Math.max(0, Math.floor((now - birth) / (7 * 864e5))));
   return { total, done, current: done < total ? done : null };
+}
+
+function gridCols(total) {
+  if (state.mode === 'goal') return total <= 42 ? 6 : total <= 120 ? 10 : 14;
+  return { month: 6, year: 14, life: 52 }[state.mode];
 }
 
 function weeksWord(n) {
@@ -44,6 +72,7 @@ function weeksWord(n) {
 function footerText(total, done) {
   const fmt = n => n.toLocaleString('ru-RU');
   if (state.mode === 'life') return `${fmt(done)} ${weeksWord(done)} прожито · ${fmt(total - done)} впереди`;
+  if (state.mode === 'goal') return `прошло ${done} · осталось ${total - done}`;
   return `день ${Math.min(done + 1, total)} из ${total}`;
 }
 
@@ -54,16 +83,35 @@ function dotPath(x, y, d) {
   else ctx.arc(x + d / 2, y + d / 2, d / 2, 0, Math.PI * 2);
 }
 
-function draw() {
-  const t = THEMES[state.theme];
-  const { total, done, current } = counts();
-  const cols = COLS[state.mode], rows = Math.ceil(total / cols);
+function drawWatermark(cx, cy, fill) {
+  const r = 5, dx = 17, dy = 15;
+  ctx.font = '400 32px -apple-system, system-ui, sans-serif';
+  const textW = ctx.measureText('vita').width;
+  const dotsW = 2 * dx + 2 * r;
+  const x = cx - (dotsW + 14 + textW) / 2;
+  ctx.fillStyle = fill;
+  for (let i = 0; i < 3; i++) for (let j = 0; j < 2; j++) {
+    ctx.beginPath();
+    ctx.arc(x + r + i * dx, cy + (j - 0.5) * dy, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.textAlign = 'left';
+  ctx.fillText('vita', x + dotsW + 14, cy);
+  ctx.textAlign = 'center';
+}
 
-  ctx.fillStyle = t.bg;
+function draw() {
+  const bgHex = BGS[state.bg];
+  const empty = blend(state.color, bgHex, 0.18);
+  const text = state.bg === 'white' ? '#8a857a' : '#8e8e8e';
+  const { total, done, current } = counts();
+  const cols = gridCols(total), rows = Math.ceil(total / cols);
+
+  ctx.fillStyle = bgHex;
   ctx.fillRect(0, 0, W, H);
 
   let dot = Math.min(W * 0.72 / (cols + (cols - 1) * GAP), H * 0.50 / (rows + (rows - 1) * GAP));
-  if (state.mode === 'month') dot = Math.min(dot, 110);
+  if (cols <= 10) dot = Math.min(dot, 110);
   const gap = dot * GAP;
   const gridW = cols * dot + (cols - 1) * gap, gridH = rows * dot + (rows - 1) * gap;
   const x0 = (W - gridW) / 2, y0 = H * 0.55 - gridH / 2;
@@ -72,14 +120,14 @@ function draw() {
     const x = x0 + (i % cols) * (dot + gap), y = y0 + Math.floor(i / cols) * (dot + gap);
     dotPath(x, y, dot);
     if (i < done) {
-      ctx.fillStyle = t.filled;
+      ctx.fillStyle = state.color;
       ctx.fill();
     } else if (current !== null && i === current) {
-      ctx.strokeStyle = t.filled;
+      ctx.strokeStyle = state.color;
       ctx.lineWidth = Math.max(2, dot * 0.09);
       ctx.stroke();
     } else {
-      ctx.fillStyle = t.empty;
+      ctx.fillStyle = empty;
       ctx.fill();
     }
   }
@@ -87,15 +135,23 @@ function draw() {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   if (state.title.trim()) {
-    ctx.fillStyle = t.filled;
+    ctx.fillStyle = state.color;
     ctx.font = '600 64px -apple-system, "SF Pro Display", system-ui, sans-serif';
-    ctx.fillText(state.title.trim().toUpperCase(), W / 2, y0 - 170);
+    ctx.fillText(state.title.trim().toUpperCase(), W / 2, y0 - 190);
   }
+  drawWatermark(W / 2, y0 - 110, text);
   if (state.footer) {
-    ctx.fillStyle = t.text;
+    ctx.fillStyle = text;
     ctx.font = '400 40px -apple-system, system-ui, sans-serif';
     ctx.fillText(footerText(total, done), W / 2, y0 + gridH + 130);
   }
+
+  const fmt = n => n.toLocaleString('ru-RU');
+  const [l1, l2] = STAT_LABELS[state.mode];
+  $('stat1').textContent = fmt(done);
+  $('stat1l').textContent = l1;
+  $('stat2').textContent = fmt(total - done);
+  $('stat2l').textContent = l2;
 }
 
 // --- контролы ---
@@ -114,6 +170,7 @@ function bindSeg(id, apply) {
 bindSeg('mode', v => {
   state.mode = v;
   $('birthRow').hidden = v !== 'life';
+  $('goalRow').hidden = v !== 'goal';
   if (!customTitle) {
     state.title = TITLES[v];
     $('title').value = state.title;
@@ -121,21 +178,37 @@ bindSeg('mode', v => {
 });
 bindSeg('shape', v => { state.shape = v; });
 bindSeg('footer', v => { state.footer = v === '1'; });
+bindSeg('bg', v => {
+  state.bg = v;
+  refreshSwatches();
+});
 
-const swatches = $('themes');
-for (const name of Object.keys(THEMES)) {
+// цвета, сливающиеся с фоном, отключаем; если выбранный стал недоступен — берём первый доступный
+const usable = c => Math.abs(lum(c) - lum(BGS[state.bg])) >= 0.25;
+
+function refreshSwatches() {
+  const btns = [...$('colors').querySelectorAll('.swatch')];
+  for (const b of btns) b.disabled = !usable(b.dataset.v);
+  if (!usable(state.color)) {
+    const first = btns.find(b => !b.disabled);
+    state.color = first.dataset.v;
+    btns.forEach(b => b.classList.toggle('on', b === first));
+  }
+}
+
+const swatches = $('colors');
+for (const c of COLORS) {
   const b = document.createElement('button');
-  b.className = 'swatch' + (name === state.theme ? ' on' : '');
-  b.style.background = THEMES[name].filled;
-  b.dataset.v = name;
-  b.title = name;
+  b.className = 'swatch' + (c === state.color ? ' on' : '');
+  b.style.background = c;
+  b.dataset.v = c;
   swatches.appendChild(b);
 }
 swatches.addEventListener('click', e => {
   const btn = e.target.closest('.swatch');
-  if (!btn) return;
+  if (!btn || btn.disabled) return;
   swatches.querySelectorAll('.swatch').forEach(s => s.classList.toggle('on', s === btn));
-  state.theme = btn.dataset.v;
+  state.color = btn.dataset.v;
   draw();
 });
 
@@ -150,6 +223,11 @@ $('birth').addEventListener('change', e => {
   state.birth = e.target.value || '2000-01-01';
   draw();
 });
+
+$('goalStart').value = state.start;
+$('goalEnd').value = state.end;
+$('goalStart').addEventListener('change', e => { state.start = e.target.value || todayISO; draw(); });
+$('goalEnd').addEventListener('change', e => { state.end = e.target.value || plus30; draw(); });
 
 $('dl').addEventListener('click', () => {
   cv.toBlob(blob => {
@@ -169,8 +247,9 @@ $('mklink').addEventListener('click', async () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        mode: state.mode, theme: state.theme, shape: state.shape,
+        mode: state.mode, color: state.color, bg: state.bg, shape: state.shape,
         title: state.title, footer: state.footer, birth: state.birth,
+        start: state.start, end: state.end,
       }),
     });
     const { url } = await res.json();
