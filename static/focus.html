@@ -3,8 +3,78 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vita — фокус · YouTube</title>
-<link rel="stylesheet" href="/static/style.css?v=6">
+<title>Vita Focus — тише в голове</title>
+<meta property="og:title" content="Vita Focus — тише в голове">
+<meta property="og:description" content="Убираем Shorts, ленты, рекомендации и комментарии. Фокус в Safari — iPhone, iPad, Mac.">
+<meta property="og:image" content="https://vitadots.ru/static/img/og.png">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="/static/style.css?v=7">
+<style>
+  .fpage { width: 100%; max-width: 460px; }
+  .fhero { text-align: center; padding: 8px 0 20px; }
+  .fhero h1 { font-size: clamp(30px, 9vw, 40px); font-weight: 800; letter-spacing: -1px; }
+  .fhero p { color: #8a8a90; font-size: 15px; margin-top: 8px; line-height: 1.5; }
+  .fcta { display: inline-flex; align-items: center; gap: 8px; margin-top: 16px; padding: 11px 18px;
+    border: 1px solid #2a2a2e; border-radius: 13px; background: #141416; color: #c8c8cc;
+    font-weight: 600; font-size: 14px; }
+  .fcta small { color: #5c5c66; font-weight: 500; }
+
+  /* ——— панель ——— */
+  .panel { position: relative; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.09);
+    border-radius: 20px; padding: 16px 14px; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    box-shadow: 0 24px 60px rgba(0,0,0,0.5); overflow: hidden; }
+  .panel-head { display: flex; align-items: center; justify-content: space-between; padding: 2px 4px 14px; }
+  .score b { font-size: 34px; font-weight: 800; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
+  .score b i { font-style: normal; font-size: 16px; color: #5c5c66; font-weight: 700; }
+  .score span { display: block; font-size: 10.5px; letter-spacing: 0.8px; text-transform: uppercase; color: #8a8a90; margin-top: 2px; }
+  .badge { font-size: 11px; color: #8a8a90; border: 1px solid #2a2a2e; border-radius: 99px; padding: 5px 10px; }
+
+  .tabs { position: relative; display: flex; gap: 2px; padding: 5px; margin-bottom: 12px;
+    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); border-radius: 14px; overflow-x: auto; scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab-ind { position: absolute; top: 5px; bottom: 5px; left: 5px; width: 0; border-radius: 10px;
+    background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.14);
+    transition: transform .42s cubic-bezier(.34,1.56,.64,1), width .42s cubic-bezier(.34,1.56,.64,1); }
+  .tab { position: relative; z-index: 1; flex: 0 0 auto; display: flex; align-items: center; gap: 6px;
+    padding: 8px 13px; border: 0; background: none; color: #8a8a90; cursor: pointer; font: inherit;
+    font-size: 13px; font-weight: 600; white-space: nowrap; border-radius: 10px; transition: color .3s, transform .15s; }
+  .tab:active { transform: scale(0.94); }
+  .tab.on { color: #f4f4f7; }
+  .tab .cnt { min-width: 16px; height: 16px; padding: 0 4px; border-radius: 99px; font-size: 10px; font-weight: 700;
+    display: grid; place-items: center; background: rgba(255,255,255,0.08); color: #8a8a90; transition: all .3s cubic-bezier(.34,1.56,.64,1); }
+  .tab.has .cnt { background: #34c759; color: #04220f; box-shadow: 0 0 10px rgba(52,199,89,0.5); }
+
+  .row { display: flex; align-items: center; gap: 12px; padding: 12px 13px; margin-bottom: 7px;
+    background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px;
+    cursor: pointer; position: relative; overflow: hidden;
+    transition: transform .18s, border-color .3s, background .3s; animation: rise .5s cubic-bezier(.22,1,.36,1) backwards; }
+  .row::before { content:""; position:absolute; left:0; top:50%; transform:translateY(-50%); width:3px; height:0;
+    border-radius:99px; background:#34c759; box-shadow:0 0 10px #34c759; transition:height .35s cubic-bezier(.34,1.56,.64,1); }
+  .row:hover { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.16); transform: translateX(2px); }
+  .row:active { transform: scale(0.985); }
+  .row.on { border-color: rgba(52,199,89,0.3); background: rgba(52,199,89,0.06); }
+  .row.on::before { height: 22px; }
+  @keyframes rise { from { opacity: 0; transform: translateY(9px); } }
+  .row-txt b { display: block; font-size: 13.5px; font-weight: 600; }
+  .row-txt span { display: block; font-size: 11.5px; color: #8a8a90; margin-top: 1px; }
+  .row-txt { flex: 1; min-width: 0; }
+
+  .sw { flex: 0 0 auto; width: 46px; height: 28px; border-radius: 99px; position: relative;
+    background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.1); transition: background .35s, border-color .35s; }
+  .sw::after { content:""; position:absolute; top:2px; left:2px; width:22px; height:22px; border-radius:50%;
+    background:#fff; box-shadow:0 2px 5px rgba(0,0,0,0.4); transition:transform .42s cubic-bezier(.34,1.56,.64,1); }
+  .row.on .sw { background:#34c759; border-color:transparent; box-shadow:0 0 16px rgba(52,199,89,0.45); }
+  .row.on .sw::after { transform: translateX(18px); }
+  .ripple { position:absolute; border-radius:50%; background:rgba(255,255,255,0.18); transform:scale(0); animation:rip .6s cubic-bezier(.22,1,.36,1); pointer-events:none; }
+  @keyframes rip { to { transform: scale(3.2); opacity: 0; } }
+
+  .fnote { text-align: center; color: #6e6e73; font-size: 12px; line-height: 1.5; margin: 16px 4px 0; }
+  .fnote b { color: #c8c8cc; }
+  .fdiv { display: flex; align-items: center; gap: 12px; color: #5c5c66; font-size: 12px; margin: 30px 0 16px; }
+  .fdiv::before, .fdiv::after { content:""; flex:1; height:1px; background: rgba(255,255,255,0.08); }
+  .player-h { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+</style>
 </head>
 <body>
 <header>
@@ -17,23 +87,36 @@
   </nav>
 </header>
 
-
-<main>
-  <div class="field">
-    <span class="goal-title" style="text-transform:none">Фокус · YouTube</span>
+<main class="fpage">
+  <div class="fhero">
+    <h1>Vita&nbsp;Focus</h1>
+    <p>Убираем Shorts, ленты, рекомендации и комментарии.<br>Остаётся только то, ради чего ты зашёл.</p>
+    <div class="fcta">🍎 Скоро в App&nbsp;Store <small>· Safari · iPhone · iPad · Mac</small></div>
   </div>
-  <p class="hint" style="margin-top:-8px">Вставь ссылку — видео откроется без ленты, шортсов, комментов и автоплея. Только то, ради чего пришёл.</p>
 
+  <div class="panel">
+    <div class="panel-head">
+      <div class="score"><b id="count">0</b><b><i>／<span id="total">0</span></i></b><span>блоков активно</span></div>
+      <div class="badge">превью</div>
+    </div>
+    <nav class="tabs" id="tabs"><span class="tab-ind" id="tabInd"></span></nav>
+    <div id="rows"></div>
+  </div>
+
+  <p class="fnote">Это интерактивное превью панели. <b>Реальную блокировку</b> на youtube.com включает
+    расширение Safari (готовим к App&nbsp;Store) — сайт по правилам браузера не может трогать чужой домен.</p>
+
+  <div class="fdiv">а посмотреть чисто можно уже сейчас</div>
+
+  <div class="player-h">Фокус-плеер YouTube</div>
+  <p class="hint" style="margin-top:-2px">Вставь ссылку — видео откроется без ленты, шортсов, комментов и автоплея.</p>
   <div class="field">
-    <label for="url">Ссылка на видео</label>
     <div class="focus-row">
       <input id="url" placeholder="youtube.com/watch?v=… или youtu.be/…" autocomplete="off" inputmode="url">
       <button class="primary" id="watch">Смотреть</button>
     </div>
   </div>
-
   <p class="err" id="err"></p>
-
   <div id="stage" hidden style="display:flex;flex-direction:column;gap:14px">
     <div class="yt-wrap"><iframe id="frame" allow="accelerometer; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen></iframe></div>
     <button class="btn secondary" id="another">← Другое видео</button>
@@ -43,37 +126,104 @@
 </main>
 
 <script>
-const $ = id => document.getElementById(id);
-const err = $('err'), stage = $('stage'), frame = $('frame'), urlIn = $('url');
+// ——— реестр (та же логика, что в расширении) ———
+const SITES = [
+  { id:'youtube', name:'YouTube', glyph:'▶', toggles:[
+    { id:'yt_shorts', label:'Shorts', desc:'Полки, вкладка и раздел' },
+    { id:'yt_recs', label:'Рекомендации на главной', desc:'Вся сетка видео' },
+    { id:'yt_comments', label:'Комментарии', desc:'Блок под видео' },
+    { id:'yt_related', label:'Похожие видео', desc:'Колонка справа' },
+    { id:'yt_autoplay', label:'Автовоспроизведение', desc:'Автоплей следующего' } ]},
+  { id:'instagram', name:'Instagram', glyph:'◎', toggles:[
+    { id:'ig_reels', label:'Reels', desc:'Вкладка и лента' },
+    { id:'ig_explore', label:'Интересное', desc:'Explore-лента' },
+    { id:'ig_stories', label:'Истории', desc:'Карусель сверху' } ]},
+  { id:'x', name:'X', glyph:'𝕏', toggles:[
+    { id:'x_foryou', label:'«Для вас»', desc:'Алгоритмическая лента' },
+    { id:'x_trends', label:'Тренды', desc:'«Что происходит»' },
+    { id:'x_follow', label:'Кого читать', desc:'Рекомендации' } ]},
+  { id:'reddit', name:'Reddit', glyph:'◔', toggles:[
+    { id:'rd_feed', label:'Домашняя лента', desc:'Бесконечный скролл' },
+    { id:'rd_popular', label:'Popular / All', desc:'Ссылки в меню' } ]},
+];
 
-// вытащить id видео из любой формы ссылки YouTube
-function videoId(raw) {
-  const s = (raw || '').trim();
-  if (/^[\w-]{11}$/.test(s)) return s;               // уже голый id
-  let m;
-  if ((m = s.match(/[?&]v=([\w-]{11})/))) return m[1];
-  if ((m = s.match(/youtu\.be\/([\w-]{11})/))) return m[1];
-  if ((m = s.match(/\/(embed|shorts|live|v)\/([\w-]{11})/))) return m[2];
-  return null;
+const $ = s => document.querySelector(s);
+const el = (t,c) => { const e=document.createElement(t); if(c) e.className=c; return e; };
+let S = JSON.parse(localStorage.vfocus || '{}');
+let active = SITES.some(s=>s.id===S.active) ? S.active : 'youtube';
+const settings = S.settings || {};
+
+const all = () => SITES.flatMap(s=>s.toggles);
+const siteN = s => s.toggles.filter(t=>settings[t.id]).length;
+const save = () => localStorage.vfocus = JSON.stringify({ settings, active });
+
+function buildTabs() {
+  const tabs = $('#tabs');
+  SITES.forEach(s => {
+    const b = el('button','tab'); b.dataset.id=s.id;
+    b.innerHTML = `<span>${s.glyph}</span>${s.name}<span class="cnt">0</span>`;
+    b.addEventListener('click', ()=>select(s.id));
+    tabs.appendChild(b);
+  });
+}
+function moveInd() {
+  const a = $(`.tab[data-id="${active}"]`); if(!a) return;
+  const ind = $('#tabInd'); ind.style.width=a.offsetWidth+'px'; ind.style.transform=`translateX(${a.offsetLeft-5}px)`;
+  a.scrollIntoView({inline:'nearest',block:'nearest',behavior:'smooth'});
+}
+function refreshTabs() {
+  SITES.forEach(s => {
+    const b = $(`.tab[data-id="${s.id}"]`); if(!b) return;
+    const n = siteN(s); b.querySelector('.cnt').textContent=n;
+    b.classList.toggle('has', n>0); b.classList.toggle('on', s.id===active);
+  });
+}
+function renderRows() {
+  const s = SITES.find(x=>x.id===active);
+  const box = $('#rows'); box.innerHTML=''; let i=0;
+  s.toggles.forEach(t => {
+    const r = el('div','row'); r.style.animationDelay=(i++*0.04)+'s';
+    if(settings[t.id]) r.classList.add('on');
+    r.innerHTML = `<div class="row-txt"><b>${t.label}</b><span>${t.desc}</span></div><div class="sw"></div>`;
+    r.addEventListener('click', e=>toggle(t.id,r,e));
+    box.appendChild(r);
+  });
+}
+function toggle(id,row,e) {
+  const on = !settings[id]; settings[id]=on; row.classList.toggle('on',on);
+  if(on){ const rp=el('span','ripple'); const b=row.getBoundingClientRect(); const sz=Math.max(b.width,b.height);
+    rp.style.width=rp.style.height=sz+'px'; rp.style.left=(e.clientX-b.left-sz/2)+'px'; rp.style.top=(e.clientY-b.top-sz/2)+'px';
+    row.appendChild(rp); setTimeout(()=>rp.remove(),600); }
+  save(); updateScore(); refreshTabs();
+}
+function select(id){ active=id; save(); renderRows(); refreshTabs(); requestAnimationFrame(moveInd); }
+
+let anim;
+function updateScore() {
+  const total=all().length, act=all().filter(t=>settings[t.id]).length;
+  $('#total').textContent=total;
+  const node=$('#count'), from=+node.textContent||0, t0=performance.now();
+  cancelAnimationFrame(anim);
+  const tick=now=>{ const k=Math.min(1,(now-t0)/420); node.textContent=Math.round(from+(act-from)*(1-Math.pow(1-k,3))); if(k<1) anim=requestAnimationFrame(tick); };
+  anim=requestAnimationFrame(tick);
 }
 
-function watch() {
-  const id = videoId(urlIn.value);
-  if (!id) { err.textContent = 'Не похоже на ссылку YouTube — вставь адрес видео'; return; }
-  err.textContent = '';
-  frame.src = `https://www.youtube-nocookie.com/embed/${id}?rel=0&modestbranding=1&iv_load_policy=3&playsinline=1`;
-  stage.hidden = false;
-  stage.scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
+buildTabs(); renderRows(); updateScore(); refreshTabs();
+requestAnimationFrame(()=>requestAnimationFrame(moveInd));
+window.addEventListener('resize', moveInd);
 
-$('watch').addEventListener('click', watch);
-urlIn.addEventListener('keydown', e => { if (e.key === 'Enter') watch(); });
-$('another').addEventListener('click', () => {
-  frame.src = 'about:blank';
-  stage.hidden = true;
-  urlIn.value = '';
-  urlIn.focus();
-});
+// ——— рабочий ютуб-плеер ———
+const err=$('#err'), stage=$('#stage'), frame=$('#frame'), urlIn=$('#url');
+function videoId(raw){ const s=(raw||'').trim(); if(/^[\w-]{11}$/.test(s)) return s; let m;
+  if((m=s.match(/[?&]v=([\w-]{11})/))) return m[1];
+  if((m=s.match(/youtu\.be\/([\w-]{11})/))) return m[1];
+  if((m=s.match(/\/(embed|shorts|live|v)\/([\w-]{11})/))) return m[2]; return null; }
+function watch(){ const id=videoId(urlIn.value); if(!id){ err.textContent='Не похоже на ссылку YouTube — вставь адрес видео'; return; }
+  err.textContent=''; frame.src=`https://www.youtube-nocookie.com/embed/${id}?rel=0&modestbranding=1&iv_load_policy=3&playsinline=1`;
+  stage.hidden=false; stage.scrollIntoView({behavior:'smooth',block:'start'}); }
+$('#watch').addEventListener('click', watch);
+urlIn.addEventListener('keydown', e=>{ if(e.key==='Enter') watch(); });
+$('#another').addEventListener('click', ()=>{ frame.src='about:blank'; stage.hidden=true; urlIn.value=''; urlIn.focus(); });
 </script>
 </body>
 </html>

@@ -3,7 +3,9 @@
 [hidden] { display: none !important; }
 
 body {
-  background: #000;
+  background:
+    linear-gradient(rgba(0,0,0,0.55), rgba(0,0,0,0.72)),
+    #000 url("/static/img/bg.png") center / cover fixed no-repeat;
   color: #f2f2f2;
   font-family: -apple-system, "SF Pro Text", system-ui, sans-serif;
   display: flex;
