@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vita — твоя жизнь в точках</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <span class="logo">⠿ vita</span>
+  <span class="tag">твоя жизнь в точках</span>
+</header>
+
+<main>
+  <div class="seg wide" id="mode">
+    <button data-v="month" class="on">Месяц</button>
+    <button data-v="year">Год</button>
+    <button data-v="life">Жизнь</button>
+  </div>
+
+  <div class="phone"><canvas id="cv" width="1179" height="2556"></canvas></div>
+
+  <section class="controls">
+    <label class="field">Заголовок
+      <input id="title" maxlength="24" value="ТВОЙ МЕСЯЦ" autocomplete="off">
+    </label>
+
+    <label class="field" id="birthRow" hidden>Дата рождения
+      <input type="date" id="birth" value="2000-01-01">
+    </label>
+
+    <div class="field">Тема
+      <div class="swatches" id="themes"></div>
+    </div>
+
+    <div class="field">Точки
+      <div class="seg" id="shape">
+        <button data-v="circle" class="on">Круг</button>
+        <button data-v="square">Квадрат</button>
+        <button data-v="rounded">Мягкие</button>
+      </div>
+    </div>
+
+    <div class="field">Цифры внизу
+      <div class="seg" id="footer">
+        <button data-v="1" class="on">Да</button>
+        <button data-v="0">Нет</button>
+      </div>
+    </div>
+
+    <button class="primary" id="dl">Скачать обои</button>
+    <button class="secondary" id="mklink">Автообои — получить ссылку</button>
+
+    <div class="linkbox" id="linkBox" hidden>
+      <code id="linkUrl"></code>
+      <button id="copyBtn">Скопировать</button>
+      <p class="hint">Картинка по этой ссылке сама обновляется каждый день —
+        новая точка закрашивается автоматически. Скоро здесь будет кнопка
+        «Установить на айфон» с готовым ярлыком.</p>
+    </div>
+  </section>
+</main>
+
+<footer class="page-foot">разовая покупка · навсегда</footer>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
