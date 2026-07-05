@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vita — челлендж</title>
+<link rel="stylesheet" href="/static/style.css?v=6">
+</head>
+<body>
+<header>
+  <a class="logo" href="/">⠿ vita</a>
+  <nav class="nav">
+    <a href="/">Обои</a>
+    <a href="/goals" class="on">Цели</a>
+    <a href="/focus">Фокус</a>
+  </nav>
+</header>
+
+<main id="app"><p class="page-foot">Загружаю челлендж…</p></main>
+
+<script>
+const CODE = "{{CODE}}";
+const app = document.getElementById('app');
+let G = null, done = new Set();
+
+const parseLocal = s => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); };
+const isoLocal = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate()+n); return x; };
+const today = () => { const t = new Date(); t.setHours(0,0,0,0); return t; };
+
+function bestStreak() {
+  const start = parseLocal(G.start);
+  let best = 0, run = 0;
+  for (let i = 0; i < G.days; i++) {
+    if (done.has(isoLocal(addDays(start, i)))) { run++; best = Math.max(best, run); } else run = 0;
+  }
+  return best;
+}
+function currentStreak() {
+  const t = today();
+  let cur = done.has(isoLocal(t)) ? t : addDays(t, -1);
+  let n = 0;
+  while (done.has(isoLocal(cur))) { n++; cur = addDays(cur, -1); }
+  return n;
+}
+
+function render() {
+  const start = parseLocal(G.start);
+  const doneCount = done.size;
+  const pct = Math.round(doneCount / G.days * 100);
+  const cols = G.days <= 42 ? 6 : G.days <= 120 ? 10 : 14;
+
+  const cells = [];
+  for (let i = 0; i < G.days; i++) {
+    const key = isoLocal(addDays(start, i));
+    const bg = done.has(key) ? G.color : 'rgba(255,255,255,.09)';
+    cells.push(`<span class="gt-dot" style="background:${bg};aspect-ratio:1"></span>`);
+  }
+
+  app.innerHTML = `
+    <div class="field" style="gap:4px">
+      <span class="goal-title" style="text-transform:none">${escapeHtml(G.title)}</span>
+      <span style="color:#ff9f45;font-size:14px;font-weight:600;text-transform:none">🔥 ${G.peers} ${G.peers === 1 ? 'человек делает' : 'делают'} эту цель</span>
+    </div>
+    <div class="stats">
+      <div><b>${doneCount}<span style="font-size:.5em;color:#6e6e73">/${G.days}</span></b><span>выполнено</span></div>
+      <div><b>${currentStreak()}🔥</b><span>стрик</span></div>
+      <div><b>${bestStreak()}</b><span>рекорд</span></div>
+    </div>
+    <div class="gbar"><i style="width:${pct}%;background:${G.color}"></i></div>
+    <div class="gt-grid" style="grid-template-columns:repeat(${cols},1fr)">${cells.join('')}</div>
+    <button class="primary" id="join">🔥 Начать эту цель у себя →</button>
+    <a class="btn secondary" href="/goals" style="margin-top:4px">Создать свою цель</a>
+    <p class="page-foot" style="text-align:center">Присоединяйся — веди свой прогресс и не разрывай цепочку</p>`;
+
+  document.getElementById('join').addEventListener('click', join);
+}
+
+async function join() {
+  const btn = document.getElementById('join');
+  btn.disabled = true; btn.textContent = 'Создаю…';
+  try {
+    const r = await fetch(`/api/goal/${CODE}/join`, { method: 'POST' });
+    const j = await r.json();
+    if (r.ok) { location.href = j.url; return; }
+  } catch {}
+  btn.disabled = false; btn.textContent = '🔥 Начать эту цель у себя →';
+}
+
+function escapeHtml(s) { const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; }
+
+(async () => {
+  try {
+    const r = await fetch(`/api/goal/${CODE}`);
+    if (!r.ok) { app.innerHTML = '<p class="err">Челлендж не найден</p>'; return; }
+    G = await r.json();
+    done = new Set(G.done);
+    render();
+  } catch {
+    app.innerHTML = '<p class="err">Нет связи с сервером — обнови страницу</p>';
+  }
+})();
+</script>
+</body>
+</html>

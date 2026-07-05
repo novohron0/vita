@@ -131,7 +131,7 @@ async function join() {
 }
 
 async function shareLink() {
-  const url = location.origin + `/g/${CODE}`;
+  const url = location.origin + `/c/${CODE}`;  // публичный read-only вид, чужой не тронет твои дни
   const btn = document.getElementById('share');
   try {
     if (navigator.share) { await navigator.share({ title: G.title, url }); return; }

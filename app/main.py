@@ -357,6 +357,15 @@ def goal_page(code: str):
     )
 
 
+@app.get("/c/{code}")
+def challenge_page(code: str):
+    g, _ = _goal_row(code)
+    if g is None:
+        raise HTTPException(404, "Нет такой цели")
+    html = (ROOT / "static" / "challenge.html").read_text(encoding="utf-8")
+    return HTMLResponse(html.replace("{{CODE}}", code), headers={"Cache-Control": "no-cache"})
+
+
 @app.get("/api/goal/{code}")
 def goal_state(code: str):
     g, done = _goal_row(code)
