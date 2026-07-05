@@ -78,6 +78,7 @@ function render() {
     <div class="field" style="gap:4px">
       <span class="goal-title" style="text-transform:none">${escapeHtml(G.title)}</span>
       <span class="goal-reward">${G.reward ? '🎁 Награда за цель: <b>' + escapeHtml(G.reward) + '</b>' : ''}</span>
+      ${G.peers >= 2 ? `<span style="color:#ff9f45;font-size:13px;font-weight:600;text-transform:none">🔥 ${G.peers} уже с этой целью</span>` : ''}
     </div>
     <div class="stats">
       <div><b>${doneCount}<span style="font-size:.5em;color:#6e6e73">/${G.days}</span></b><span>выполнено</span></div>
@@ -91,6 +92,7 @@ function render() {
       <button class="primary" id="share">Поделиться</button>
       <a class="btn secondary" href="/goals">Новая цель</a>
     </div>
+    <button class="btn secondary" id="join" style="margin-top:10px">🔥 Начать эту цель у себя →</button>
     <details class="screen">
       <summary>📲 Поставить цель на экран айфона</summary>
       <div class="screen-body">
@@ -110,6 +112,18 @@ function render() {
     toggle(c.dataset.key);
   });
   document.getElementById('share').addEventListener('click', shareLink);
+  document.getElementById('join').addEventListener('click', join);
+}
+
+async function join() {
+  const btn = document.getElementById('join');
+  btn.disabled = true; btn.textContent = 'Создаю…';
+  try {
+    const r = await fetch(`/api/goal/${CODE}/join`, { method: 'POST' });
+    const j = await r.json();
+    if (r.ok) { location.href = j.url; return; }
+  } catch {}
+  btn.disabled = false; btn.textContent = '🔥 Начать эту цель у себя →';
 }
 
 async function shareLink() {

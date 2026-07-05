@@ -75,6 +75,10 @@ def db() -> sqlite3.Connection:
         "CREATE TABLE IF NOT EXISTS checkins("
         "code TEXT NOT NULL, day TEXT NOT NULL, PRIMARY KEY(code, day))"
     )
+    try:
+        conn.execute("ALTER TABLE goals ADD COLUMN root TEXT")  # корень челленджа (NULL = сам себе корень)
+    except sqlite3.OperationalError:
+        pass
     return conn
 
 
@@ -323,13 +327,22 @@ def _parse_start(value: str) -> str:
 def _goal_row(code: str):
     with db() as conn:
         g = conn.execute(
-            "SELECT code, title, days, start, reward, color, bg, shape FROM goals WHERE code = ?",
+            "SELECT code, title, days, start, reward, color, bg, shape, root FROM goals WHERE code = ?",
             (code,),
         ).fetchone()
         done = [r[0] for r in conn.execute(
             "SELECT day FROM checkins WHERE code = ? ORDER BY day", (code,)
         )]
     return g, done
+
+
+def _peers(code: str, root: str | None) -> int:
+    """Сколько всего людей делают этот челлендж (включая корень и все копии)."""
+    key = root or code
+    with db() as conn:
+        return conn.execute(
+            "SELECT COUNT(*) FROM goals WHERE COALESCE(root, code) = ?", (key,)
+        ).fetchone()[0]
 
 
 @app.get("/g/{code}")
@@ -349,10 +362,11 @@ def goal_state(code: str):
     g, done = _goal_row(code)
     if g is None:
         raise HTTPException(404, "Нет такой цели")
-    _, title, days, start, reward, color, bg, shape = g
+    _, title, days, start, reward, color, bg, shape, root = g
     return {
         "title": title, "days": days, "start": start, "reward": reward,
         "color": color, "bg": bg, "shape": shape, "done": done,
+        "peers": _peers(code, root),
     }
 
 
@@ -383,12 +397,31 @@ def goal_toggle(code: str, ci: CheckIn):
     return {"done": True}
 
 
+@app.post("/api/goal/{code}/join")
+def goal_join(code: str, request: Request):
+    with db() as conn:
+        row = conn.execute(
+            "SELECT title, days, color, bg, shape, root FROM goals WHERE code = ?", (code,)
+        ).fetchone()
+        if row is None:
+            raise HTTPException(404, "Нет такой цели")
+        title, days, color, bg, shape, root = row
+        newcode = _gen_code()
+        conn.execute(
+            "INSERT INTO goals(code, title, days, start, reward, color, bg, shape, root) "
+            "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (newcode, title, days, date.today().isoformat(), "", color, bg, shape, root or code),
+        )
+    base = str(request.base_url).rstrip("/")
+    return {"code": newcode, "url": f"{base}/g/{newcode}"}
+
+
 @app.get("/gw/{code}.png")
 def goal_wallpaper(code: str):
     g, done = _goal_row(code)
     if g is None:
         raise HTTPException(404, "Нет такой цели")
-    _, title, days, start, reward, color, bg, shape = g
+    _, title, days, start, reward, color, bg, shape, _root = g
     img = render_goal(
         {"title": title, "days": days, "start": start,
          "color": color, "bg": bg, "shape": shape},
