@@ -1,0 +1,16 @@
+services:
+  vita:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # полночь = новая точка; часовой пояс критичен
+      TZ: ${TZ:-Europe/Moscow}
+    ports:
+      # слушаем только докер-мост: c интернета не достать, а Caddy из соседнего
+      # ~/yoy ходит сюда как host.docker.internal:8788
+      - "172.17.0.1:8788:8787"
+    volumes:
+      # база ссылок и идей переживает пересборки
+      - ./data:/app/data

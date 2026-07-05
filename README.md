@@ -34,6 +34,22 @@ python3 -m venv .venv
 4. Вставить ссылку в `SHORTCUT_ICLOUD_URL` в `app/main.py` — кнопка
    «Добавить ярлык» на странице установки оживёт сама.
 
+## Деплой (сервер с yoy: один Caddy на двоих)
+
+```bash
+# на сервере, рядом с ~/yoy
+git clone https://github.com/novohron0/vita.git ~/vita
+cd ~/vita
+cp .env.example .env && nano .env   # ADMIN_TOKEN=случайная строка
+docker compose up -d --build        # поднимет vita на 127.0.0.1:8788
+
+# yoy-Caddy уже знает про Vita (блок {$VITA_DOMAIN} в Caddyfile):
+cd ~/yoy && git pull && docker compose up -d
+# домен по умолчанию: vita.138-124-51-182.sslip.io (менять — VITA_DOMAIN в ~/yoy/.env)
+```
+
+Обновление: `cd ~/vita && git pull && docker compose up -d --build`.
+
 ## Воронка (цель продукта)
 
 Reels → сайт → настройка 2–3 мин → оплата СБП → установка по инструкции ≤3 мин.

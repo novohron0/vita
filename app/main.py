@@ -1,6 +1,7 @@
 """Vita — сайт-генератор обоев «жизнь в точках» + персональные ссылки для автообоев."""
 import io
 import json
+import os
 import secrets
 import sqlite3
 from datetime import date, timedelta
@@ -22,11 +23,11 @@ CODE_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"
 
 # Ссылка iCloud на мастер-ярлык «Vita» (создаётся один раз на iPhone владельца,
 # см. README). Пока пусто — на странице установки кнопка в состоянии «готовится».
-SHORTCUT_ICLOUD_URL = ""
+SHORTCUT_ICLOUD_URL = os.environ.get("SHORTCUT_ICLOUD_URL", "")
 
 TRIAL_DAYS = 7
-# токен админки: /admin?token=... — не публиковать; при деплое вынесем в env
-ADMIN_TOKEN = "vt-h7m3q9r2"
+# токен админки: /admin?token=... — боевой задаётся в .env, не публиковать
+ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN", "vt-dev")
 
 
 def db() -> sqlite3.Connection:
