@@ -111,7 +111,7 @@ def _watermark(draw: ImageDraw.ImageDraw, cx: float, cy: float, fill) -> None:
     draw.text((x + dots_w + 14, cy), label, font=font, fill=fill, anchor="lm")
 
 
-def render_wallpaper(cfg: dict, today: date | None = None) -> Image.Image:
+def render_wallpaper(cfg: dict, today: date | None = None, expired: bool = False) -> Image.Image:
     today = today or date.today()
     mode = cfg.get("mode") if cfg.get("mode") in MODES else "month"
     bg = BGS.get(cfg.get("bg", ""), BGS["black"])
@@ -162,7 +162,11 @@ def render_wallpaper(cfg: dict, today: date | None = None) -> Image.Image:
         draw.text((W / 2, y0 - 190), title, font=_font(64), fill=color, anchor="mm")
     if cfg.get("brand", True):
         _watermark(draw, W / 2, y0 - 110, text)
-    if cfg.get("footer", True):
+    if expired:
+        # доступ кончился: прогресс заморожен (today = дата окончания), обои сами напоминают
+        draw.text((W / 2, y0 + grid_h + 130), "точки замерли · продли на vita",
+                  font=_font(40), fill=color, anchor="mm")
+    elif cfg.get("footer", True):
         draw.text(
             (W / 2, y0 + grid_h + 130),
             _footer(mode, total, done),

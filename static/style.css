@@ -89,7 +89,7 @@ main { width: 100%; max-width: 430px; display: flex; flex-direction: column; gap
   letter-spacing: 1.2px;
   text-transform: uppercase;
 }
-.field input {
+.field input, .field textarea {
   background: #141416;
   border: 1px solid #232326;
   border-radius: 14px;
@@ -101,8 +101,9 @@ main { width: 100%; max-width: 430px; display: flex; flex-direction: column; gap
   padding: 13px 16px;
   outline: none;
   color-scheme: dark;
+  resize: none;
 }
-.field input:focus { border-color: #4a4a50; }
+.field input:focus, .field textarea:focus { border-color: #4a4a50; }
 
 .swatches { display: flex; gap: 14px; }
 .swatch {
@@ -159,6 +160,76 @@ main { width: 100%; max-width: 430px; display: flex; flex-direction: column; gap
 .hint { color: #6e6e73; font-size: 13px; line-height: 1.5; }
 
 .page-foot { color: #48484d; font-size: 13px; padding-top: 36px; }
+
+/* --- модал предложки --- */
+.modal-back {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 10;
+}
+.modal {
+  position: relative;
+  width: 100%;
+  max-width: 430px;
+  max-height: 92vh;
+  overflow-y: auto;
+  background: #101012;
+  border: 1px solid #232326;
+  border-radius: 24px 24px 0 0;
+  padding: 26px 20px 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.modal h2 { font-size: 22px; font-weight: 800; }
+.modal .sub { color: #9a9aa0; font-size: 14px; line-height: 1.5; }
+.modal-x {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  background: #232326;
+  border: 0;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  color: #9a9aa0;
+  font-size: 14px;
+  cursor: pointer;
+}
+.err { color: #ff6b81; font-size: 14px; }
+.or {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #6e6e73;
+  font-size: 13px;
+}
+.or::before, .or::after { content: ""; flex: 1; height: 1px; background: #232326; }
+.tariffs { display: flex; gap: 10px; }
+.tariff {
+  flex: 1;
+  background: #141416;
+  border: 1px solid #232326;
+  border-radius: 14px;
+  color: #f2f2f2;
+  font: inherit;
+  padding: 13px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  opacity: 0.55;
+}
+.tariff b { font-size: 17px; }
+.tariff span { color: #8e8e8e; font-size: 12px; }
+
+.access { color: #7fd4a3; font-size: 14px; font-weight: 600; }
+.access:empty { display: none; }
 
 /* --- страница установки --- */
 .setup { align-items: center; text-align: center; }

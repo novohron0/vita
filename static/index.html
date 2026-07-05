@@ -72,20 +72,39 @@
       </div>
     </div>
 
-    <button class="primary" id="dl">Скачать обои</button>
-    <button class="secondary" id="mklink">Автообои — получить ссылку</button>
-
-    <div class="linkbox" id="linkBox" hidden>
-      <code id="linkUrl"></code>
-      <button id="copyBtn">Скопировать</button>
-      <a class="btn primary" id="setupBtn" href="#">Продолжить установку →</a>
-      <p class="hint">Картинка по этой ссылке сама обновляется каждый день —
-        новая точка закрашивается автоматически.</p>
-    </div>
+    <button class="primary" id="getBtn">Получить автообои</button>
+    <button class="secondary" id="dl">Скачать картинку бесплатно</button>
   </section>
 </main>
 
-<footer class="page-foot">разовая покупка · навсегда</footer>
+<div class="modal-back" id="modal" hidden>
+  <div class="modal">
+    <button class="modal-x" id="modalClose">✕</button>
+    <h2>Живые обои Vita</h2>
+    <p class="sub">Каждую ночь точка закрашивается сама. Первым 100 —
+      неделя бесплатно за идею.</p>
+
+    <label class="field">Твоя идея — что добавить в Vita?
+      <textarea id="idea" rows="3" maxlength="500"
+        placeholder="Например: режим «до дня рождения» или точки-сердечки"></textarea>
+    </label>
+    <label class="field">Телега или инста — туда придёт вторая неделя
+      <input id="contact" maxlength="64" placeholder="@nickname" autocomplete="off">
+    </label>
+    <button class="primary" id="ideaSend">Получить неделю бесплатно</button>
+    <p class="err" id="ideaErr" hidden></p>
+
+    <div class="or">или сразу оплатить</div>
+    <div class="tariffs">
+      <button class="tariff" disabled><b>119 ₽</b><span>месяц</span></button>
+      <button class="tariff" disabled><b>269 ₽</b><span>3 месяца</span></button>
+      <button class="tariff" disabled><b>590 ₽</b><span>год</span></button>
+    </div>
+    <p class="hint">Оплата по СБП подключается — пока неделя за идею.</p>
+  </div>
+</div>
+
+<footer class="page-foot">от 49 ₽/мес · без автосписаний</footer>
 
 <script src="/static/app.js"></script>
 </body>

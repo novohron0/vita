@@ -239,9 +239,14 @@ $('dl').addEventListener('click', () => {
   });
 });
 
-$('mklink').addEventListener('click', async () => {
-  const btn = $('mklink');
+$('getBtn').addEventListener('click', () => { $('modal').hidden = false; });
+$('modalClose').addEventListener('click', () => { $('modal').hidden = true; });
+$('modal').addEventListener('click', e => { if (e.target === $('modal')) $('modal').hidden = true; });
+
+$('ideaSend').addEventListener('click', async () => {
+  const btn = $('ideaSend'), err = $('ideaErr');
   btn.disabled = true;
+  err.hidden = true;
   try {
     const res = await fetch('/api/link', {
       method: 'POST',
@@ -250,13 +255,19 @@ $('mklink').addEventListener('click', async () => {
         mode: state.mode, color: state.color, bg: state.bg, shape: state.shape,
         title: state.title, footer: state.footer, birth: state.birth,
         start: state.start, end: state.end,
+        idea: $('idea').value, contact: $('contact').value,
       }),
     });
-    const { url, setup } = await res.json();
-    $('linkUrl').textContent = url;
-    $('setupBtn').href = setup;
-    $('linkBox').hidden = false;
-    $('copyBtn').onclick = () => navigator.clipboard.writeText(url);
+    const data = await res.json();
+    if (!res.ok) {
+      err.textContent = data.detail || 'Что-то пошло не так — попробуй ещё раз';
+      err.hidden = false;
+      return;
+    }
+    window.location.href = data.setup;
+  } catch {
+    err.textContent = 'Нет связи с сервером — попробуй ещё раз';
+    err.hidden = false;
   } finally {
     btn.disabled = false;
   }
