@@ -23,6 +23,7 @@ header {
 }
 .logo { font-weight: 700; font-size: 20px; letter-spacing: 0.5px; }
 .tag { color: #6e6e73; font-size: 13px; }
+.navlink { color: #34c759; font-size: 13px; font-weight: 600; text-decoration: none; white-space: nowrap; }
 
 main { width: 100%; max-width: 430px; display: flex; flex-direction: column; gap: 20px; }
 

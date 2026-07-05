@@ -111,6 +111,83 @@ def _watermark(draw: ImageDraw.ImageDraw, cx: float, cy: float, fill) -> None:
     draw.text((x + dots_w + 14, cy), label, font=font, fill=fill, anchor="lm")
 
 
+def _streak(done_idx: set[int], upto: int) -> int:
+    """Текущая цепочка: подряд идущие выполненные дни, кончающиеся сегодня (или вчера — льгота)."""
+    if upto < 0:
+        return 0
+    end = upto if upto in done_idx else upto - 1
+    n = 0
+    while end >= 0 and end in done_idx:
+        n += 1
+        end -= 1
+    return n
+
+
+def render_goal(goal: dict, done: set[str], today: date | None = None) -> Image.Image:
+    """Обои-виджет цели: сетка дней (клетка = день), закрашены выполненные, сегодня — кольцо."""
+    today = today or date.today()
+    bg = BGS.get(goal.get("bg", ""), BGS["black"])
+    color = goal.get("color") or "#34c759"
+    if not re.fullmatch(r"#[0-9a-fA-F]{6}", color):
+        color = "#34c759"
+    shape = goal.get("shape", "circle")
+    title = (goal.get("title") or "").strip().upper()
+    start = _parse_date(goal.get("start"), today)
+    days = max(1, min(int(goal.get("days", 30)), 365))
+
+    # индексы выполненных дней относительно старта + индекс «сегодня»
+    done_idx = {(_parse_date(d, start) - start).days for d in done}
+    done_idx = {i for i in done_idx if 0 <= i < days}
+    today_idx = (today - start).days
+    done_count = len(done_idx)
+    streak = _streak(done_idx, min(today_idx, days - 1))
+
+    empty = _blend(color, bg, 0.18)
+    text = "#8a857a" if bg == BGS["white"] else "#8e8e8e"
+
+    cols = _cols("goal", days)
+    rows = math.ceil(days / cols)
+
+    img = Image.new("RGB", (W, H), bg)
+    draw = ImageDraw.Draw(img)
+
+    max_w, max_h = W * 0.72, H * 0.50
+    dot = min(max_w / (cols + (cols - 1) * GAP), max_h / (rows + (rows - 1) * GAP))
+    if cols <= 10:
+        dot = min(dot, 110)
+    gap = dot * GAP
+    grid_w = cols * dot + (cols - 1) * gap
+    grid_h = rows * dot + (rows - 1) * gap
+    x0 = (W - grid_w) / 2
+    y0 = H * 0.55 - grid_h / 2
+
+    for i in range(days):
+        r, c = divmod(i, cols)
+        x, y = x0 + c * (dot + gap), y0 + r * (dot + gap)
+        box = (x, y, x + dot, y + dot)
+        if i in done_idx:
+            fill, outline, width = color, None, 0
+        elif i == today_idx:
+            fill, outline, width = None, color, max(2, round(dot * 0.09))
+        else:
+            fill, outline, width = empty, None, 0
+        if shape == "square":
+            draw.rectangle(box, fill=fill, outline=outline, width=width)
+        elif shape == "rounded":
+            draw.rounded_rectangle(box, radius=dot * 0.3, fill=fill, outline=outline, width=width)
+        else:
+            draw.ellipse(box, fill=fill, outline=outline, width=width)
+
+    if title:
+        draw.text((W / 2, y0 - 190), title, font=_font(64), fill=color, anchor="mm")
+    _watermark(draw, W / 2, y0 - 110, text)
+    footer = f"{done_count} из {days} · стрик {streak}"
+    if done_count >= days:
+        footer = "цель закрыта · 🎁 забирай награду"
+    draw.text((W / 2, y0 + grid_h + 130), footer, font=_font(40), fill=text, anchor="mm")
+    return img
+
+
 def render_wallpaper(cfg: dict, today: date | None = None, expired: bool = False) -> Image.Image:
     today = today or date.today()
     mode = cfg.get("mode") if cfg.get("mode") in MODES else "month"

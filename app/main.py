@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from .render import render_wallpaper
+from .render import render_goal, render_wallpaper
 
 ROOT = Path(__file__).resolve().parent.parent
 # VITA_DATA — переопределение каталога данных (dev/тесты не трогают боевую БД)
@@ -333,7 +333,10 @@ def goal_page(code: str):
     if g is None:
         raise HTTPException(404, "Нет такой цели")
     html = (ROOT / "static" / "goal.html").read_text(encoding="utf-8")
-    return HTMLResponse(html.replace("{{CODE}}", code), headers={"Cache-Control": "no-cache"})
+    return HTMLResponse(
+        html.replace("{{CODE}}", code).replace("{{SHORTCUT_URL}}", SHORTCUT_ICLOUD_URL),
+        headers={"Cache-Control": "no-cache"},
+    )
 
 
 @app.get("/api/goal/{code}")
@@ -373,6 +376,26 @@ def goal_toggle(code: str, ci: CheckIn):
             return {"done": False}
         conn.execute("INSERT INTO checkins(code, day) VALUES(?, ?)", (code, ci.day))
     return {"done": True}
+
+
+@app.get("/gw/{code}.png")
+def goal_wallpaper(code: str):
+    g, done = _goal_row(code)
+    if g is None:
+        raise HTTPException(404, "Нет такой цели")
+    _, title, days, start, reward, color, bg, shape = g
+    img = render_goal(
+        {"title": title, "days": days, "start": start,
+         "color": color, "bg": bg, "shape": shape},
+        set(done),
+    )
+    buf = io.BytesIO()
+    img.save(buf, "PNG")
+    return Response(
+        buf.getvalue(),
+        media_type="image/png",
+        headers={"Cache-Control": "no-store"},  # каждый день/после отметки — свежая картинка
+    )
 
 
 # --- админка (первая сотня управляется руками) ---

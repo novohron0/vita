@@ -42,6 +42,14 @@
   .foot { text-align:center; color:var(--muted); font-size:12px; margin-top:26px; }
   .foot a { color:var(--accent); }
   .err { color:#ff6b81; text-align:center; margin-top:16px; }
+  .screen { margin-top:22px; background:var(--card); border:1px solid var(--line); border-radius:16px; overflow:hidden; }
+  .screen > summary { list-style:none; cursor:pointer; padding:15px 16px; font-weight:600; display:flex; justify-content:space-between; }
+  .screen > summary::-webkit-details-marker { display:none; }
+  .screen > summary::after { content:'＋'; color:var(--muted); }
+  .screen[open] > summary::after { content:'－'; }
+  .screen .body { padding:0 16px 16px; }
+  .screen p { color:var(--muted); font-size:13px; margin:0 0 12px; }
+  .screen .btn { display:block; margin-bottom:8px; }
 </style>
 </head>
 <body>
@@ -49,6 +57,7 @@
 
 <script>
 const CODE = "{{CODE}}";
+const SHORTCUT = "{{SHORTCUT_URL}}";
 const app = document.getElementById('app');
 let G = null, done = new Set();
 
@@ -128,6 +137,17 @@ function render(){
       <button class="btn primary" id="share">Поделиться целью</button>
       <a class="btn" href="/goals">Новая цель</a>
     </div>
+    <details class="screen">
+      <summary>📲 Поставить цель на экран айфона</summary>
+      <div class="body">
+        <p>Цель станет живыми обоями и будет обновляться каждый день сама — как трекер прямо на локскрине.</p>
+        ${SHORTCUT
+          ? `<a class="btn primary" href="${SHORTCUT}">Добавить ярлык Vita</a>`
+          : `<span class="btn" style="opacity:.6">Ярлык готовится — скоро</span>`}
+        <a class="btn" href="/gw/${CODE}.png" target="_blank">Открыть картинку цели</a>
+        <p style="margin-top:12px">В ярлыке вставь свою ссылку: <b style="color:var(--fg)">${location.origin}/gw/${CODE}.png</b></p>
+      </div>
+    </details>
     <p class="foot">Отмечай каждый день, не разрывай цепочку · <a href="/">⠿ vita</a></p>`;
 
   app.querySelector('.grid').addEventListener('click', e => {
