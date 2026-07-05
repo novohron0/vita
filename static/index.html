@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Vita — твоя жизнь в точках</title>
-<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="/static/style.css?v=2">
 </head>
 <body>
 <header>
@@ -22,6 +22,10 @@
 
   <div class="phone"><canvas id="cv" width="1179" height="2556"></canvas></div>
 
+  <div class="mini" id="mini" title="К превью">
+    <canvas id="cv2" width="1179" height="2556"></canvas>
+  </div>
+
   <div class="stats">
     <div><b id="stat1">0</b><span id="stat1l">дней позади</span></div>
     <div><b id="stat2">0</b><span id="stat2l">впереди</span></div>
@@ -29,7 +33,8 @@
 
   <section class="controls">
     <label class="field">Заголовок
-      <input id="title" maxlength="24" value="ТВОЙ МЕСЯЦ" autocomplete="off">
+      <input id="title" maxlength="24" value="ТВОЙ МЕСЯЦ" autocomplete="off"
+        placeholder="пусто — обои без заголовка">
     </label>
 
     <label class="field" id="birthRow" hidden>Дата рождения
@@ -106,6 +111,6 @@
 
 <footer class="page-foot">от 49 ₽/мес · без автосписаний</footer>
 
-<script src="/static/app.js"></script>
+<script src="/static/app.js?v=3"></script>
 </body>
 </html>

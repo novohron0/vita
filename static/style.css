@@ -59,6 +59,25 @@ main { width: 100%; max-width: 430px; display: flex; flex-direction: column; gap
 }
 .phone canvas { display: block; width: 100%; height: auto; }
 
+.mini {
+  position: fixed;
+  right: 14px;
+  bottom: 14px;
+  width: 92px;
+  border: 3px solid #2a2a2e;
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.6);
+  cursor: pointer;
+  z-index: 5;
+  opacity: 0;
+  transform: translateY(12px);
+  pointer-events: none;
+  transition: opacity 0.2s, transform 0.2s;
+}
+.mini.show { opacity: 1; transform: none; pointer-events: auto; }
+.mini canvas { display: block; width: 100%; height: auto; }
+
 .stats {
   display: flex;
   justify-content: space-evenly;

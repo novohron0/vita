@@ -70,7 +70,8 @@ app = FastAPI(title="vita")
 
 @app.get("/")
 def index():
-    return FileResponse(ROOT / "static" / "index.html")
+    # HTML не кэшируем: статика версионируется (?v=N), а страница всегда свежая
+    return FileResponse(ROOT / "static" / "index.html", headers={"Cache-Control": "no-cache"})
 
 
 @app.post("/api/link")
@@ -127,7 +128,8 @@ def setup_page(code: str, request: Request):
         access = f"Твоя неделя активна до {until.strftime('%d.%m')}."
     html = (ROOT / "static" / "setup.html").read_text(encoding="utf-8")
     return HTMLResponse(
-        html.replace("{{URL}}", url).replace("{{SHORTCUT_BTN}}", btn).replace("{{ACCESS}}", access)
+        html.replace("{{URL}}", url).replace("{{SHORTCUT_BTN}}", btn).replace("{{ACCESS}}", access),
+        headers={"Cache-Control": "no-cache"},
     )
 
 

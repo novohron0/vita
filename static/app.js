@@ -1,7 +1,7 @@
 // Превью и скачивание рендерятся на канвасе 1:1 с серверным рендером (app/render.py).
 const W = 1179, H = 2556, GAP = 0.45, LIFE_YEARS = 90;
 
-const COLORS = ['#f2f2f2', '#3da9fc', '#34c759', '#ff9500', '#c7c7cc', '#a78bfa', '#ff6b81', '#ff5fa2'];
+const COLORS = ['#f2f2f2', '#1c1c1e', '#3da9fc', '#34c759', '#ff9500', '#c7c7cc', '#a78bfa', '#ff6b81', '#ff5fa2'];
 const BGS = { black: '#000000', white: '#f4f1ec', navy: '#0d1526' };
 const TITLES = { month: 'ТВОЙ МЕСЯЦ', year: 'ТВОЙ ГОД', life: 'ТВОЯ ЖИЗНЬ', goal: 'ДО ЦЕЛИ' };
 const STAT_LABELS = {
@@ -23,6 +23,7 @@ let customTitle = false;
 
 const $ = id => document.getElementById(id);
 const cv = $('cv'), ctx = cv.getContext('2d');
+const cv2 = $('cv2'), ctx2 = cv2.getContext('2d');
 
 const rgb = hx => [1, 3, 5].map(i => parseInt(hx.slice(i, i + 2), 16));
 const blend = (fg, bg, a) => {
@@ -152,7 +153,21 @@ function draw() {
   $('stat1l').textContent = l1;
   $('stat2').textContent = fmt(total - done);
   $('stat2l').textContent = l2;
+
+  ctx2.drawImage(cv, 0, 0);
 }
+
+// мини-превью в углу, пока большой телефон не виден — не нужно мотать вверх
+const phoneEl = document.querySelector('.phone');
+function updateMini() {
+  $('mini').classList.toggle('show', phoneEl.getBoundingClientRect().bottom < 40);
+}
+addEventListener('scroll', updateMini, { passive: true });
+addEventListener('resize', updateMini, { passive: true });
+
+$('mini').addEventListener('click', () => {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
 
 // --- контролы ---
 
@@ -184,7 +199,8 @@ bindSeg('bg', v => {
 });
 
 // цвета, сливающиеся с фоном, отключаем; если выбранный стал недоступен — берём первый доступный
-const usable = c => Math.abs(lum(c) - lum(BGS[state.bg])) >= 0.25;
+// порог 0.13: серый на белом ещё читается, чёрный на чёрном уже нет
+const usable = c => Math.abs(lum(c) - lum(BGS[state.bg])) >= 0.13;
 
 function refreshSwatches() {
   const btns = [...$('colors').querySelectorAll('.swatch')];
@@ -212,10 +228,10 @@ swatches.addEventListener('click', e => {
   draw();
 });
 
+// любое ручное изменение (включая полное стирание) — воля юзера, дефолт не навязываем
 $('title').addEventListener('input', e => {
-  customTitle = e.target.value.trim() !== '';
-  state.title = customTitle ? e.target.value : TITLES[state.mode];
-  if (!customTitle) e.target.value = state.title;
+  customTitle = true;
+  state.title = e.target.value;
   draw();
 });
 
