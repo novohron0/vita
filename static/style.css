@@ -387,3 +387,73 @@ header .logo { color: inherit; text-decoration: none; }
 .focus-row { display: flex; gap: 10px; }
 .focus-row input { flex: 1; }
 .focus-row .primary { margin-top: 0; flex: none; white-space: nowrap; }
+
+/* ===================================================================
+   ПРЕМИУМ-ДВИЖЕНИЕ (v8) — живой монохром на всех страницах
+   =================================================================== */
+
+/* аврора: мягкое серебристое свечение дрейфует на фоне */
+body::before {
+  content: ""; position: fixed; inset: -25%; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(36% 30% at 20% 16%, rgba(205,208,216,0.11), transparent 70%),
+    radial-gradient(32% 28% at 82% 80%, rgba(150,160,185,0.09), transparent 70%);
+  filter: blur(34px);
+  animation: auroraDrift 24s ease-in-out infinite alternate;
+}
+@keyframes auroraDrift {
+  from { transform: translate3d(-3%, -2%, 0) scale(1); }
+  to   { transform: translate3d(4%, 3%, 0) scale(1.18); }
+}
+
+/* вход страницы */
+header { animation: fadeDown .55s cubic-bezier(.22,1,.36,1) both; }
+main   { animation: fadeUp .7s cubic-bezier(.22,1,.36,1) both; }
+@keyframes fadeUp   { from { opacity: 0; transform: translateY(16px); } }
+@keyframes fadeDown { from { opacity: 0; transform: translateY(-10px); } }
+@keyframes fadeIn   { from { opacity: 0; } }
+
+/* навигация / лого */
+.nav a { transition: color .2s, text-shadow .3s; }
+.nav a:hover { color: #f2f2f2; }
+.logo { transition: text-shadow .35s; }
+.logo:hover { text-shadow: 0 0 18px rgba(255,255,255,.45); }
+
+/* кнопки — пружина + свечение */
+.primary, .secondary, .btn, .seg button, .tariff, .swatch, .gt-cell {
+  transition: transform .2s cubic-bezier(.34,1.56,.64,1), box-shadow .3s,
+              background .25s, color .2s, border-color .25s;
+}
+.primary { will-change: transform; }
+.primary:hover { transform: translateY(-1px); box-shadow: 0 10px 34px rgba(255,255,255,.14); }
+.primary:active, .secondary:active, .btn:active, .seg button:active { transform: scale(.96); }
+.secondary:hover, .btn.secondary:hover { border-color: #3a3a40; background: #202024; }
+.seg button.on { box-shadow: 0 4px 16px rgba(0,0,0,.4); }
+.swatch:hover { transform: scale(1.12); }
+.field input:focus, .field textarea:focus { box-shadow: 0 0 0 3px rgba(255,255,255,.06); }
+
+/* телефон — парит + свечение */
+.phone { animation: phoneFloat 7s ease-in-out .9s infinite; transition: box-shadow .45s; }
+.phone:hover { box-shadow: 0 24px 80px rgba(255,255,255,.14); }
+@keyframes phoneFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-9px); } }
+
+/* карточки — приподнимаются на ховер */
+.linkbox, .step, .screen, .tariff, .review, .celebrate {
+  transition: transform .2s, border-color .3s, box-shadow .3s;
+}
+.step:hover, .linkbox:hover, .screen:hover {
+  transform: translateY(-2px); border-color: #2e2e34; box-shadow: 0 14px 34px rgba(0,0,0,.4);
+}
+
+/* прогресс-бар цели — блик */
+.gbar > i { position: relative; }
+
+/* модалка — выезжает шторкой */
+.modal-back { animation: fadeIn .3s ease; }
+.modal { animation: sheetUp .42s cubic-bezier(.22,1,.36,1); }
+@keyframes sheetUp { from { transform: translateY(100%); } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001s !important; transition-duration: .08s !important; }
+  body::before, .phone { animation: none; }
+}
