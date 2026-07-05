@@ -259,6 +259,9 @@ h1 {{ font-size: 20px; margin-bottom: 14px; }}
 .row {{ display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }}
 button {{ background:#232326; color:#f2f2f2; border:0; border-radius:9px; padding:7px 12px; font:inherit; cursor:pointer; }}
 button:hover {{ background:#2f2f33; }}
+button.copy {{ background:#12261a; color:#7fd4a3; }}
+button.copy:hover {{ background:#173324; }}
+button.copy.done {{ background:#1f7a4d; color:#fff; }}
 .expired {{ color:#ff6b81; }}
 a {{ color:#7fd4a3; }}
 </style></head><body><h1>⠿ vita — идеи ({count})</h1>{cards}
@@ -266,6 +269,26 @@ a {{ color:#7fd4a3; }}
 async function ext(code, days) {{
   await fetch(`/admin/extend?token={token}&code=${{code}}&days=${{days}}`, {{ method: 'POST' }});
   location.reload();
+}}
+async function copyCard(btn) {{
+  const text = btn.dataset.copy;
+  try {{
+    await navigator.clipboard.writeText(text);
+  }} catch (e) {{
+    // Safari/HTTP-фолбэк: скрытая textarea + execCommand
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    ta.remove();
+  }}
+  const label = btn.textContent;
+  btn.textContent = '✓ скопировано';
+  btn.classList.add('done');
+  setTimeout(() => {{ btn.textContent = label; btn.classList.remove('done'); }}, 1500);
 }}
 </script></body></html>"""
 
@@ -290,20 +313,36 @@ def admin(token: str = ""):
         expired, until = _access_state(access_until)
         if until is None:
             status = "навсегда"
+            status_txt = "навсегда"
         elif expired:
             status = f'<span class="expired">истёк {until.strftime("%d.%m")}</span>'
+            status_txt = f"истёк {until.strftime('%d.%m')}"
         else:
             status = f"до {until.strftime('%d.%m')}"
+            status_txt = status
+        card_reviews = reviews.get(code, [])
         review_html = "".join(
-            f'<div class="review-q">{esc(t)}</div>' for t in reviews.get(code, [])
+            f'<div class="review-q">{esc(t)}</div>' for t in card_reviews
         )
+        # текст для кнопки «копировать» — чтобы владелец одним тапом кидал идею мне
+        copy_lines = [
+            f"Vita · идея (код {code})",
+            f"Идея: {idea}",
+            f"Контакт: {contact}",
+            f"Дата: {created} · доступ: {status_txt} · скачиваний: {fetches}",
+        ]
+        for t in card_reviews:
+            copy_lines.append(f"Отзыв: {t}")
+        copy_text = "\n".join(copy_lines)
         cards.append(
             f'<div class="card"><div class="meta"><span>{created}</span>'
             f'<span>контакт: <b>{esc(contact)}</b></span>'
             f'<span>доступ: {status}</span><span>скачиваний: {fetches}</span>'
             f'<a href="/w/{code}.png" target="_blank">{code}</a></div>'
             f'<div class="idea">{esc(idea)}</div>{review_html}'
-            f'<div class="row"><button onclick="ext(\'{code}\', 7)">+7 дней</button>'
+            f'<div class="row">'
+            f'<button class="copy" data-copy="{esc(copy_text)}" onclick="copyCard(this)">⧉ Копировать</button>'
+            f'<button onclick="ext(\'{code}\', 7)">+7 дней</button>'
             f'<button onclick="ext(\'{code}\', 30)">+месяц</button>'
             f'<button onclick="ext(\'{code}\', 3650)">навсегда</button></div></div>'
         )
