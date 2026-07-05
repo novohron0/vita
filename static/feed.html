@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vita — лента челленджей</title>
+<link rel="stylesheet" href="/static/style.css?v=6">
+<style>
+  .feed-intro { color: #6e6e73; font-size: 14px; line-height: 1.5; margin: -4px 0 16px; }
+  .feed-list { display: flex; flex-direction: column; gap: 10px; }
+  .fc {
+    display: flex; align-items: center; gap: 14px; text-decoration: none;
+    background: #101012; border: 1px solid #232326; border-radius: 14px;
+    padding: 14px 16px; transition: border-color .15s, transform .1s;
+  }
+  .fc:active { transform: scale(0.99); }
+  .fc:hover { border-color: #34343a; }
+  .fc-dots { flex: none; display: grid; grid-template-columns: repeat(3, 8px); gap: 4px; }
+  .fc-dots span { width: 8px; height: 8px; border-radius: 50%; display: block; }
+  .fc-body { flex: 1; min-width: 0; }
+  .fc-title {
+    color: #f2f2f2; font-size: 16px; font-weight: 700; letter-spacing: -.3px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .fc-meta { color: #6e6e73; font-size: 13px; margin-top: 3px; }
+  .fc-peers { color: #ff9f45; font-weight: 600; }
+  .fc-go { flex: none; color: #48484d; font-size: 20px; }
+  .feed-empty { text-align: center; color: #6e6e73; padding: 28px 8px; line-height: 1.6; }
+  .feed-empty b { color: #d9d9de; }
+</style>
+</head>
+<body>
+<header>
+  <a class="logo" href="/">⠿ vita</a>
+  <nav class="nav">
+    <a href="/">Обои</a>
+    <a href="/goals">Цели</a>
+    <a href="/feed" class="on">Лента</a>
+    <a href="/focus">Фокус</a>
+  </nav>
+</header>
+
+<main>
+  <div class="field">
+    <span class="goal-title" style="text-transform:none;letter-spacing:-.5px">Лента челленджей 🔥</span>
+  </div>
+  <p class="feed-intro">Цели, которые уже подхватили другие. Выбери свою — присоединяйся и веди прогресс, не разрывая цепочку.</p>
+
+  <div class="feed-list" id="list"><p class="page-foot">Загружаю ленту…</p></div>
+
+  <a class="primary" href="/goals" style="display:block;text-align:center;text-decoration:none;margin-top:18px">Создать свою цель →</a>
+  <p class="page-foot" style="text-align:center">⠿ vita — обои «жизнь в точках»</p>
+</main>
+
+<script>
+const list = document.getElementById('list');
+const esc = s => { const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; };
+const plural = (n, one, few, many) => {
+  const m10 = n % 10, m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return one;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+  return many;
+};
+
+function dots(color) {
+  const cells = [];
+  for (let i = 0; i < 6; i++) {
+    const on = i < 4;  // намёк-превью: несколько точек уже закрашены
+    cells.push(`<span style="background:${on ? color : 'rgba(255,255,255,.12)'}"></span>`);
+  }
+  return `<div class="fc-dots">${cells.join('')}</div>`;
+}
+
+function card(it) {
+  const dayW = plural(it.days, 'день', 'дня', 'дней');
+  const peerW = plural(it.peers, 'человек делает', 'человека делают', 'человек делают');
+  return `<a class="fc" href="/c/${it.code}">
+    ${dots(it.color)}
+    <div class="fc-body">
+      <div class="fc-title">${esc(it.title)}</div>
+      <div class="fc-meta">${it.days} ${dayW} · <span class="fc-peers">🔥 ${it.peers} ${peerW}</span></div>
+    </div>
+    <span class="fc-go">›</span>
+  </a>`;
+}
+
+(async () => {
+  try {
+    const r = await fetch('/api/feed');
+    const j = await r.json();
+    if (!j.items || !j.items.length) {
+      list.innerHTML = `<div class="feed-empty">Пока лента пуста — <b>стань первым</b>.<br>
+        Создай цель и поделись ссылкой: как только кто-то подхватит её, она появится здесь.</div>`;
+      return;
+    }
+    list.innerHTML = j.items.map(card).join('');
+  } catch {
+    list.innerHTML = '<p class="err">Нет связи с сервером — обнови страницу</p>';
+  }
+})();
+</script>
+</body>
+</html>

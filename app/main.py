@@ -296,6 +296,32 @@ def focus_page():
     return FileResponse(ROOT / "static" / "focus.html", headers={"Cache-Control": "no-cache"})
 
 
+@app.get("/feed")
+def feed_page():
+    return FileResponse(ROOT / "static" / "feed.html", headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/api/feed")
+def feed_list():
+    """Лента челленджей: только те, что кто-то реально подхватил (peers >= 2 — значит,
+    цель шарили и она живёт). Группируем копии по корню, самые популярные — выше."""
+    with db() as conn:
+        rows = conn.execute(
+            "SELECT g.code, g.title, g.days, g.color, g.shape, cnt.peers "
+            "FROM (SELECT COALESCE(root, code) AS rc, COUNT(*) AS peers "
+            "      FROM goals GROUP BY rc) cnt "
+            "JOIN goals g ON g.code = cnt.rc "
+            "WHERE cnt.peers >= 2 "
+            "ORDER BY cnt.peers DESC, g.created DESC LIMIT 60"
+        ).fetchall()
+    return {
+        "items": [
+            {"code": c, "title": t, "days": d, "color": col, "shape": sh, "peers": p}
+            for c, t, d, col, sh, p in rows
+        ]
+    }
+
+
 @app.post("/api/goal")
 def create_goal(g: GoalIn, request: Request):
     title = g.title.strip()
