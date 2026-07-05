@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Vita — новая цель</title>
+<style>
+  :root { --bg:#000; --fg:#f2f2f2; --muted:#8e8e8e; --card:#101012; --line:#232326; --accent:#34c759; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+    font:16px/1.4 -apple-system, system-ui, sans-serif; padding:26px 16px 60px; }
+  .wrap { max-width:480px; margin:0 auto; }
+  h1 { font-size:26px; font-weight:700; margin:0 0 4px; letter-spacing:-.02em; }
+  .sub { color:var(--muted); margin:0 0 24px; font-size:14px; }
+  label { display:block; font-size:13px; color:var(--muted); margin:18px 0 8px; text-transform:uppercase; letter-spacing:.04em; }
+  input { width:100%; background:var(--card); border:1px solid var(--line); color:var(--fg);
+    border-radius:12px; padding:14px; font:inherit; }
+  input:focus { outline:none; border-color:var(--accent); }
+  .seg { display:flex; gap:8px; flex-wrap:wrap; }
+  .seg button { flex:1; min-width:64px; background:var(--card); border:1px solid var(--line);
+    color:var(--fg); border-radius:12px; padding:12px 6px; font:inherit; cursor:pointer; }
+  .seg button.on { background:var(--accent); color:#04140a; border-color:transparent; font-weight:600; }
+  .colors { display:flex; gap:10px; flex-wrap:wrap; }
+  .sw { width:36px; height:36px; border-radius:50%; border:2px solid transparent; cursor:pointer; padding:0; }
+  .sw.on { border-color:#fff; }
+  .go { width:100%; margin-top:28px; background:var(--accent); color:#04140a; border:none;
+    border-radius:14px; padding:16px; font:inherit; font-weight:700; font-size:17px; cursor:pointer; }
+  .go:disabled { opacity:.5; }
+  .err { color:#ff6b81; text-align:center; margin-top:14px; min-height:20px; font-size:14px; }
+  .foot { text-align:center; color:var(--muted); font-size:12px; margin-top:24px; }
+  .foot a { color:var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Новая цель</h1>
+  <p class="sub">Отмечай каждый день — и не разрывай цепочку. В конце заберёшь награду.</p>
+
+  <label>Цель</label>
+  <input id="title" maxlength="80" placeholder="Например: 100 дней без сахара" autocomplete="off">
+
+  <label>Сколько дней</label>
+  <div class="seg" id="days">
+    <button data-v="21">21</button>
+    <button data-v="30" class="on">30</button>
+    <button data-v="66">66</button>
+    <button data-v="100">100</button>
+  </div>
+
+  <label>🎁 Награда себе за прохождение</label>
+  <input id="reward" maxlength="200" placeholder="Например: новые кроссовки" autocomplete="off">
+
+  <label>Цвет</label>
+  <div class="colors" id="colors"></div>
+
+  <button class="go" id="go">Создать цель</button>
+  <p class="err" id="err"></p>
+  <p class="foot"><a href="/">⠿ vita — обои «жизнь в точках»</a></p>
+</div>
+
+<script>
+const COLORS = ['#34c759','#3da9fc','#ff9500','#a78bfa','#ff6b81','#ff5fa2','#f2f2f2'];
+const state = { days:30, color:'#34c759' };
+
+const daysSeg = document.getElementById('days');
+daysSeg.addEventListener('click', e => {
+  const b = e.target.closest('button'); if(!b) return;
+  daysSeg.querySelectorAll('button').forEach(x=>x.classList.toggle('on', x===b));
+  state.days = +b.dataset.v;
+});
+
+const colorsEl = document.getElementById('colors');
+COLORS.forEach((c,i) => {
+  const b = document.createElement('button');
+  b.className = 'sw' + (i===0?' on':''); b.style.background = c; b.dataset.v = c;
+  colorsEl.appendChild(b);
+});
+colorsEl.addEventListener('click', e => {
+  const b = e.target.closest('.sw'); if(!b) return;
+  colorsEl.querySelectorAll('.sw').forEach(x=>x.classList.toggle('on', x===b));
+  state.color = b.dataset.v;
+  document.documentElement.style.setProperty('--accent', b.dataset.v);
+});
+
+const go = document.getElementById('go'), err = document.getElementById('err');
+go.addEventListener('click', async () => {
+  const title = document.getElementById('title').value.trim();
+  if (title.length < 2) { err.textContent = 'Назови цель'; return; }
+  go.disabled = true; err.textContent = '';
+  try {
+    const r = await fetch('/api/goal', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        title, days: state.days, color: state.color,
+        reward: document.getElementById('reward').value.trim(),
+      })
+    });
+    const j = await r.json();
+    if (!r.ok) { err.textContent = j.detail || 'Что-то пошло не так'; go.disabled = false; return; }
+    location.href = j.url;
+  } catch {
+    err.textContent = 'Нет связи с сервером — попробуй ещё раз'; go.disabled = false;
+  }
+});
+</script>
+</body>
+</html>

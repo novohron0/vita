@@ -62,6 +62,19 @@ def db() -> sqlite3.Connection:
         "text TEXT NOT NULL, "
         "created TEXT NOT NULL DEFAULT (datetime('now')))"
     )
+    # трекер целей «тыкалка»: цель + отметки дней (checkins)
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS goals("
+        "code TEXT PRIMARY KEY, title TEXT NOT NULL, days INTEGER NOT NULL, "
+        "start TEXT NOT NULL, reward TEXT NOT NULL DEFAULT '', "
+        "color TEXT NOT NULL DEFAULT '#34c759', bg TEXT NOT NULL DEFAULT 'black', "
+        "shape TEXT NOT NULL DEFAULT 'circle', "
+        "created TEXT NOT NULL DEFAULT (datetime('now')))"
+    )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS checkins("
+        "code TEXT NOT NULL, day TEXT NOT NULL, PRIMARY KEY(code, day))"
+    )
     return conn
 
 
@@ -82,6 +95,30 @@ class LinkIn(BaseModel):
 class ReviewIn(BaseModel):
     code: str
     text: str = ""
+
+
+class GoalIn(BaseModel):
+    title: str = ""
+    days: int = 30
+    reward: str = ""
+    color: str = "#34c759"
+    bg: str = "black"
+    shape: str = "circle"
+    start: str = ""
+
+
+class CheckIn(BaseModel):
+    day: str = ""
+
+
+def _gen_code() -> str:
+    return "".join(secrets.choice(CODE_ALPHABET) for _ in range(6))
+
+
+def _valid_color(c: str) -> bool:
+    return isinstance(c, str) and len(c) == 7 and c[0] == "#" and all(
+        ch in "0123456789abcdefABCDEF" for ch in c[1:]
+    )
 
 
 app = FastAPI(title="vita")
@@ -240,6 +277,102 @@ def wallpaper(code: str):
         media_type="image/png",
         headers={"Cache-Control": "no-store"},  # Ярлыки должны тянуть свежую картинку каждый день
     )
+
+
+# --- трекер целей «тыкалка» (клон Ripples, чисто веб) ---
+
+
+@app.get("/goals")
+def goals_new():
+    return FileResponse(ROOT / "static" / "goals.html", headers={"Cache-Control": "no-cache"})
+
+
+@app.post("/api/goal")
+def create_goal(g: GoalIn, request: Request):
+    title = g.title.strip()
+    if len(title) < 2:
+        raise HTTPException(422, "Назови цель — хотя бы пару слов")
+    days = min(max(int(g.days), 1), 365)
+    start = _parse_start(g.start)
+    color = g.color if _valid_color(g.color) else "#34c759"
+    bg = g.bg if g.bg in ("black", "white", "navy") else "black"
+    shape = g.shape if g.shape in ("circle", "rounded", "square") else "circle"
+    code = _gen_code()
+    with db() as conn:
+        conn.execute(
+            "INSERT INTO goals(code, title, days, start, reward, color, bg, shape) "
+            "VALUES(?, ?, ?, ?, ?, ?, ?, ?)",
+            (code, title[:80], days, start, g.reward.strip()[:200], color, bg, shape),
+        )
+    base = str(request.base_url).rstrip("/")
+    return {"code": code, "url": f"{base}/g/{code}"}
+
+
+def _parse_start(value: str) -> str:
+    try:
+        return date.fromisoformat(value).isoformat()
+    except (ValueError, TypeError):
+        return date.today().isoformat()
+
+
+def _goal_row(code: str):
+    with db() as conn:
+        g = conn.execute(
+            "SELECT code, title, days, start, reward, color, bg, shape FROM goals WHERE code = ?",
+            (code,),
+        ).fetchone()
+        done = [r[0] for r in conn.execute(
+            "SELECT day FROM checkins WHERE code = ? ORDER BY day", (code,)
+        )]
+    return g, done
+
+
+@app.get("/g/{code}")
+def goal_page(code: str):
+    g, _ = _goal_row(code)
+    if g is None:
+        raise HTTPException(404, "Нет такой цели")
+    html = (ROOT / "static" / "goal.html").read_text(encoding="utf-8")
+    return HTMLResponse(html.replace("{{CODE}}", code), headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/api/goal/{code}")
+def goal_state(code: str):
+    g, done = _goal_row(code)
+    if g is None:
+        raise HTTPException(404, "Нет такой цели")
+    _, title, days, start, reward, color, bg, shape = g
+    return {
+        "title": title, "days": days, "start": start, "reward": reward,
+        "color": color, "bg": bg, "shape": shape, "done": done,
+    }
+
+
+@app.post("/api/goal/{code}/toggle")
+def goal_toggle(code: str, ci: CheckIn):
+    g, _ = _goal_row(code)
+    if g is None:
+        raise HTTPException(404, "Нет такой цели")
+    _, _, days, start, *_ = g
+    try:
+        day = date.fromisoformat(ci.day)
+        start_d = date.fromisoformat(start)
+    except (ValueError, TypeError):
+        raise HTTPException(422, "Некорректная дата")
+    # отмечать можно только дни в пределах цели и не в будущем
+    if not (start_d <= day <= start_d + timedelta(days=days - 1)):
+        raise HTTPException(422, "День вне цели")
+    if day > date.today():
+        raise HTTPException(422, "Будущее ещё не прожито 🙂")
+    with db() as conn:
+        exists = conn.execute(
+            "SELECT 1 FROM checkins WHERE code = ? AND day = ?", (code, ci.day)
+        ).fetchone()
+        if exists:
+            conn.execute("DELETE FROM checkins WHERE code = ? AND day = ?", (code, ci.day))
+            return {"done": False}
+        conn.execute("INSERT INTO checkins(code, day) VALUES(?, ?)", (code, ci.day))
+    return {"done": True}
 
 
 # --- админка (первая сотня управляется руками) ---
