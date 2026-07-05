@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vita — фокус · YouTube</title>
+<link rel="stylesheet" href="/static/style.css?v=5">
+</head>
+<body>
+<header>
+  <a class="logo" href="/">⠿ vita</a>
+  <span class="tag">твоя жизнь в точках</span>
+</header>
+
+<main>
+  <div class="field">
+    <span class="goal-title" style="text-transform:none">Фокус · YouTube</span>
+  </div>
+  <p class="hint" style="margin-top:-8px">Вставь ссылку — видео откроется без ленты, шортсов, комментов и автоплея. Только то, ради чего пришёл.</p>
+
+  <div class="field">
+    <label for="url">Ссылка на видео</label>
+    <div class="focus-row">
+      <input id="url" placeholder="youtube.com/watch?v=… или youtu.be/…" autocomplete="off" inputmode="url">
+      <button class="primary" id="watch">Смотреть</button>
+    </div>
+  </div>
+
+  <p class="err" id="err"></p>
+
+  <div id="stage" hidden style="display:flex;flex-direction:column;gap:14px">
+    <div class="yt-wrap"><iframe id="frame" allow="accelerometer; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen></iframe></div>
+    <button class="btn secondary" id="another">← Другое видео</button>
+  </div>
+
+  <p class="page-foot" style="text-align:center">Один экран. Одно видео. Без залипания.</p>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const err = $('err'), stage = $('stage'), frame = $('frame'), urlIn = $('url');
+
+// вытащить id видео из любой формы ссылки YouTube
+function videoId(raw) {
+  const s = (raw || '').trim();
+  if (/^[\w-]{11}$/.test(s)) return s;               // уже голый id
+  let m;
+  if ((m = s.match(/[?&]v=([\w-]{11})/))) return m[1];
+  if ((m = s.match(/youtu\.be\/([\w-]{11})/))) return m[1];
+  if ((m = s.match(/\/(embed|shorts|live|v)\/([\w-]{11})/))) return m[2];
+  return null;
+}
+
+function watch() {
+  const id = videoId(urlIn.value);
+  if (!id) { err.textContent = 'Не похоже на ссылку YouTube — вставь адрес видео'; return; }
+  err.textContent = '';
+  frame.src = `https://www.youtube-nocookie.com/embed/${id}?rel=0&modestbranding=1&iv_load_policy=3&playsinline=1`;
+  stage.hidden = false;
+  stage.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+$('watch').addEventListener('click', watch);
+urlIn.addEventListener('keydown', e => { if (e.key === 'Enter') watch(); });
+$('another').addEventListener('click', () => {
+  frame.src = 'about:blank';
+  stage.hidden = true;
+  urlIn.value = '';
+  urlIn.focus();
+});
+</script>
+</body>
+</html>

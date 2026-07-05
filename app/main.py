@@ -287,6 +287,11 @@ def goals_new():
     return FileResponse(ROOT / "static" / "goals.html", headers={"Cache-Control": "no-cache"})
 
 
+@app.get("/focus")
+def focus_page():
+    return FileResponse(ROOT / "static" / "focus.html", headers={"Cache-Control": "no-cache"})
+
+
 @app.post("/api/goal")
 def create_goal(g: GoalIn, request: Request):
     title = g.title.strip()
