@@ -5,6 +5,7 @@ import os
 import secrets
 import sqlite3
 from datetime import date, timedelta
+from html import escape as esc
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
@@ -15,8 +16,9 @@ from pydantic import BaseModel
 from .render import render_wallpaper
 
 ROOT = Path(__file__).resolve().parent.parent
-DATA = ROOT / "data"
-DATA.mkdir(exist_ok=True)
+# VITA_DATA — переопределение каталога данных (dev/тесты не трогают боевую БД)
+DATA = Path(os.environ.get("VITA_DATA") or (ROOT / "data"))
+DATA.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA / "vita.db"
 
 CODE_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"
@@ -26,6 +28,7 @@ CODE_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"
 SHORTCUT_ICLOUD_URL = os.environ.get("SHORTCUT_ICLOUD_URL", "")
 
 TRIAL_DAYS = 7
+REVIEW_DAYS = 7  # вторая неделя — автоматом за отзыв после использования
 # токен админки: /admin?token=... — боевой задаётся в .env, не публиковать
 ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN", "vt-dev")
 
@@ -37,7 +40,12 @@ def db() -> sqlite3.Connection:
         "code TEXT PRIMARY KEY, config TEXT NOT NULL, "
         "created TEXT NOT NULL DEFAULT (datetime('now')))"
     )
-    for col in ("fetches INTEGER NOT NULL DEFAULT 0", "last_fetch TEXT", "access_until TEXT"):
+    for col in (
+        "fetches INTEGER NOT NULL DEFAULT 0",
+        "last_fetch TEXT",
+        "access_until TEXT",
+        "review_at TEXT",  # когда получена вторая неделя за отзыв (одноразово)
+    ):
         try:
             conn.execute(f"ALTER TABLE links ADD COLUMN {col}")
         except sqlite3.OperationalError:
@@ -46,6 +54,12 @@ def db() -> sqlite3.Connection:
         "CREATE TABLE IF NOT EXISTS ideas("
         "id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT NOT NULL, "
         "idea TEXT NOT NULL, contact TEXT NOT NULL, "
+        "created TEXT NOT NULL DEFAULT (datetime('now')))"
+    )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS reviews("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT NOT NULL, "
+        "text TEXT NOT NULL, "
         "created TEXT NOT NULL DEFAULT (datetime('now')))"
     )
     return conn
@@ -63,6 +77,11 @@ class LinkIn(BaseModel):
     end: str = ""
     idea: str = ""
     contact: str = ""
+
+
+class ReviewIn(BaseModel):
+    code: str
+    text: str = ""
 
 
 app = FastAPI(title="vita")
@@ -97,6 +116,28 @@ def create_link(cfg: LinkIn, request: Request):
     return {"code": code, "url": f"{base}/w/{code}.png", "setup": f"{base}/s/{code}", "until": until}
 
 
+@app.post("/api/review")
+def create_review(rv: ReviewIn):
+    text = rv.text.strip()
+    if len(text) < 15:
+        raise HTTPException(422, "Напиши чуть подробнее — хотя бы строчку живого текста")
+    with db() as conn:
+        row = conn.execute(
+            "SELECT access_until, review_at FROM links WHERE code = ?", (rv.code,)
+        ).fetchone()
+        if row is None:
+            raise HTTPException(404, "Нет такой ссылки")
+        if row[1]:  # вторую неделю уже дарили
+            raise HTTPException(409, "Вторая неделя уже активирована — спасибо, что остаёшься 🙏")
+        conn.execute("INSERT INTO reviews(code, text) VALUES(?, ?)", (rv.code, text))
+        conn.execute(
+            "UPDATE links SET review_at = datetime('now') WHERE code = ?", (rv.code,)
+        )
+        new_until = _extend(conn, rv.code, REVIEW_DAYS, row[0])
+    until_d = date.fromisoformat(new_until)
+    return {"code": rv.code, "until": new_until, "until_h": until_d.strftime("%d.%m")}
+
+
 def _access_state(access_until: str | None) -> tuple[bool, date | None]:
     """(доступ истёк, дата заморозки). NULL = бессрочный доступ."""
     if not access_until:
@@ -108,27 +149,67 @@ def _access_state(access_until: str | None) -> tuple[bool, date | None]:
     return date.today() > until, until
 
 
+def _extend(conn: sqlite3.Connection, code: str, days: int, current: str | None) -> str:
+    """Продлить доступ от максимума (сегодня, текущий срок). Возвращает новую дату ISO."""
+    _, until = _access_state(current)
+    base = max(date.today(), until) if until else date.today()
+    new_until = (base + timedelta(days=days)).isoformat()
+    conn.execute("UPDATE links SET access_until = ? WHERE code = ?", (new_until, code))
+    return new_until
+
+
+REVIEW_BLOCK = """<div class="review" id="reviewBlock">
+  <h3>Открой вторую неделю — бесплатно</h3>
+  <p class="hint">Расскажи, как тебе Vita: для чего используешь, что зацепило, чего не хватает.
+    Пара живых фраз — и мы дарим ещё 7 дней.</p>
+  <textarea id="reviewText" rows="4"
+    placeholder="Например: наконец вижу, сколько недель уже прожито — отрезвляет и бодрит одновременно…"></textarea>
+  <button id="reviewSend" class="btn primary">Отправить и получить +7 дней</button>
+  <p class="hint err" id="reviewStatus"></p>
+</div>"""
+
+REVIEW_DONE = """<div class="review">
+  <h3>Спасибо за отзыв 🙏</h3>
+  <p class="hint">Вторая неделя уже активна. Точки живут дальше.</p>
+</div>"""
+
+
 @app.get("/s/{code}")
 def setup_page(code: str, request: Request):
     with db() as conn:
-        row = conn.execute("SELECT access_until FROM links WHERE code = ?", (code,)).fetchone()
+        row = conn.execute(
+            "SELECT access_until, fetches, review_at FROM links WHERE code = ?", (code,)
+        ).fetchone()
     if row is None:
         raise HTTPException(404, "Нет такой ссылки")
+    access_until, fetches, review_at = row
     url = str(request.base_url).rstrip("/") + f"/w/{code}.png"
     if SHORTCUT_ICLOUD_URL:
         btn = f'<a class="btn primary" href="{SHORTCUT_ICLOUD_URL}">Добавить ярлык</a>'
     else:
         btn = '<span class="btn primary disabled">Ярлык готовится — скоро здесь</span>'
-    expired, until = _access_state(row[0])
+    expired, until = _access_state(access_until)
     if until is None:
         access = ""
     elif expired:
         access = f"Доступ закончился {until.strftime('%d.%m')} — продли, и точки оживут."
     else:
         access = f"Твоя неделя активна до {until.strftime('%d.%m')}."
+    # блок отзыва: только тем, кто уже пользовался (обои реально тянулись) или у кого доступ истёк,
+    # и только если вторую неделю ещё не дарили — иначе пусто/благодарность
+    if review_at:
+        review = REVIEW_DONE
+    elif fetches and fetches > 0 or expired:
+        review = REVIEW_BLOCK
+    else:
+        review = ""
     html = (ROOT / "static" / "setup.html").read_text(encoding="utf-8")
     return HTMLResponse(
-        html.replace("{{URL}}", url).replace("{{SHORTCUT_BTN}}", btn).replace("{{ACCESS}}", access),
+        html.replace("{{URL}}", url)
+        .replace("{{SHORTCUT_BTN}}", btn)
+        .replace("{{ACCESS}}", access)
+        .replace("{{REVIEW}}", review)
+        .replace("{{CODE}}", code),
         headers={"Cache-Control": "no-cache"},
     )
 
@@ -170,6 +251,9 @@ body {{ background:#000; color:#f2f2f2; font: 14px -apple-system, system-ui, san
 h1 {{ font-size: 20px; margin-bottom: 14px; }}
 .card {{ background:#101012; border:1px solid #232326; border-radius: 14px; padding: 14px; margin-bottom: 12px; }}
 .idea {{ font-size: 15px; line-height: 1.45; margin: 6px 0 10px; }}
+.review-q {{ font-size: 14px; line-height: 1.45; margin: 8px 0 4px; padding: 8px 12px;
+  background:#0d1a12; border-left:2px solid #7fd4a3; border-radius:0 8px 8px 0; color:#cbe9d7; }}
+.review-q::before {{ content:"отзыв · "; color:#7fd4a3; font-weight:600; }}
 .meta {{ color:#8e8e8e; font-size: 12px; display:flex; gap:12px; flex-wrap:wrap; }}
 .meta b {{ color:#d9d9de; }}
 .row {{ display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }}
@@ -195,6 +279,12 @@ def admin(token: str = ""):
             "SELECT i.created, i.idea, i.contact, l.code, l.access_until, l.fetches "
             "FROM ideas i JOIN links l ON l.code = i.code ORDER BY i.id DESC"
         ).fetchall()
+        rv_rows = conn.execute(
+            "SELECT code, text FROM reviews ORDER BY id"
+        ).fetchall()
+    reviews: dict[str, list[str]] = {}
+    for r_code, r_text in rv_rows:
+        reviews.setdefault(r_code, []).append(r_text)
     cards = []
     for created, idea, contact, code, access_until, fetches in rows:
         expired, until = _access_state(access_until)
@@ -204,12 +294,15 @@ def admin(token: str = ""):
             status = f'<span class="expired">истёк {until.strftime("%d.%m")}</span>'
         else:
             status = f"до {until.strftime('%d.%m')}"
+        review_html = "".join(
+            f'<div class="review-q">{esc(t)}</div>' for t in reviews.get(code, [])
+        )
         cards.append(
             f'<div class="card"><div class="meta"><span>{created}</span>'
-            f'<span>контакт: <b>{contact}</b></span>'
+            f'<span>контакт: <b>{esc(contact)}</b></span>'
             f'<span>доступ: {status}</span><span>скачиваний: {fetches}</span>'
             f'<a href="/w/{code}.png" target="_blank">{code}</a></div>'
-            f'<div class="idea">{idea}</div>'
+            f'<div class="idea">{esc(idea)}</div>{review_html}'
             f'<div class="row"><button onclick="ext(\'{code}\', 7)">+7 дней</button>'
             f'<button onclick="ext(\'{code}\', 30)">+месяц</button>'
             f'<button onclick="ext(\'{code}\', 3650)">навсегда</button></div></div>'
@@ -226,10 +319,7 @@ def admin_extend(code: str, days: int, token: str = ""):
         row = conn.execute("SELECT access_until FROM links WHERE code = ?", (code,)).fetchone()
         if row is None:
             raise HTTPException(404, "Нет такой ссылки")
-        _, until = _access_state(row[0])
-        base = max(date.today(), until) if until else date.today()
-        new_until = (base + timedelta(days=days)).isoformat()
-        conn.execute("UPDATE links SET access_until = ? WHERE code = ?", (new_until, code))
+        new_until = _extend(conn, code, days, row[0])
     return {"code": code, "access_until": new_until}
 
 
