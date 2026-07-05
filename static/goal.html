@@ -2,58 +2,17 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Vita — цель</title>
-<style>
-  :root { --bg:#000; --fg:#f2f2f2; --muted:#8e8e8e; --card:#101012; --line:#232326; --accent:#34c759; }
-  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-  body { margin:0; background:var(--bg); color:var(--fg);
-    font:16px/1.4 -apple-system, system-ui, sans-serif; padding:20px 16px 60px; }
-  .wrap { max-width:520px; margin:0 auto; }
-  h1 { font-size:26px; font-weight:700; margin:0 0 4px; letter-spacing:-.02em; }
-  .reward { color:var(--accent); font-size:14px; margin:0 0 18px; }
-  .reward b { color:var(--fg); }
-  .stats { display:flex; gap:10px; margin:0 0 20px; }
-  .stat { flex:1; background:var(--card); border:1px solid var(--line);
-    border-radius:14px; padding:12px; text-align:center; }
-  .stat .n { font-size:24px; font-weight:700; line-height:1; }
-  .stat .l { font-size:11px; color:var(--muted); margin-top:5px; text-transform:uppercase; letter-spacing:.04em; }
-  .bar { height:8px; background:var(--line); border-radius:99px; overflow:hidden; margin:0 0 22px; }
-  .bar > i { display:block; height:100%; background:var(--accent); border-radius:99px; transition:width .3s; }
-  .grid { display:grid; gap:7px; margin:0 0 24px; }
-  .cell { aspect-ratio:1; border:none; padding:0; cursor:pointer; position:relative;
-    background:transparent; transition:transform .1s; }
-  .cell:active { transform:scale(.86); }
-  .dot { width:100%; height:100%; border-radius:50%; }
-  .cell[data-shape=rounded] .dot { border-radius:30%; }
-  .cell[data-shape=square] .dot { border-radius:0; }
-  .cell.future { cursor:default; opacity:.55; }
-  .celebrate { display:none; background:linear-gradient(160deg,#12261a,#0c1a12);
-    border:1px solid var(--accent); border-radius:16px; padding:18px; text-align:center; margin:0 0 22px; }
-  .celebrate.show { display:block; }
-  .celebrate h2 { margin:0 0 6px; font-size:20px; }
-  .celebrate p { margin:0; color:#cbe9d7; }
-  .actions { display:flex; gap:10px; }
-  .btn { flex:1; text-align:center; text-decoration:none; border:1px solid var(--line);
-    background:var(--card); color:var(--fg); border-radius:12px; padding:13px; font:inherit;
-    font-weight:600; cursor:pointer; }
-  .btn.primary { background:var(--accent); color:#04140a; border-color:transparent; }
-  .btn.copied { background:#1f7a4d; color:#fff; }
-  .foot { text-align:center; color:var(--muted); font-size:12px; margin-top:26px; }
-  .foot a { color:var(--accent); }
-  .err { color:#ff6b81; text-align:center; margin-top:16px; }
-  .screen { margin-top:22px; background:var(--card); border:1px solid var(--line); border-radius:16px; overflow:hidden; }
-  .screen > summary { list-style:none; cursor:pointer; padding:15px 16px; font-weight:600; display:flex; justify-content:space-between; }
-  .screen > summary::-webkit-details-marker { display:none; }
-  .screen > summary::after { content:'＋'; color:var(--muted); }
-  .screen[open] > summary::after { content:'－'; }
-  .screen .body { padding:0 16px 16px; }
-  .screen p { color:var(--muted); font-size:13px; margin:0 0 12px; }
-  .screen .btn { display:block; margin-bottom:8px; }
-</style>
+<link rel="stylesheet" href="/static/style.css?v=5">
 </head>
 <body>
-<div class="wrap" id="app"><p class="foot">Загружаю цель…</p></div>
+<header>
+  <a class="logo" href="/">⠿ vita</a>
+  <span class="tag">твоя жизнь в точках</span>
+</header>
+
+<main id="app"><p class="page-foot">Загружаю цель…</p></main>
 
 <script>
 const CODE = "{{CODE}}";
@@ -61,128 +20,123 @@ const SHORTCUT = "{{SHORTCUT_URL}}";
 const app = document.getElementById('app');
 let G = null, done = new Set();
 
-const parseLocal = s => { const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); };
+const parseLocal = s => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); };
 const isoLocal = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-const addDays = (d,n) => { const x=new Date(d); x.setDate(x.getDate()+n); return x; };
-const today = () => { const t=new Date(); t.setHours(0,0,0,0); return t; };
+const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate()+n); return x; };
+const today = () => { const t = new Date(); t.setHours(0,0,0,0); return t; };
 
-function bestStreak(){
+function bestStreak() {
   const start = parseLocal(G.start);
-  let best=0, run=0;
-  for (let i=0;i<G.days;i++){
-    if (done.has(isoLocal(addDays(start,i)))) { run++; best=Math.max(best,run); }
-    else run=0;
+  let best = 0, run = 0;
+  for (let i = 0; i < G.days; i++) {
+    if (done.has(isoLocal(addDays(start, i)))) { run++; best = Math.max(best, run); } else run = 0;
   }
   return best;
 }
-function currentStreak(){
+function currentStreak() {
   const t = today();
-  // если сегодня ещё не отмечено — считаем цепочку от вчера (льгота на текущий день)
-  let cur = done.has(isoLocal(t)) ? t : addDays(t,-1);
-  let n=0;
-  while (done.has(isoLocal(cur))) { n++; cur=addDays(cur,-1); }
+  let cur = done.has(isoLocal(t)) ? t : addDays(t, -1);
+  let n = 0;
+  while (done.has(isoLocal(cur))) { n++; cur = addDays(cur, -1); }
   return n;
 }
 
-async function toggle(key){
+async function toggle(key) {
   try {
-    const r = await fetch(`/api/goal/${CODE}/toggle`,{
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({day:key})
+    const r = await fetch(`/api/goal/${CODE}/toggle`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ day: key })
     });
-    if(!r.ok) return;
+    if (!r.ok) return;
     const j = await r.json();
-    if(j.done) done.add(key); else done.delete(key);
+    if (j.done) done.add(key); else done.delete(key);
     render();
   } catch {}
 }
 
-function render(){
+function render() {
   const start = parseLocal(G.start), t = today();
   const doneCount = done.size;
   const pct = Math.round(doneCount / G.days * 100);
   const finished = doneCount >= G.days;
-  document.documentElement.style.setProperty('--accent', G.color);
-
   const cols = G.days <= 42 ? 6 : G.days <= 120 ? 10 : 14;
+
   const cells = [];
-  for (let i=0;i<G.days;i++){
-    const d = addDays(start,i), key = isoLocal(d);
+  for (let i = 0; i < G.days; i++) {
+    const d = addDays(start, i), key = isoLocal(d);
     const isDone = done.has(key);
     const isFuture = d > t;
     const isToday = key === isoLocal(t);
     const bg = isDone ? G.color : 'rgba(255,255,255,.09)';
     const ring = isToday && !isDone ? `box-shadow:inset 0 0 0 2px ${G.color};` : '';
     cells.push(
-      `<button class="cell${isFuture?' future':''}" data-shape="${G.shape}" ${isFuture?'disabled':''} data-key="${key}" title="День ${i+1} · ${key}">`+
-      `<span class="dot" style="background:${bg};${ring}"></span></button>`
+      `<button class="gt-cell" data-shape="${G.shape}" ${isFuture ? 'disabled' : ''} data-key="${key}" title="День ${i+1} · ${key}">` +
+      `<span class="gt-dot" style="background:${bg};${ring}"></span></button>`
     );
   }
 
   app.innerHTML = `
-    <h1>${escapeHtml(G.title)}</h1>
-    ${G.reward ? `<p class="reward">🎁 Награда за цель: <b>${escapeHtml(G.reward)}</b></p>` : '<div style="height:8px"></div>'}
+    <div class="field" style="gap:4px">
+      <span class="goal-title" style="text-transform:none">${escapeHtml(G.title)}</span>
+      <span class="goal-reward">${G.reward ? '🎁 Награда за цель: <b>' + escapeHtml(G.reward) + '</b>' : ''}</span>
+    </div>
     <div class="stats">
-      <div class="stat"><div class="n">${doneCount}/${G.days}</div><div class="l">выполнено</div></div>
-      <div class="stat"><div class="n">${currentStreak()}🔥</div><div class="l">стрик</div></div>
-      <div class="stat"><div class="n">${bestStreak()}</div><div class="l">рекорд</div></div>
+      <div><b>${doneCount}<span style="font-size:.5em;color:#6e6e73">/${G.days}</span></b><span>выполнено</span></div>
+      <div><b>${currentStreak()}🔥</b><span>стрик</span></div>
+      <div><b>${bestStreak()}</b><span>рекорд</span></div>
     </div>
-    <div class="bar"><i style="width:${pct}%"></i></div>
-    <div class="celebrate${finished?' show':''}">
-      <h2>Цель закрыта! 🎉</h2>
-      <p>${G.reward ? 'Ты обещал себе: <b>'+escapeHtml(G.reward)+'</b>. Забирай.' : 'Ты дошёл. Гордись.'}</p>
-    </div>
-    <div class="grid" style="grid-template-columns:repeat(${cols},1fr)">${cells.join('')}</div>
+    <div class="gbar"><i style="width:${pct}%;background:${G.color}"></i></div>
+    ${finished ? `<div class="celebrate"><h2>Цель закрыта! 🎉</h2><p>${G.reward ? 'Ты обещал себе: <b>' + escapeHtml(G.reward) + '</b>. Забирай.' : 'Ты дошёл. Гордись.'}</p></div>` : ''}
+    <div class="gt-grid" style="grid-template-columns:repeat(${cols},1fr)">${cells.join('')}</div>
     <div class="actions">
-      <button class="btn primary" id="share">Поделиться целью</button>
-      <a class="btn" href="/goals">Новая цель</a>
+      <button class="primary" id="share">Поделиться</button>
+      <a class="btn secondary" href="/goals">Новая цель</a>
     </div>
     <details class="screen">
       <summary>📲 Поставить цель на экран айфона</summary>
-      <div class="body">
-        <p>Цель станет живыми обоями и будет обновляться каждый день сама — как трекер прямо на локскрине.</p>
+      <div class="screen-body">
+        <p>Цель станет живыми обоями и будет обновляться каждый день сама — трекер прямо на локскрине.</p>
         ${SHORTCUT
           ? `<a class="btn primary" href="${SHORTCUT}">Добавить ярлык Vita</a>`
-          : `<span class="btn" style="opacity:.6">Ярлык готовится — скоро</span>`}
-        <a class="btn" href="/gw/${CODE}.png" target="_blank">Открыть картинку цели</a>
-        <p style="margin-top:12px">В ярлыке вставь свою ссылку: <b style="color:var(--fg)">${location.origin}/gw/${CODE}.png</b></p>
+          : `<span class="btn disabled">Ярлык готовится — скоро</span>`}
+        <a class="btn secondary" href="/gw/${CODE}.png" target="_blank">Открыть картинку цели</a>
+        <p>В ярлыке вставь свою ссылку: <b class="mono">${location.origin}/gw/${CODE}.png</b></p>
       </div>
     </details>
-    <p class="foot">Отмечай каждый день, не разрывай цепочку · <a href="/">⠿ vita</a></p>`;
+    <p class="page-foot" style="text-align:center">Отмечай каждый день, не разрывай цепочку</p>`;
 
-  app.querySelector('.grid').addEventListener('click', e => {
-    const c = e.target.closest('.cell');
-    if(!c || c.disabled) return;
+  app.querySelector('.gt-grid').addEventListener('click', e => {
+    const c = e.target.closest('.gt-cell');
+    if (!c || c.disabled) return;
     toggle(c.dataset.key);
   });
   document.getElementById('share').addEventListener('click', shareLink);
 }
 
-async function shareLink(){
+async function shareLink() {
   const url = location.origin + `/g/${CODE}`;
   const btn = document.getElementById('share');
   try {
-    if (navigator.share) { await navigator.share({title:G.title, url}); return; }
+    if (navigator.share) { await navigator.share({ title: G.title, url }); return; }
     await navigator.clipboard.writeText(url);
   } catch {
-    const ta=document.createElement('textarea'); ta.value=url; document.body.appendChild(ta);
+    const ta = document.createElement('textarea'); ta.value = url; document.body.appendChild(ta);
     ta.select(); document.execCommand('copy'); ta.remove();
   }
-  btn.textContent='✓ ссылка скопирована'; btn.classList.add('copied');
-  setTimeout(()=>{ btn.textContent='Поделиться целью'; btn.classList.remove('copied'); }, 1600);
+  btn.textContent = '✓ скопировано'; btn.classList.add('copied');
+  setTimeout(() => { btn.textContent = 'Поделиться'; btn.classList.remove('copied'); }, 1600);
 }
 
-function escapeHtml(s){ const d=document.createElement('div'); d.textContent=s??''; return d.innerHTML; }
+function escapeHtml(s) { const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; }
 
 (async () => {
   try {
     const r = await fetch(`/api/goal/${CODE}`);
-    if(!r.ok){ app.innerHTML='<p class="err">Цель не найдена</p>'; return; }
+    if (!r.ok) { app.innerHTML = '<p class="err">Цель не найдена</p>'; return; }
     G = await r.json();
     done = new Set(G.done);
     render();
   } catch {
-    app.innerHTML='<p class="err">Нет связи с сервером — обнови страницу</p>';
+    app.innerHTML = '<p class="err">Нет связи с сервером — обнови страницу</p>';
   }
 })();
 </script>
