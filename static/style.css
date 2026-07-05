@@ -159,3 +159,54 @@ main { width: 100%; max-width: 430px; display: flex; flex-direction: column; gap
 .hint { color: #6e6e73; font-size: 13px; line-height: 1.5; }
 
 .page-foot { color: #48484d; font-size: 13px; padding-top: 36px; }
+
+/* --- страница установки --- */
+.setup { align-items: center; text-align: center; }
+.setup h1 { font-size: 28px; font-weight: 800; }
+.setup .sub { color: #9a9aa0; font-size: 15px; line-height: 1.5; max-width: 320px; }
+.wp-preview {
+  width: 132px;
+  border-radius: 22px;
+  border: 4px solid #1d1d20;
+}
+.step {
+  display: flex;
+  gap: 14px;
+  width: 100%;
+  text-align: left;
+  background: #101012;
+  border: 1px solid #1d1d20;
+  border-radius: 18px;
+  padding: 18px;
+}
+.step-n {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: #f2f2f2;
+  color: #000;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.step-body { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.step-body h3 { font-size: 17px; }
+.step-body p { color: #9a9aa0; font-size: 14px; line-height: 1.55; }
+.step-body b { color: #d9d9de; font-weight: 600; }
+.btn {
+  display: block;
+  text-align: center;
+  text-decoration: none;
+  border-radius: 16px;
+  font-size: 17px;
+  font-weight: 600;
+  padding: 15px;
+}
+.btn.primary { background: #f2f2f2; color: #000; }
+.btn.secondary { background: #1a1a1d; color: #f2f2f2; border: 1px solid #2a2a2e; }
+.btn.disabled { opacity: 0.45; pointer-events: none; }
+.fallback { max-width: 340px; }
+.fallback a { color: #7fd4a3; }
+header .logo { color: inherit; text-decoration: none; }

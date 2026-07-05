@@ -6,7 +6,7 @@ import sqlite3
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -19,6 +19,10 @@ DB_PATH = DATA / "vita.db"
 
 CODE_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"
 
+# Ссылка iCloud на мастер-ярлык «Vita» (создаётся один раз на iPhone владельца,
+# см. README). Пока пусто — на странице установки кнопка в состоянии «готовится».
+SHORTCUT_ICLOUD_URL = ""
+
 
 def db() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH)
@@ -27,6 +31,11 @@ def db() -> sqlite3.Connection:
         "code TEXT PRIMARY KEY, config TEXT NOT NULL, "
         "created TEXT NOT NULL DEFAULT (datetime('now')))"
     )
+    for col in ("fetches INTEGER NOT NULL DEFAULT 0", "last_fetch TEXT"):
+        try:
+            conn.execute(f"ALTER TABLE links ADD COLUMN {col}")
+        except sqlite3.OperationalError:
+            pass  # колонка уже есть
     return conn
 
 
@@ -58,13 +67,34 @@ def create_link(cfg: LinkIn, request: Request):
             "INSERT INTO links(code, config) VALUES(?, ?)",
             (code, cfg.model_dump_json()),
         )
-    return {"code": code, "url": str(request.base_url).rstrip("/") + f"/w/{code}.png"}
+    base = str(request.base_url).rstrip("/")
+    return {"code": code, "url": f"{base}/w/{code}.png", "setup": f"{base}/s/{code}"}
+
+
+@app.get("/s/{code}")
+def setup_page(code: str, request: Request):
+    with db() as conn:
+        row = conn.execute("SELECT 1 FROM links WHERE code = ?", (code,)).fetchone()
+    if row is None:
+        raise HTTPException(404, "Нет такой ссылки")
+    url = str(request.base_url).rstrip("/") + f"/w/{code}.png"
+    if SHORTCUT_ICLOUD_URL:
+        btn = f'<a class="btn primary" href="{SHORTCUT_ICLOUD_URL}">Добавить ярлык</a>'
+    else:
+        btn = '<span class="btn primary disabled">Ярлык готовится — скоро здесь</span>'
+    html = (ROOT / "static" / "setup.html").read_text(encoding="utf-8")
+    return HTMLResponse(html.replace("{{URL}}", url).replace("{{SHORTCUT_BTN}}", btn))
 
 
 @app.get("/w/{code}.png")
 def wallpaper(code: str):
     with db() as conn:
         row = conn.execute("SELECT config FROM links WHERE code = ?", (code,)).fetchone()
+        if row is not None:
+            conn.execute(
+                "UPDATE links SET fetches = fetches + 1, last_fetch = datetime('now') WHERE code = ?",
+                (code,),
+            )
     if row is None:
         raise HTTPException(404, "Нет такой ссылки")
     img = render_wallpaper(json.loads(row[0]))

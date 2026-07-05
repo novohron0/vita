@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Установка — Vita</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <a class="logo" href="/">⠿ vita</a>
+  <span class="tag">установка</span>
+</header>
+
+<main class="setup">
+  <img class="wp-preview" src="{{URL}}" alt="Твои обои">
+  <h1>Осталось 2 минуты</h1>
+  <p class="sub">Картинка готова и уже сама обновляется каждый день.
+    Осталось подружить её с обоями айфона.</p>
+
+  <div class="step">
+    <div class="step-n">1</div>
+    <div class="step-body">
+      <h3>Добавь ярлык Vita</h3>
+      <p>При добавлении ярлык спросит твою ссылку — скопируй её:</p>
+      <div class="linkbox">
+        <code id="myUrl">{{URL}}</code>
+        <button id="copy">Скопировать</button>
+      </div>
+      {{SHORTCUT_BTN}}
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">2</div>
+    <div class="step-body">
+      <h3>Включи автообновление</h3>
+      <p>Открой <b>Команды</b> → вкладка <b>«Автоматизация»</b> → <b>+</b> →
+        <b>«Время суток»</b> → поставь <b>00:05</b>, каждый день →
+        <b>«Выполнять сразу»</b> → выбери ярлык <b>Vita</b>.</p>
+      <p class="hint">Это единственный шаг руками — Apple не разрешает включить
+        расписание за тебя. Зато потом всё работает само, навсегда.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">3</div>
+    <div class="step-body">
+      <h3>Проверь</h3>
+      <a class="btn secondary" href="shortcuts://run-shortcut?name=Vita">Поставить обои сейчас</a>
+      <p class="hint">Кнопка запустит ярлык — обои встанут сразу, не дожидаясь ночи.</p>
+    </div>
+  </div>
+
+  <p class="hint fallback">Не дружишь с Ярлыками? Просто <a href="{{URL}}">открой картинку</a>,
+    сохрани в Фото и поставь как обои. Но обновлять придётся руками —
+    с ярлыком точки закрашиваются сами.</p>
+</main>
+
+<footer class="page-foot">vita · твоя жизнь в точках</footer>
+
+<script>
+document.getElementById('copy').addEventListener('click', () => {
+  navigator.clipboard.writeText(document.getElementById('myUrl').textContent);
+  document.getElementById('copy').textContent = 'Скопировано ✓';
+});
+</script>
+</body>
+</html>

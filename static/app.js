@@ -252,8 +252,9 @@ $('mklink').addEventListener('click', async () => {
         start: state.start, end: state.end,
       }),
     });
-    const { url } = await res.json();
+    const { url, setup } = await res.json();
     $('linkUrl').textContent = url;
+    $('setupBtn').href = setup;
     $('linkBox').hidden = false;
     $('copyBtn').onclick = () => navigator.clipboard.writeText(url);
   } finally {
