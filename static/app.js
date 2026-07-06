@@ -228,6 +228,9 @@ $('mini').addEventListener('click', () => {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 });
 
+// тап по телефону — сетка заполняется заново (в демо уже крутится свой цикл)
+if (!DEMO) phoneEl.addEventListener('click', () => animateReveal());
+
 // --- контролы ---
 
 function bindSeg(id, apply, anim) {

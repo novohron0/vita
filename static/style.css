@@ -467,8 +467,10 @@ main   { animation: fadeUp .7s cubic-bezier(.22,1,.36,1) both; }
 .swatch:not(:disabled):hover { transform: scale(1.12); }
 .field input:focus, .field textarea:focus { box-shadow: 0 0 0 3px rgba(255,255,255,.06); }
 
-/* телефон — парит + свечение */
-.phone { animation: phoneFloat 7s ease-in-out .9s infinite; }
+/* телефон — парит + свечение; ховер/тап вспыхивает ярче (drop-shadow не трогает стек рамки) */
+.phone { animation: phoneFloat 7s ease-in-out .9s infinite; transition: filter .5s; cursor: pointer; }
+.phone:hover { filter: drop-shadow(0 0 30px rgba(255, 255, 255, 0.16)); }
+.phone:active { filter: drop-shadow(0 0 44px rgba(255, 255, 255, 0.24)); transition: filter .15s; }
 @keyframes phoneFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-9px); } }
 
 /* карточки — приподнимаются на ховер */
