@@ -242,6 +242,7 @@ for (const c of COLORS) {
   b.dataset.v = c;
   swatches.appendChild(b);
 }
+refreshSwatches(); // сразу гасим цвета, нечитаемые на стартовом фоне (иначе графит на чёрном → невидимые точки)
 swatches.addEventListener('click', e => {
   const btn = e.target.closest('.swatch');
   if (!btn || btn.disabled) return;
