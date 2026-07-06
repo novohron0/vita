@@ -38,6 +38,8 @@ const DEMO = q.has('demo');
 // /?reel — кинематографичный луп: фраза печатается, точка падает в календарь,
 // скачет с разгоном, отъезд камеры, монтаж тем, финальная карточка
 const REEL = q.has('reel');
+// life-рилс заполняет сетку только до «сегодня» (видно прожито/осталось), а не всю
+let reelFull = true;
 if (REEL) document.body.classList.add('reel');
 if (DEMO) {
   document.body.classList.add('demo');
@@ -172,8 +174,8 @@ function draw(reveal = 1, pulse = 0, fx = null) {
   const text = state.bg === 'white' ? '#8a857a' : '#8e8e8e';
   const { total, done: realDone, current: realCurrent } = counts();
   // демо/рилс: заполняем всю сетку, последняя точка остаётся дышащим кольцом
-  const fullDone = DEMO || REEL ? total - 1 : realDone;
-  const fullCurrent = DEMO || REEL ? total - 1 : realCurrent;
+  const fullDone = (DEMO || (REEL && reelFull)) ? total - 1 : realDone;
+  const fullCurrent = (DEMO || (REEL && reelFull)) ? total - 1 : realCurrent;
   // reveal < 1 — точки закрашиваются по одной (анимация загрузки/смены режима);
   // счётчики и подпись бегут вместе с ними
   // fx — прыжковая анимация по тапу: шарик летит по сетке (fx.p — дробный индекс),
@@ -576,7 +578,85 @@ if (DEMO) {
   const cycle = () => { animateReveal(2600); setTimeout(cycle, 5600); };
   cycle();
 } else if (REEL) {
-  reelPlay();
+  (q.get('reel') === 'life' ? reelLife : reelPlay)();
 } else {
   animateReveal();
+}
+
+// ——— life-рилс: «календарь жизни» заполняется до сегодня; видно прожито/осталось.
+// Персонализация: ?reel=life&born=ГГГГ-ММ-ДД — цифры про конкретного человека.
+async function reelLife() {
+  reelFull = false; // заполняем только прожитые недели, не всю сетку
+  const phoneBox = document.querySelector('.phone');
+  const born = q.get('born');
+  if (born && /^\d{4}-\d{2}-\d{2}$/.test(born)) state.birth = born;
+  const fmt = n => n.toLocaleString('ru-RU');
+  for (;;) {
+    cancelAnimationFrame(pulseRAF);
+    state.mode = 'life'; state.title = TITLES.life;
+    state.bg = 'black'; state.color = '#f2f2f2'; state.shape = 'square';
+    // life-сетка плотная — сразу показываем весь телефон (камера не близко)
+    phoneBox.style.transition = 'none';
+    document.body.classList.add('reel-out');
+    void phoneBox.offsetWidth;
+    phoneBox.style.transition = '';
+    draw(0);
+    const { total, done } = counts();
+    const left = total - done;
+    // сцена 0: ХУК — сколько недель осталось (персонально) либо всего в жизни
+    if (!q.has('nohook')) {
+      const num = born ? left : total;
+      const hook = document.createElement('div');
+      hook.className = 'reel-hook';
+      hook.innerHTML = `<span class="l1">${born ? 'Тебе осталось' : 'Вся твоя жизнь —'}</span>`
+        + `<b class="big" id="hn">0</b><span class="l3">недель</span>`;
+      document.body.appendChild(hook);
+      await rafSleep(280);
+      hook.querySelector('.l1').classList.add('in');
+      await rafSleep(430);
+      hook.querySelector('.big').classList.add('in');
+      const hn = hook.querySelector('#hn'), tN = performance.now(), durN = 1000;
+      await new Promise(res => {
+        const st = now => {
+          const kk = Math.min(1, (now - tN) / durN);
+          hn.textContent = fmt(Math.round(num * (1 - Math.pow(1 - kk, 3))));
+          if (kk < 1) requestAnimationFrame(st); else res();
+        };
+        requestAnimationFrame(st);
+      });
+      hn.textContent = fmt(num);
+      hook.querySelector('.l3').classList.add('in');
+      await rafSleep(1500);
+      hook.style.transition = 'opacity .5s'; hook.style.opacity = 0;
+      await rafSleep(540);
+      hook.remove();
+    }
+    // сцена 1: недели набегают от рождения до сегодня — время «разгоняется»
+    const dur = 3200, t0 = performance.now();
+    await new Promise(res => {
+      const step = now => {
+        const kk = Math.min(1, (now - t0) / dur);
+        draw(Math.pow(kk, 1.7)); // ускорение: медленно → быстрее
+        if (kk < 1) requestAnimationFrame(step); else res();
+      };
+      requestAnimationFrame(step);
+    });
+    draw(); startPulse();
+    // граница прожито/осталось — гут-панч; подпись на канвасе уже её показывает
+    await rafSleep(2600);
+    // сцена 2: финал — тайтл про «не слей остальные»
+    cancelAnimationFrame(pulseRAF);
+    const end = document.createElement('div');
+    end.className = 'reel-end';
+    end.innerHTML = born
+      ? `<span class="dotp"></span><p>Прожито ${fmt(done)}. Осталось ${fmt(left)}.<br>Не слей их.</p><b>⠿ vita · vitadots.ru</b>`
+      : `<span class="dotp"></span><p>Каждая точка — неделя жизни.</p><b>⠿ vita · vitadots.ru</b>`;
+    document.body.appendChild(end);
+    void end.offsetWidth;
+    end.classList.add('show');
+    await rafSleep(3600);
+    end.classList.remove('show');
+    await rafSleep(700);
+    end.remove();
+  }
 }
