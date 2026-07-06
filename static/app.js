@@ -101,7 +101,7 @@ function drawWatermark(cx, cy, fill) {
   ctx.textAlign = 'center';
 }
 
-function draw(reveal = 1) {
+function draw(reveal = 1, pulse = 0) {
   const bgHex = BGS[state.bg];
   const empty = blend(state.color, bgHex, 0.18);
   const text = state.bg === 'white' ? '#8a857a' : '#8e8e8e';
@@ -132,6 +132,7 @@ function draw(reveal = 1) {
       ctx.strokeStyle = state.color;
       ctx.lineWidth = Math.max(2, dot * 0.09);
       if (i === lead) { ctx.shadowColor = state.color; ctx.shadowBlur = dot * 0.6; }
+      else if (pulse > 0) { ctx.shadowColor = state.color; ctx.shadowBlur = dot * 0.55 * pulse; }
       ctx.stroke();
       ctx.shadowBlur = 0;
     } else {
@@ -169,14 +170,33 @@ const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 let revealRAF = null;
 function animateReveal(dur = 1150) {
   cancelAnimationFrame(revealRAF);
-  if (reduceMotion || counts().done <= 0) { draw(); return; }
+  cancelAnimationFrame(pulseRAF);
+  if (reduceMotion || counts().done <= 0) { draw(); startPulse(); return; }
   const t0 = performance.now();
   const step = now => {
     const p = Math.min(1, (now - t0) / dur);
     draw(1 - Math.pow(1 - p, 3)); // easeOutCubic
     if (p < 1) revealRAF = requestAnimationFrame(step);
+    else startPulse();
   };
   revealRAF = requestAnimationFrame(step);
+}
+
+// «сегодняшняя» точка-кольцо мягко дышит — сразу видно, что обои живые
+let pulseRAF = null, pulseLast = 0;
+function startPulse() {
+  cancelAnimationFrame(pulseRAF);
+  if (reduceMotion) return;
+  const loop = now => {
+    pulseRAF = requestAnimationFrame(loop);
+    if (document.hidden || now - pulseLast < 66) return; // ~15 кадров/с хватает
+    const r = phoneEl.getBoundingClientRect();
+    // телефон не виден и мини-превью скрыто — не жжём батарею
+    if (!$('mini').classList.contains('show') && (r.bottom < 0 || r.top > innerHeight)) return;
+    pulseLast = now;
+    draw(1, 0.5 + 0.5 * Math.sin(now / 620));
+  };
+  pulseRAF = requestAnimationFrame(loop);
 }
 
 // мини-превью в углу, пока большой телефон не виден — не нужно мотать вверх

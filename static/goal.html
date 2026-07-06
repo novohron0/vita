@@ -6,7 +6,7 @@
   <link rel="icon" type="image/png" href="/static/img/favicon.png">
   <link rel="apple-touch-icon" href="/static/img/apple-touch.png">
 <title>Vita — цель</title>
-<link rel="stylesheet" href="/static/style.css?v=10">
+<link rel="stylesheet" href="/static/style.css?v=11">
 </head>
 <body>
 <header>
@@ -79,6 +79,7 @@ function render(anim) {
     let cls = 'gt-cell', extra = '';
     if (isDone && anim === 'in') { cls += ' gt-in'; extra = ` style="--d:${Math.min(di * 24, 850)}ms"`; di++; }
     else if (isDone && anim && anim.pop === key) { cls += ' gt-pop'; }
+    if (isToday && !isDone) cls += ' gt-today'; // сегодняшнее кольцо мягко дышит
     cells.push(
       `<button class="${cls}" data-shape="${G.shape}" ${isFuture ? 'disabled' : ''} data-key="${key}"${extra} title="День ${i+1} · ${key}">` +
       `<span class="gt-dot" style="background:${bg};${ring}"></span></button>`

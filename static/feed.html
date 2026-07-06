@@ -6,7 +6,7 @@
   <link rel="icon" type="image/png" href="/static/img/favicon.png">
   <link rel="apple-touch-icon" href="/static/img/apple-touch.png">
 <title>Vita — лента челленджей</title>
-<link rel="stylesheet" href="/static/style.css?v=10">
+<link rel="stylesheet" href="/static/style.css?v=11">
 <style>
   .feed-intro { color: #6e6e73; font-size: 14px; line-height: 1.5; margin: -4px 0 16px; }
   .feed-list { display: flex; flex-direction: column; gap: 10px; }
@@ -33,6 +33,11 @@
   .fc-go { flex: none; color: #48484d; font-size: 20px; }
   .feed-empty { text-align: center; color: #6e6e73; padding: 28px 8px; line-height: 1.6; }
   .feed-empty b { color: #d9d9de; }
+  /* тихая волна точек в пустой ленте — страница живая даже без контента */
+  .fe-dots { display: flex; gap: 9px; justify-content: center; margin-bottom: 14px; }
+  .fe-dots span { width: 10px; height: 10px; border-radius: 50%; background: #f2f2f2; opacity: .12;
+    animation: feBlink 2.6s ease-in-out infinite; animation-delay: calc(var(--n) * .3s); }
+  @keyframes feBlink { 0%, 100% { opacity: .12; } 35% { opacity: .5; } }
 </style>
 </head>
 <body>
@@ -99,7 +104,9 @@ function card(it, idx) {
     const r = await fetch('/api/feed');
     const j = await r.json();
     if (!j.items || !j.items.length) {
-      list.innerHTML = `<div class="feed-empty">Пока лента пуста — <b>стань первым</b>.<br>
+      list.innerHTML = `<div class="feed-empty">
+        <div class="fe-dots">${Array.from({length:6},(_,i)=>`<span style="--n:${i}"></span>`).join('')}</div>
+        Пока лента пуста — <b>стань первым</b>.<br>
         Создай цель и поделись ссылкой: как только кто-то подхватит её, она появится здесь.</div>`;
       return;
     }

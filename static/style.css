@@ -366,6 +366,11 @@ header .logo { color: inherit; text-decoration: none; }
 /* при загрузке уже закрашенные дни всплывают каскадом (задержка через --d) */
 .gt-cell.gt-in .gt-dot { animation: gtIn .5s cubic-bezier(.34,1.56,.64,1) both; animation-delay: var(--d, 0ms); }
 @keyframes gtIn { from { opacity: 0; transform: scale(.2); } }
+/* сегодняшнее кольцо мягко дышит — «этот день ещё можно прожить» */
+.gt-cell.gt-today .gt-dot { animation: gtBreathe 2.6s ease-in-out .9s infinite; }
+@keyframes gtBreathe { 50% { transform: scale(1.09); } }
+/* read-only вид /c: закрашенные дни всплывают каскадом */
+.gt-grid > .gt-dot.cin { animation: gtIn .5s cubic-bezier(.34,1.56,.64,1) both; animation-delay: var(--d, 0ms); }
 /* при тапе точка «выстреливает» с расходящимся кольцом */
 .gt-cell.gt-pop .gt-dot { animation: gtPop .42s cubic-bezier(.34,1.56,.64,1); }
 .gt-cell.gt-pop .gt-dot::after {
@@ -466,6 +471,12 @@ main   { animation: fadeUp .7s cubic-bezier(.22,1,.36,1) both; }
   animation: gbarShine 2.8s ease-in-out 1s infinite;
 }
 @keyframes gbarShine { 0% { transform: translateX(-120%); } 55%,100% { transform: translateX(120%); } }
+
+/* онбординг /s: превью обоев парит, шаги входят друг за другом */
+.setup .wp-preview { animation: fadeUp .7s cubic-bezier(.22,1,.36,1) both, phoneFloat 7s ease-in-out 1.3s infinite; }
+.setup .step { animation: fadeUp .6s cubic-bezier(.22,1,.36,1) both .1s; }
+.setup .step ~ .step { animation-delay: .24s; }
+.setup .step ~ .step ~ .step { animation-delay: .38s; }
 
 /* модалка — выезжает шторкой */
 .modal-back { animation: fadeIn .3s ease; }

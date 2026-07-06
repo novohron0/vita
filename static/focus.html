@@ -11,7 +11,7 @@
 <meta property="og:image" content="https://vitadots.ru/static/img/og.png">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="stylesheet" href="/static/style.css?v=10">
+<link rel="stylesheet" href="/static/style.css?v=11">
 <style>
   .fpage { width: 100%; max-width: 460px; }
   .fhero { text-align: center; padding: 8px 0 20px; }
@@ -21,6 +21,8 @@
     border: 1px solid #2a2a2e; border-radius: 13px; background: #141416; color: #c8c8cc;
     font-weight: 600; font-size: 14px; }
   .fcta small { color: #5c5c66; font-weight: 500; }
+  .fcta { animation: ctaFloat 6s ease-in-out 1.6s infinite; }
+  @keyframes ctaFloat { 50% { transform: translateY(-4px); } }
 
   /* ——— панель ——— */
   .panel { position: relative; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.09);
