@@ -16,7 +16,7 @@ const plus30 = new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10);
 
 const state = {
   mode: 'month', color: '#f2f2f2', bg: 'black', shape: 'circle',
-  title: TITLES.month, footer: true, birth: '2000-01-01',
+  title: TITLES.month, footer: true, brand: true, birth: '2000-01-01',
   start: todayISO, end: plus30,
 };
 let customTitle = false;
@@ -193,7 +193,7 @@ function draw(reveal = 1, pulse = 0, fx = null) {
     ctx.font = '600 64px -apple-system, "SF Pro Display", system-ui, sans-serif';
     ctx.fillText(state.title.trim().toUpperCase(), W / 2, y0 - 190);
   }
-  drawWatermark(W / 2, y0 - 110, text);
+  if (state.brand) drawWatermark(W / 2, y0 - 110, text);
   if (state.footer) {
     ctx.fillStyle = text;
     ctx.font = '400 40px -apple-system, system-ui, sans-serif';
@@ -304,6 +304,7 @@ bindSeg('mode', v => {
 }, true);
 bindSeg('shape', v => { state.shape = v; });
 bindSeg('footer', v => { state.footer = v === '1'; });
+bindSeg('brand', v => { state.brand = v === '1'; });
 bindSeg('bg', v => {
   state.bg = v;
   refreshSwatches();
@@ -381,7 +382,7 @@ $('ideaSend').addEventListener('click', async () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         mode: state.mode, color: state.color, bg: state.bg, shape: state.shape,
-        title: state.title, footer: state.footer, birth: state.birth,
+        title: state.title, footer: state.footer, brand: state.brand, birth: state.birth,
         start: state.start, end: state.end,
         idea: $('idea').value, contact: $('contact').value,
       }),

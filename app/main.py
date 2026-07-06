@@ -95,6 +95,7 @@ class LinkIn(BaseModel):
     shape: str = "circle"
     title: str = ""
     footer: bool = True
+    brand: bool = True  # лого vita на обоях; в render.py уже есть cfg.get("brand", True)
     birth: str = "2000-01-01"
     start: str = ""
     end: str = ""
