@@ -6,7 +6,7 @@
   <link rel="icon" type="image/png" href="/static/img/favicon.png">
   <link rel="apple-touch-icon" href="/static/img/apple-touch.png">
 <title>Vita — лента челленджей</title>
-<link rel="stylesheet" href="/static/style.css?v=8">
+<link rel="stylesheet" href="/static/style.css?v=9">
 <style>
   .feed-intro { color: #6e6e73; font-size: 14px; line-height: 1.5; margin: -4px 0 16px; }
   .feed-list { display: flex; flex-direction: column; gap: 10px; }
@@ -16,9 +16,13 @@
     padding: 14px 16px; transition: border-color .15s, transform .1s;
   }
   .fc:active { transform: scale(0.99); }
-  .fc:hover { border-color: #34343a; }
+  .fc:hover { border-color: #34343a; transform: translateY(-2px); box-shadow: 0 12px 30px rgba(0,0,0,.4); }
+  .fc { animation: fcIn .5s cubic-bezier(.22,1,.36,1) both; animation-delay: var(--i, 0ms); }
+  @keyframes fcIn { from { opacity: 0; transform: translateY(12px); } }
   .fc-dots { flex: none; display: grid; grid-template-columns: repeat(3, 8px); gap: 4px; }
   .fc-dots span { width: 8px; height: 8px; border-radius: 50%; display: block; }
+  .fc-dots span.on { animation: fcDot .45s cubic-bezier(.34,1.56,.64,1) both; animation-delay: var(--dd, 0ms); }
+  @keyframes fcDot { from { opacity: 0; transform: scale(.2); } }
   .fc-body { flex: 1; min-width: 0; }
   .fc-title {
     color: #f2f2f2; font-size: 16px; font-weight: 700; letter-spacing: -.3px;
@@ -64,20 +68,24 @@ const plural = (n, one, few, many) => {
   return many;
 };
 
-function dots(color) {
+function dots(color, base) {
   const cells = [];
   for (let i = 0; i < 6; i++) {
     const on = i < 4;  // намёк-превью: несколько точек уже закрашены
-    cells.push(`<span style="background:${on ? color : 'rgba(255,255,255,.12)'}"></span>`);
+    const style = on
+      ? `background:${color};--dd:${base + i * 55}ms`
+      : `background:rgba(255,255,255,.12)`;
+    cells.push(`<span class="${on ? 'on' : ''}" style="${style}"></span>`);
   }
   return `<div class="fc-dots">${cells.join('')}</div>`;
 }
 
-function card(it) {
+function card(it, idx) {
   const dayW = plural(it.days, 'день', 'дня', 'дней');
   const peerW = plural(it.peers, 'человек делает', 'человека делают', 'человек делают');
-  return `<a class="fc" href="/c/${it.code}">
-    ${dots(it.color)}
+  const base = idx * 70;  // карточка выезжает, затем её точки всплывают
+  return `<a class="fc" style="--i:${base}ms" href="/c/${it.code}">
+    ${dots(it.color, base + 180)}
     <div class="fc-body">
       <div class="fc-title">${esc(it.title)}</div>
       <div class="fc-meta">${it.days} ${dayW} · <span class="fc-peers">🔥 ${it.peers} ${peerW}</span></div>
@@ -95,7 +103,7 @@ function card(it) {
         Создай цель и поделись ссылкой: как только кто-то подхватит её, она появится здесь.</div>`;
       return;
     }
-    list.innerHTML = j.items.map(card).join('');
+    list.innerHTML = j.items.map((it, i) => card(it, i)).join('');
   } catch {
     list.innerHTML = '<p class="err">Нет связи с сервером — обнови страницу</p>';
   }

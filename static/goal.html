@@ -6,7 +6,7 @@
   <link rel="icon" type="image/png" href="/static/img/favicon.png">
   <link rel="apple-touch-icon" href="/static/img/apple-touch.png">
 <title>Vita — цель</title>
-<link rel="stylesheet" href="/static/style.css?v=8">
+<link rel="stylesheet" href="/static/style.css?v=9">
 </head>
 <body>
 <header>
@@ -56,11 +56,11 @@ async function toggle(key) {
     if (!r.ok) return;
     const j = await r.json();
     if (j.done) done.add(key); else done.delete(key);
-    render();
+    render(j.done ? { pop: key } : null); // поп только на закрашивании, не на снятии
   } catch {}
 }
 
-function render() {
+function render(anim) {
   const start = parseLocal(G.start), t = today();
   const doneCount = done.size;
   const pct = Math.round(doneCount / G.days * 100);
@@ -68,6 +68,7 @@ function render() {
   const cols = G.days <= 42 ? 6 : G.days <= 120 ? 10 : 14;
 
   const cells = [];
+  let di = 0; // порядковый среди закрашенных — для каскадной задержки при загрузке
   for (let i = 0; i < G.days; i++) {
     const d = addDays(start, i), key = isoLocal(d);
     const isDone = done.has(key);
@@ -75,8 +76,11 @@ function render() {
     const isToday = key === isoLocal(t);
     const bg = isDone ? G.color : 'rgba(255,255,255,.09)';
     const ring = isToday && !isDone ? `box-shadow:inset 0 0 0 2px ${G.color};` : '';
+    let cls = 'gt-cell', extra = '';
+    if (isDone && anim === 'in') { cls += ' gt-in'; extra = ` style="--d:${Math.min(di * 24, 850)}ms"`; di++; }
+    else if (isDone && anim && anim.pop === key) { cls += ' gt-pop'; }
     cells.push(
-      `<button class="gt-cell" data-shape="${G.shape}" ${isFuture ? 'disabled' : ''} data-key="${key}" title="День ${i+1} · ${key}">` +
+      `<button class="${cls}" data-shape="${G.shape}" ${isFuture ? 'disabled' : ''} data-key="${key}"${extra} title="День ${i+1} · ${key}">` +
       `<span class="gt-dot" style="background:${bg};${ring}"></span></button>`
     );
   }
@@ -155,7 +159,7 @@ function escapeHtml(s) { const d = document.createElement('div'); d.textContent 
     if (!r.ok) { app.innerHTML = '<p class="err">Цель не найдена</p>'; return; }
     G = await r.json();
     done = new Set(G.done);
-    render();
+    render('in');
   } catch {
     app.innerHTML = '<p class="err">Нет связи с сервером — обнови страницу</p>';
   }
