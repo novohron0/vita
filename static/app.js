@@ -48,6 +48,7 @@ const lum = hx => {
   const [r, g, b] = rgb(hx);
   return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
 };
+const easeOutBack = t => { const u = t - 1; return 1 + 3.6 * u * u * u + 2.6 * u * u; };
 
 function counts() {
   const now = new Date();
@@ -115,7 +116,7 @@ function drawWatermark(cx, cy, fill) {
   ctx.textAlign = 'center';
 }
 
-function draw(reveal = 1, pulse = 0) {
+function draw(reveal = 1, pulse = 0, fx = null) {
   const bgHex = BGS[state.bg];
   const empty = blend(state.color, bgHex, 0.18);
   const text = state.bg === 'white' ? '#8a857a' : '#8e8e8e';
@@ -125,9 +126,12 @@ function draw(reveal = 1, pulse = 0) {
   const fullCurrent = DEMO ? total - 1 : realCurrent;
   // reveal < 1 — точки закрашиваются по одной (анимация загрузки/смены режима);
   // счётчики и подпись бегут вместе с ними
-  const done = reveal >= 1 ? fullDone : Math.round(fullDone * reveal);
-  const current = reveal >= 1 ? fullCurrent : (done < total ? done : null);
-  const lead = reveal >= 1 ? -2 : current; // ведущая точка при анимации подсвечивается ярче
+  // fx — прыжковая анимация по тапу: шарик летит по сетке (fx.p — дробный индекс),
+  // точки позади него проштампованы, кольцо «сегодня» прячется до приземления
+  const done = fx ? Math.min(fullDone, Math.floor(fx.p) + 1)
+    : reveal >= 1 ? fullDone : Math.round(fullDone * reveal);
+  const current = fx ? null : reveal >= 1 ? fullCurrent : (done < total ? done : null);
+  const lead = fx || reveal >= 1 ? -2 : current; // ведущая точка при анимации подсвечивается ярче
   const cols = gridCols(total), rows = Math.ceil(total / cols);
 
   ctx.fillStyle = bgHex;
@@ -144,6 +148,13 @@ function draw(reveal = 1, pulse = 0) {
     dotPath(x, y, dot);
     if (i < done) {
       ctx.fillStyle = state.color;
+      if (fx) { // свежепроштампованная точка выпрыгивает с перелётом
+        const k = Math.min(1, (fx.p - i) * fx.interval / 300);
+        if (k < 1) {
+          const d2 = dot * (0.5 + 0.5 * easeOutBack(k));
+          dotPath(x + (dot - d2) / 2, y + (dot - d2) / 2, d2);
+        }
+      }
       ctx.fill();
     } else if (current !== null && i === current) {
       ctx.strokeStyle = state.color;
@@ -156,6 +167,23 @@ function draw(reveal = 1, pulse = 0) {
       ctx.fillStyle = empty;
       ctx.fill();
     }
+  }
+
+  if (fx) { // шарик: летит дугой от точки к точке, между рядами — длинный прыжок
+    const p = Math.min(fx.p, fx.N);
+    const i0 = Math.floor(p), i1 = Math.min(i0 + 1, fx.N), frac = p - i0;
+    const cx = i => x0 + (i % cols) * (dot + gap) + dot / 2;
+    const cy = i => y0 + Math.floor(i / cols) * (dot + gap) + dot / 2;
+    const hop = Math.max(dot * 0.9, Math.hypot(cx(i1) - cx(i0), cy(i1) - cy(i0)) * 0.22);
+    const lx = cx(i0) + (cx(i1) - cx(i0)) * frac;
+    const ly = cy(i0) + (cy(i1) - cy(i0)) * frac - hop * Math.sin(Math.PI * frac);
+    ctx.beginPath();
+    ctx.arc(lx, ly, dot / 2, 0, Math.PI * 2);
+    ctx.fillStyle = state.color;
+    ctx.shadowColor = state.color;
+    ctx.shadowBlur = dot * 0.7;
+    ctx.fill();
+    ctx.shadowBlur = 0;
   }
 
   ctx.textAlign = 'center';
@@ -184,10 +212,11 @@ function draw(reveal = 1, pulse = 0) {
 
 // точки закрашиваются по одной при загрузке и смене режима — «оживает» на глазах
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-let revealRAF = null;
+let revealRAF = null, jumpRAF = null;
 function animateReveal(dur = 1150) {
   cancelAnimationFrame(revealRAF);
   cancelAnimationFrame(pulseRAF);
+  cancelAnimationFrame(jumpRAF);
   if (reduceMotion || (!DEMO && counts().done <= 0)) { draw(); startPulse(); return; }
   const t0 = performance.now();
   const step = now => {
@@ -216,6 +245,26 @@ function startPulse() {
   pulseRAF = requestAnimationFrame(loop);
 }
 
+// тап по телефону: шарик скачет по сетке дугами и штампует точки одну за другой,
+// в конце приземляется на сегодняшнюю точку и становится дышащим кольцом
+function animateJump() {
+  const { total, done } = counts();
+  if (reduceMotion || done <= 0) { animateReveal(); return; }
+  cancelAnimationFrame(revealRAF);
+  cancelAnimationFrame(pulseRAF);
+  cancelAnimationFrame(jumpRAF);
+  const N = Math.min(done, total - 1); // финиш — на сегодняшней точке
+  const interval = Math.min(2600, Math.max(700, N * 140)) / N; // мс на прыжок
+  const t0 = performance.now();
+  const step = now => {
+    const p = Math.min(N, (now - t0) / interval);
+    draw(1, 0, { p, interval, N });
+    if (p < N) jumpRAF = requestAnimationFrame(step);
+    else { draw(); startPulse(); }
+  };
+  jumpRAF = requestAnimationFrame(step);
+}
+
 // мини-превью в углу, пока большой телефон не виден — не нужно мотать вверх
 const phoneEl = document.querySelector('.phone');
 function updateMini() {
@@ -228,8 +277,8 @@ $('mini').addEventListener('click', () => {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 });
 
-// тап по телефону — сетка заполняется заново (в демо уже крутится свой цикл)
-if (!DEMO) phoneEl.addEventListener('click', () => animateReveal());
+// тап по телефону — точки прыгают друг за другом (в демо уже крутится свой цикл)
+if (!DEMO) phoneEl.addEventListener('click', () => animateJump());
 
 // --- контролы ---
 
