@@ -516,25 +516,45 @@ async function reelPlay() {
     const rp = ov.querySelector('#rp');
     rp.style.opacity = 1;
     await rafSleep(650);
-    // сцена 2: точка из конца фразы падает в день 1
+    // сцена 2: точка вылетает из фразы, вырастает в большой светящийся шар по
+    // центру, зависает и падает вниз с ускорением и отскоком — к остальным точкам
     const pr = rp.getBoundingClientRect(), cvr = cv.getBoundingClientRect();
     const g = geom(), k = cvr.width / W;
-    const tx = cvr.left + (g.x0 + g.dot / 2) * k, ty = cvr.top + (g.y0 + g.dot / 2) * k;
+    const slotX = cvr.left + (g.x0 + g.dot / 2) * k, slotY = cvr.top + (g.y0 + g.dot / 2) * k;
     const d0 = Math.max(9, pr.width);
+    const pcx = pr.left + pr.width / 2, pcy = pr.top + pr.height / 2;
     const fly = document.createElement('span');
     fly.className = 'reel-dot';
     Object.assign(fly.style, {
-      left: pr.left + pr.width / 2 - d0 / 2 + 'px', top: pr.top + pr.height / 2 - d0 / 2 + 'px',
-      width: d0 + 'px', height: d0 + 'px',
+      left: pcx - d0 / 2 + 'px', top: pcy - d0 / 2 + 'px',
+      width: d0 + 'px', height: d0 + 'px', boxShadow: '0 0 22px rgba(255,255,255,.6)',
     });
     document.body.appendChild(fly);
     rp.style.opacity = 0;
     const h1 = ov.querySelector('h1');
     h1.style.transition = 'opacity .55s'; h1.style.opacity = 0;
+    const cX = innerWidth / 2, cY = innerHeight * 0.3;
+    const big = Math.min(innerWidth * 0.24, 120), sBig = big / d0, sSmall = g.dot * k / d0;
+    const at = (x, y, s) => `translate(${x - pcx}px, ${y - pcy}px) scale(${s})`;
+    // A — вылет в центр и рост в большой шар
+    await fly.animate([{ transform: 'translate(0,0) scale(1)' }, { transform: at(cX, cY, sBig) }],
+      { duration: 620, easing: 'cubic-bezier(.22,1,.36,1)', fill: 'forwards' }).finished;
+    // зависание с лёгким пульсом
+    await fly.animate([{ transform: at(cX, cY, sBig) }, { transform: at(cX, cY, sBig * 1.12) }, { transform: at(cX, cY, sBig) }],
+      { duration: 520, easing: 'ease-in-out', fill: 'forwards' }).finished;
+    // B — падение вниз с отскоком к остальным точкам
     await fly.animate([
-      { transform: 'translate(0,0) scale(1)' },
-      { transform: `translate(${tx - (pr.left + pr.width / 2)}px, ${ty - (pr.top + pr.height / 2)}px) scale(${g.dot * k / d0})` },
-    ], { duration: 850, easing: 'cubic-bezier(.45,0,.95,.55)', fill: 'forwards' }).finished;
+      { transform: at(cX, cY, sBig), offset: 0 },
+      { transform: at(slotX, slotY, sSmall), offset: .78, easing: 'cubic-bezier(.6,0,.9,.45)' },
+      { transform: at(slotX, slotY - g.dot * k * 0.8, sSmall), offset: .88 },
+      { transform: at(slotX, slotY, sSmall), offset: 1 },
+    ], { duration: 840, fill: 'forwards' }).finished;
+    // всплеск-кольцо на приземлении
+    const rip = document.createElement('span');
+    rip.style.cssText = `position:fixed;z-index:61;border-radius:50%;border:2px solid #fff;pointer-events:none;left:${slotX}px;top:${slotY}px;transform:translate(-50%,-50%)`;
+    document.body.appendChild(rip);
+    rip.animate([{ width: '0', height: '0', opacity: .85 }, { width: '64px', height: '64px', opacity: 0 }],
+      { duration: 500, easing: 'ease-out' }).finished.then(() => rip.remove());
     fly.remove(); ov.remove();
     // сцена 3: скачки по месяцу — сначала медленно, потом быстрее; на середине отъезд камеры
     const N = g.total - 1, D = 3400, t0 = performance.now();
@@ -552,7 +572,16 @@ async function reelPlay() {
       requestAnimationFrame(step);
     });
     draw(); startPulse();
-    await rafSleep(1000);
+    await rafSleep(700);
+    // «вот сколько точек» — крупный счётчик итога поверх заполненного календаря
+    const cnt = document.createElement('div');
+    cnt.className = 'reel-hook';
+    cnt.style.background = 'rgba(0,0,0,.5)';
+    cnt.innerHTML = `<span class="l1 in">вот сколько точек</span><b class="big in">${g.total}</b>`;
+    document.body.appendChild(cnt);
+    await rafSleep(1500);
+    cnt.style.transition = 'opacity .5s'; cnt.style.opacity = 0;
+    await rafSleep(520); cnt.remove();
     // сцена 4: монтаж тем — горы, океан, закат, синий
     for (const [bg, color] of [['mountains', '#34c759'], ['ocean', '#f2f2f2'], ['sunset', '#ff9500'], ['navy', '#3da9fc']]) {
       state.bg = bg; state.color = color;
