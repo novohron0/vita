@@ -21,6 +21,20 @@ const state = {
 };
 let customTitle = false;
 
+// ——— демо-режим для съёмки рилсов: /?demo[&mode=year&color=%2334c759&bg=black&shape=rounded]
+// чистый кадр (только телефон) + бесконечный цикл заполнения всей сетки
+const q = new URLSearchParams(location.search);
+const DEMO = q.has('demo');
+if (DEMO) {
+  document.body.classList.add('demo');
+  const m = q.get('mode');
+  if (TITLES[m]) { state.mode = m; state.title = TITLES[m]; }
+  const c = q.get('color');
+  if (/^#[0-9a-fA-F]{6}$/.test(c || '')) state.color = c;
+  if (BGS[q.get('bg')]) state.bg = q.get('bg');
+  if (['circle', 'square', 'rounded'].includes(q.get('shape'))) state.shape = q.get('shape');
+}
+
 const $ = id => document.getElementById(id);
 const cv = $('cv'), ctx = cv.getContext('2d');
 const cv2 = $('cv2'), ctx2 = cv2.getContext('2d');
@@ -105,7 +119,10 @@ function draw(reveal = 1, pulse = 0) {
   const bgHex = BGS[state.bg];
   const empty = blend(state.color, bgHex, 0.18);
   const text = state.bg === 'white' ? '#8a857a' : '#8e8e8e';
-  const { total, done: fullDone, current: fullCurrent } = counts();
+  const { total, done: realDone, current: realCurrent } = counts();
+  // демо: заполняем всю сетку, последняя точка остаётся дышащим кольцом
+  const fullDone = DEMO ? total - 1 : realDone;
+  const fullCurrent = DEMO ? total - 1 : realCurrent;
   // reveal < 1 — точки закрашиваются по одной (анимация загрузки/смены режима);
   // счётчики и подпись бегут вместе с ними
   const done = reveal >= 1 ? fullDone : Math.round(fullDone * reveal);
@@ -171,7 +188,7 @@ let revealRAF = null;
 function animateReveal(dur = 1150) {
   cancelAnimationFrame(revealRAF);
   cancelAnimationFrame(pulseRAF);
-  if (reduceMotion || counts().done <= 0) { draw(); startPulse(); return; }
+  if (reduceMotion || (!DEMO && counts().done <= 0)) { draw(); startPulse(); return; }
   const t0 = performance.now();
   const step = now => {
     const p = Math.min(1, (now - t0) / dur);
@@ -332,4 +349,10 @@ $('ideaSend').addEventListener('click', async () => {
   }
 });
 
-animateReveal();
+if (DEMO) {
+  // луп для съёмки: заполнение ~2.6с → пауза с дышащим кольцом → заново
+  const cycle = () => { animateReveal(2600); setTimeout(cycle, 5600); };
+  cycle();
+} else {
+  animateReveal();
+}
