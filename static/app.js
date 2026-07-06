@@ -2,7 +2,17 @@
 const W = 1179, H = 2556, GAP = 0.45, LIFE_YEARS = 90;
 
 const COLORS = ['#f2f2f2', '#1c1c1e', '#3da9fc', '#34c759', '#ff9500', '#c7c7cc', '#a78bfa', '#ff6b81', '#ff5fa2'];
-const BGS = { black: '#000000', white: '#f4f1ec', navy: '#0d1526' };
+// base — опорный цвет фона: от него считаются пустые точки и контраст свотчей;
+// сцены (закат/горы/океан) рисуются градиентом + силуэтами в paintBG (зеркало render.py)
+const BGS = {
+  black: '#000000', white: '#f4f1ec', navy: '#0d1526',
+  sunset: '#2a1230', mountains: '#0e1520', ocean: '#0a1a2b',
+};
+const SCENE_GRADS = {
+  sunset: [['#331539', 0], ['#4a1c40', .45], ['#1c0d24', 1]],
+  mountains: [['#16202e', 0], ['#0e1520', .6], ['#090d13', 1]],
+  ocean: [['#0e2138', 0], ['#0a1a2b', .55], ['#062433', 1]],
+};
 const TITLES = { month: 'ТВОЙ МЕСЯЦ', year: 'ТВОЙ ГОД', life: 'ТВОЯ ЖИЗНЬ', goal: 'ДО ЦЕЛИ' };
 const STAT_LABELS = {
   month: ['дней позади', 'впереди'],
@@ -25,6 +35,10 @@ let customTitle = false;
 // чистый кадр (только телефон) + бесконечный цикл заполнения всей сетки
 const q = new URLSearchParams(location.search);
 const DEMO = q.has('demo');
+// /?reel — кинематографичный луп: фраза печатается, точка падает в календарь,
+// скачет с разгоном, отъезд камеры, монтаж тем, финальная карточка
+const REEL = q.has('reel');
+if (REEL) document.body.classList.add('reel');
 if (DEMO) {
   document.body.classList.add('demo');
   const m = q.get('mode');
@@ -49,6 +63,42 @@ const lum = hx => {
   return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
 };
 const easeOutBack = t => { const u = t - 1; return 1 + 3.6 * u * u * u + 2.6 * u * u; };
+
+// фон: сплошной цвет или сцена (градиент + минималистичные силуэты внизу, луна сверху).
+// координаты 1:1 с _paint_bg в app/render.py — превью честное
+function paintBG(c) {
+  const key = state.bg, base = BGS[key], stops = SCENE_GRADS[key];
+  if (!stops) {
+    c.fillStyle = base;
+    c.fillRect(0, 0, W, H);
+    return;
+  }
+  const g = c.createLinearGradient(0, 0, 0, H);
+  stops.forEach(([col, p]) => g.addColorStop(p, col));
+  c.fillStyle = g;
+  c.fillRect(0, 0, W, H);
+  const poly = (pts, fill) => {
+    c.beginPath();
+    pts.forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y));
+    c.closePath(); c.fillStyle = fill; c.fill();
+  };
+  const circle = (x, y, r, fill) => { c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fillStyle = fill; c.fill(); };
+  const hline = (x1, x2, y, wd, fill) => { c.fillStyle = fill; c.fillRect(x1, y - wd / 2, x2 - x1, wd); };
+  if (key === 'mountains') {
+    circle(985, 310, 45, blend('#e8eef5', base, 0.5));
+    poly([[0, 2556], [0, 2440], [300, 2280], [620, 2470], [830, 2360], [1179, 2520], [1179, 2556]], '#141c28');
+    poly([[0, 2556], [150, 2430], [470, 2556]], '#0c1119');
+    poly([[560, 2556], [860, 2380], [1179, 2556]], '#0c1119');
+  } else if (key === 'ocean') {
+    circle(985, 310, 45, blend('#dfe9f2', base, 0.45));
+    hline(0, W, 2300, 3, blend('#ffffff', base, 0.14));
+    [[150, 2360], [110, 2415], [70, 2470], [40, 2520]].forEach(([w2, yy]) =>
+      hline(985 - w2 / 2, 985 + w2 / 2, yy, 8, blend('#dfe9f2', base, 0.16)));
+  } else if (key === 'sunset') {
+    circle(W / 2, 2730, 400, blend('#ff9b6a', base, 0.32));
+    hline(0, W, 2330, 3, blend('#ffb37c', base, 0.20));
+  }
+}
 
 function counts() {
   const now = new Date();
@@ -121,9 +171,9 @@ function draw(reveal = 1, pulse = 0, fx = null) {
   const empty = blend(state.color, bgHex, 0.18);
   const text = state.bg === 'white' ? '#8a857a' : '#8e8e8e';
   const { total, done: realDone, current: realCurrent } = counts();
-  // демо: заполняем всю сетку, последняя точка остаётся дышащим кольцом
-  const fullDone = DEMO ? total - 1 : realDone;
-  const fullCurrent = DEMO ? total - 1 : realCurrent;
+  // демо/рилс: заполняем всю сетку, последняя точка остаётся дышащим кольцом
+  const fullDone = DEMO || REEL ? total - 1 : realDone;
+  const fullCurrent = DEMO || REEL ? total - 1 : realCurrent;
   // reveal < 1 — точки закрашиваются по одной (анимация загрузки/смены режима);
   // счётчики и подпись бегут вместе с ними
   // fx — прыжковая анимация по тапу: шарик летит по сетке (fx.p — дробный индекс),
@@ -134,8 +184,7 @@ function draw(reveal = 1, pulse = 0, fx = null) {
   const lead = fx || reveal >= 1 ? -2 : current; // ведущая точка при анимации подсвечивается ярче
   const cols = gridCols(total), rows = Math.ceil(total / cols);
 
-  ctx.fillStyle = bgHex;
-  ctx.fillRect(0, 0, W, H);
+  paintBG(ctx);
 
   let dot = Math.min(W * 0.72 / (cols + (cols - 1) * GAP), H * 0.50 / (rows + (rows - 1) * GAP));
   if (cols <= 10) dot = Math.min(dot, 110);
@@ -402,10 +451,105 @@ $('ideaSend').addEventListener('click', async () => {
   }
 });
 
+// ——— рилс-сценарий: сон на rAF (не троттлится в видимой вкладке, тайминг стабильный для съёмки)
+const rafSleep = ms => new Promise(r => {
+  const s = performance.now();
+  const f = n => (n - s >= ms ? r() : requestAnimationFrame(f));
+  requestAnimationFrame(f);
+});
+
+async function reelPlay() {
+  const phoneBox = document.querySelector('.phone');
+  const geom = () => { // геометрия месячной сетки — формулы как в draw()
+    const total = counts().total, cols = 6, rows = Math.ceil(total / cols);
+    const dot = Math.min(W * 0.72 / (cols + (cols - 1) * GAP), H * 0.50 / (rows + (rows - 1) * GAP), 110);
+    const gap = dot * GAP;
+    const gridW = cols * dot + (cols - 1) * gap;
+    return { total, dot, x0: (W - gridW) / 2, y0: H * 0.55 - (rows * dot + (rows - 1) * gap) / 2 };
+  };
+  for (;;) {
+    // сцена 1: чёрный фон, пустая сетка, камера близко; фраза печатается
+    cancelAnimationFrame(pulseRAF);
+    state.mode = 'month'; state.title = TITLES.month;
+    state.bg = 'black'; state.color = '#f2f2f2'; state.shape = 'circle';
+    phoneBox.style.transition = 'none';
+    document.body.classList.remove('reel-out');
+    void phoneBox.offsetWidth;
+    phoneBox.style.transition = '';
+    draw(0);
+    const ov = document.createElement('div');
+    ov.className = 'reel-text';
+    ov.innerHTML = '<h1><span id="rt"></span><span id="rp" style="opacity:0">.</span></h1>';
+    document.body.appendChild(ov);
+    await rafSleep(800);
+    const rt = ov.querySelector('#rt');
+    for (const ch of 'Твоя жизнь — в точках') { rt.textContent += ch; await rafSleep(64); }
+    const rp = ov.querySelector('#rp');
+    rp.style.opacity = 1;
+    await rafSleep(650);
+    // сцена 2: точка из конца фразы падает в день 1
+    const pr = rp.getBoundingClientRect(), cvr = cv.getBoundingClientRect();
+    const g = geom(), k = cvr.width / W;
+    const tx = cvr.left + (g.x0 + g.dot / 2) * k, ty = cvr.top + (g.y0 + g.dot / 2) * k;
+    const d0 = Math.max(9, pr.width);
+    const fly = document.createElement('span');
+    fly.className = 'reel-dot';
+    Object.assign(fly.style, {
+      left: pr.left + pr.width / 2 - d0 / 2 + 'px', top: pr.top + pr.height / 2 - d0 / 2 + 'px',
+      width: d0 + 'px', height: d0 + 'px',
+    });
+    document.body.appendChild(fly);
+    rp.style.opacity = 0;
+    const h1 = ov.querySelector('h1');
+    h1.style.transition = 'opacity .55s'; h1.style.opacity = 0;
+    await fly.animate([
+      { transform: 'translate(0,0) scale(1)' },
+      { transform: `translate(${tx - (pr.left + pr.width / 2)}px, ${ty - (pr.top + pr.height / 2)}px) scale(${g.dot * k / d0})` },
+    ], { duration: 850, easing: 'cubic-bezier(.45,0,.95,.55)', fill: 'forwards' }).finished;
+    fly.remove(); ov.remove();
+    // сцена 3: скачки по месяцу — сначала медленно, потом быстрее; на середине отъезд камеры
+    const N = g.total - 1, D = 3400, t0 = performance.now();
+    let zoomedOut = false, prevP = 0, prevT = t0;
+    await new Promise(res => {
+      const step = now => {
+        const kk = Math.min(1, (now - t0) / D);
+        const p = N * Math.pow(kk, 2.2);
+        const interval = Math.min(420, Math.max(60, (now - prevT) / Math.max(p - prevP, 1e-3)));
+        prevP = p; prevT = now;
+        draw(1, 0, { p, interval, N });
+        if (!zoomedOut && kk > 0.45) { zoomedOut = true; document.body.classList.add('reel-out'); }
+        if (kk < 1) requestAnimationFrame(step); else res();
+      };
+      requestAnimationFrame(step);
+    });
+    draw(); startPulse();
+    await rafSleep(1000);
+    // сцена 4: монтаж тем — горы, океан, закат, синий
+    for (const [bg, color] of [['mountains', '#34c759'], ['ocean', '#f2f2f2'], ['sunset', '#ff9500'], ['navy', '#3da9fc']]) {
+      state.bg = bg; state.color = color;
+      draw(1, 0.5);
+      await rafSleep(1150);
+    }
+    // сцена 5: финал — экран гаснет, остаётся одна дышащая точка и подпись
+    const end = document.createElement('div');
+    end.className = 'reel-end';
+    end.innerHTML = '<span class="dotp"></span><p>Каждый день — одна точка.</p><b>⠿ vita · vitadots.ru</b>';
+    document.body.appendChild(end);
+    void end.offsetWidth;
+    end.classList.add('show');
+    await rafSleep(3300);
+    end.classList.remove('show');
+    await rafSleep(700);
+    end.remove();
+  }
+}
+
 if (DEMO) {
   // луп для съёмки: заполнение ~2.6с → пауза с дышащим кольцом → заново
   const cycle = () => { animateReveal(2600); setTimeout(cycle, 5600); };
   cycle();
+} else if (REEL) {
+  reelPlay();
 } else {
   animateReveal();
 }

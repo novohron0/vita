@@ -145,6 +145,29 @@ def index():
     return FileResponse(ROOT / "static" / "index.html", headers={"Cache-Control": "no-cache"})
 
 
+@app.get("/robots.txt")
+def robots():
+    # персональные ссылки (обои/установка/цели) поисковикам не нужны
+    return Response(
+        "User-agent: *\nAllow: /\n"
+        "Disallow: /s/\nDisallow: /w/\nDisallow: /g/\nDisallow: /gw/\nDisallow: /c/\nDisallow: /admin\n"
+        "Sitemap: https://vitadots.ru/sitemap.xml\n",
+        media_type="text/plain",
+    )
+
+
+@app.get("/sitemap.xml")
+def sitemap():
+    urls = "".join(
+        f"<url><loc>https://vitadots.ru/{p}</loc></url>" for p in ("", "goals", "feed", "focus")
+    )
+    return Response(
+        f'<?xml version="1.0" encoding="UTF-8"?>'
+        f'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{urls}</urlset>',
+        media_type="application/xml",
+    )
+
+
 @app.post("/api/link")
 def create_link(cfg: LinkIn, request: Request):
     idea, contact = cfg.idea.strip(), cfg.contact.strip()

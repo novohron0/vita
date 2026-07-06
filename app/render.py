@@ -13,7 +13,17 @@ GAP = 0.45  # зазор между точками, в долях диаметр
 LIFE_YEARS = 90
 
 COLORS = ["#f2f2f2", "#3da9fc", "#34c759", "#ff9500", "#c7c7cc", "#a78bfa", "#ff6b81", "#ff5fa2"]
-BGS = {"black": "#000000", "white": "#f4f1ec", "navy": "#0d1526"}
+# base-цвет фона (для пустых точек и текста); сцены дорисовываются в _paint_bg —
+# координаты 1:1 с paintBG в static/app.js, чтобы превью было честным
+BGS = {
+    "black": "#000000", "white": "#f4f1ec", "navy": "#0d1526",
+    "sunset": "#2a1230", "mountains": "#0e1520", "ocean": "#0a1a2b",
+}
+SCENE_GRADS = {
+    "sunset": (("#331539", 0.0), ("#4a1c40", 0.45), ("#1c0d24", 1.0)),
+    "mountains": (("#16202e", 0.0), ("#0e1520", 0.6), ("#090d13", 1.0)),
+    "ocean": (("#0e2138", 0.0), ("#0a1a2b", 0.55), ("#062433", 1.0)),
+}
 MODES = ("month", "year", "life", "goal")
 
 # первый существующий шрифт с кириллицей: сначала macOS, затем Linux (сервер)
@@ -41,6 +51,41 @@ def _rgb(hx: str) -> tuple[int, int, int]:
 def _blend(fg: str, bg: str, alpha: float) -> tuple[int, int, int]:
     f, b = _rgb(fg), _rgb(bg)
     return tuple(round(f[i] * alpha + b[i] * (1 - alpha)) for i in range(3))
+
+
+def _bg_key(raw) -> str:
+    return raw if raw in BGS else "black"
+
+
+def _paint_bg(draw: ImageDraw.ImageDraw, key: str, base: str) -> None:
+    """Сцена-фон: вертикальный градиент + силуэты (горы/океан/закат). Для сплошных — no-op."""
+    stops = SCENE_GRADS.get(key)
+    if not stops:
+        return
+    for y in range(H):
+        t = y / (H - 1)
+        col = _rgb(stops[-1][0])
+        for (c1, p1), (c2, p2) in zip(stops, stops[1:]):
+            if t <= p2:
+                f = 0.0 if p2 == p1 else (t - p1) / (p2 - p1)
+                a, b = _rgb(c1), _rgb(c2)
+                col = tuple(round(a[i] + (b[i] - a[i]) * f) for i in range(3))
+                break
+        draw.line(((0, y), (W, y)), fill=col)
+    if key == "mountains":
+        draw.ellipse((940, 265, 1030, 355), fill=_blend("#e8eef5", base, 0.5))
+        draw.polygon([(0, 2556), (0, 2440), (300, 2280), (620, 2470), (830, 2360), (1179, 2520), (1179, 2556)], fill="#141c28")
+        draw.polygon([(0, 2556), (150, 2430), (470, 2556)], fill="#0c1119")
+        draw.polygon([(560, 2556), (860, 2380), (1179, 2556)], fill="#0c1119")
+    elif key == "ocean":
+        draw.ellipse((940, 265, 1030, 355), fill=_blend("#dfe9f2", base, 0.45))
+        draw.line(((0, 2300), (W, 2300)), fill=_blend("#ffffff", base, 0.14), width=3)
+        refl = _blend("#dfe9f2", base, 0.16)
+        for w2, yy in ((150, 2360), (110, 2415), (70, 2470), (40, 2520)):
+            draw.line(((985 - w2 / 2, yy), (985 + w2 / 2, yy)), fill=refl, width=8)
+    elif key == "sunset":
+        draw.ellipse((W / 2 - 400, 2330, W / 2 + 400, 3130), fill=_blend("#ff9b6a", base, 0.32))
+        draw.line(((0, 2330), (W, 2330)), fill=_blend("#ffb37c", base, 0.20), width=3)
 
 
 def _parse_date(value, fallback: date) -> date:
@@ -126,7 +171,8 @@ def _streak(done_idx: set[int], upto: int) -> int:
 def render_goal(goal: dict, done: set[str], today: date | None = None) -> Image.Image:
     """Обои-виджет цели: сетка дней (клетка = день), закрашены выполненные, сегодня — кольцо."""
     today = today or date.today()
-    bg = BGS.get(goal.get("bg", ""), BGS["black"])
+    bg_key = _bg_key(goal.get("bg", ""))
+    bg = BGS[bg_key]
     color = goal.get("color") or "#34c759"
     if not re.fullmatch(r"#[0-9a-fA-F]{6}", color):
         color = "#34c759"
@@ -150,6 +196,7 @@ def render_goal(goal: dict, done: set[str], today: date | None = None) -> Image.
 
     img = Image.new("RGB", (W, H), bg)
     draw = ImageDraw.Draw(img)
+    _paint_bg(draw, bg_key, bg)
 
     max_w, max_h = W * 0.72, H * 0.50
     dot = min(max_w / (cols + (cols - 1) * GAP), max_h / (rows + (rows - 1) * GAP))
@@ -191,7 +238,8 @@ def render_goal(goal: dict, done: set[str], today: date | None = None) -> Image.
 def render_wallpaper(cfg: dict, today: date | None = None, expired: bool = False) -> Image.Image:
     today = today or date.today()
     mode = cfg.get("mode") if cfg.get("mode") in MODES else "month"
-    bg = BGS.get(cfg.get("bg", ""), BGS["black"])
+    bg_key = _bg_key(cfg.get("bg", ""))
+    bg = BGS[bg_key]
     color = cfg.get("color") or "#f2f2f2"
     if not re.fullmatch(r"#[0-9a-fA-F]{6}", color):
         color = "#f2f2f2"
@@ -207,6 +255,7 @@ def render_wallpaper(cfg: dict, today: date | None = None, expired: bool = False
 
     img = Image.new("RGB", (W, H), bg)
     draw = ImageDraw.Draw(img)
+    _paint_bg(draw, bg_key, bg)
 
     max_w, max_h = W * 0.72, H * 0.50
     dot = min(max_w / (cols + (cols - 1) * GAP), max_h / (rows + (rows - 1) * GAP))

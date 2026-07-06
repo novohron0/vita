@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" type="image/png" href="/static/img/favicon.png">
   <link rel="apple-touch-icon" href="/static/img/apple-touch.png">
-<title>Vita — твоя жизнь в точках</title>
+<title>Vita (витадотс) — твоя жизнь в точках: живые обои-календарь</title>
+<meta name="description" content="Vita (vitadots, витадотс) — живые обои-календарь жизни для айфона: каждый день закрашивается одна точка. Месяц, год, жизнь или цель + трекер целей со стриками.">
 <meta property="og:title" content="Vita — твоя жизнь в точках">
 <meta property="og:description" content="Живые обои-календарь жизни + трекер целей и фокус. Каждый день — одна точка.">
 <meta property="og:image" content="https://vitadots.ru/static/img/og.png">
@@ -23,6 +24,34 @@
   body.demo header, body.demo .home-hero, body.demo #mode, body.demo .stats,
   body.demo .controls, body.demo .mini, body.demo .page-foot { display: none !important; }
   body.demo .phone { margin-top: 4vh; width: min(76vw, 310px); }
+  /* рилс-режим (?reel): сценарий с печатающейся фразой, падающей точкой и монтажом тем */
+  body.reel header, body.reel .home-hero, body.reel #mode, body.reel .stats,
+  body.reel .controls, body.reel .mini, body.reel .page-foot { display: none !important; }
+  body.reel { overflow: hidden; }
+  body.reel .phone {
+    margin-top: 6vh; width: min(76vw, 310px);
+    animation: none; cursor: default;
+    transform: scale(1.55); transform-origin: 50% 30%;
+    transition: transform 1.15s cubic-bezier(.22,1,.36,1);
+  }
+  body.reel.reel-out .phone { transform: scale(1); }
+  .reel-text {
+    position: fixed; inset: 0; z-index: 60; pointer-events: none;
+    display: flex; align-items: center; justify-content: center;
+    padding: 0 8vw; text-align: center; background: rgba(0,0,0,.45);
+  }
+  .reel-text h1 { font-size: clamp(30px, 8.6vw, 46px); font-weight: 800; letter-spacing: -1px; color: #fff; }
+  .reel-dot { position: fixed; z-index: 61; border-radius: 50%; background: #fff; pointer-events: none; }
+  .reel-end {
+    position: fixed; inset: 0; z-index: 70; background: #000; pointer-events: none;
+    display: flex; flex-direction: column; gap: 26px; align-items: center; justify-content: center;
+    opacity: 0; transition: opacity .9s;
+  }
+  .reel-end.show { opacity: 1; }
+  .reel-end .dotp { width: 26px; height: 26px; border-radius: 50%; background: #fff; animation: reelPulse 2.2s ease-in-out infinite; }
+  .reel-end p { color: #cfcfd4; font-size: 19px; }
+  .reel-end b { color: #fff; letter-spacing: .4px; }
+  @keyframes reelPulse { 50% { transform: scale(1.35); box-shadow: 0 0 34px rgba(255,255,255,.35); } }
 </style>
 </head>
 <body>
@@ -83,10 +112,13 @@
     </div>
 
     <div class="field">Фон
-      <div class="seg" id="bg">
+      <div class="seg" id="bg" style="flex-wrap:wrap">
         <button data-v="black" class="on">Чёрный</button>
         <button data-v="white">Белый</button>
         <button data-v="navy">Синий</button>
+        <button data-v="mountains">Горы</button>
+        <button data-v="ocean">Океан</button>
+        <button data-v="sunset">Закат</button>
       </div>
     </div>
 
@@ -146,6 +178,6 @@
 
 <footer class="page-foot">от 49 ₽/мес · без автосписаний</footer>
 
-<script src="/static/app.js?v=10"></script>
+<script src="/static/app.js?v=11"></script>
 </body>
 </html>
