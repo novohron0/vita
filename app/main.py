@@ -79,6 +79,12 @@ def db() -> sqlite3.Connection:
         conn.execute("ALTER TABLE goals ADD COLUMN root TEXT")  # корень челленджа (NULL = сам себе корень)
     except sqlite3.OperationalError:
         pass
+    # вейтлист беты Vita Focus (contact = телега/инста, PRIMARY KEY даёт дедуп)
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS focus_wait("
+        "contact TEXT PRIMARY KEY, "
+        "created TEXT NOT NULL DEFAULT (datetime('now')))"
+    )
     return conn
 
 
@@ -113,6 +119,10 @@ class GoalIn(BaseModel):
 
 class CheckIn(BaseModel):
     day: str = ""
+
+
+class FocusWaitIn(BaseModel):
+    contact: str = ""
 
 
 def _gen_code() -> str:
@@ -294,6 +304,17 @@ def goals_new():
 @app.get("/focus")
 def focus_page():
     return FileResponse(ROOT / "static" / "focus.html", headers={"Cache-Control": "no-cache"})
+
+
+@app.post("/api/focus-wait")
+def focus_wait(fw: FocusWaitIn):
+    """Вейтлист беты Vita Focus: телега/инста. Повторная отправка — тоже ок (дедуп по contact)."""
+    contact = fw.contact.strip()
+    if len(contact) < 2:
+        raise HTTPException(422, "Оставь телегу или инсту — туда позовём в бету")
+    with db() as conn:
+        conn.execute("INSERT OR IGNORE INTO focus_wait(contact) VALUES(?)", (contact[:64],))
+    return {"ok": True}
 
 
 @app.get("/feed")
@@ -534,6 +555,9 @@ def admin(token: str = ""):
         rv_rows = conn.execute(
             "SELECT code, text FROM reviews ORDER BY id"
         ).fetchall()
+        fw_rows = conn.execute(
+            "SELECT contact, created FROM focus_wait ORDER BY created DESC"
+        ).fetchall()
     reviews: dict[str, list[str]] = {}
     for r_code, r_text in rv_rows:
         reviews.setdefault(r_code, []).append(r_text)
@@ -575,7 +599,19 @@ def admin(token: str = ""):
             f'<button onclick="ext(\'{code}\', 30)">+месяц</button>'
             f'<button onclick="ext(\'{code}\', 3650)">навсегда</button></div></div>'
         )
-    html = ADMIN_PAGE.format(count=len(rows), cards="".join(cards) or "<p>Пока пусто.</p>", token=ADMIN_TOKEN)
+    # вейтлист беты Vita Focus — карточкой над идеями (виден только когда кто-то записался)
+    focus_block = ""
+    if fw_rows:
+        items = "".join(
+            f'<div>{esc(c)} <span style="color:#8e8e8e">· {cr}</span></div>' for c, cr in fw_rows
+        )
+        focus_block = (
+            f'<div class="card"><div class="meta"><span>🍎 Vita Focus — ждут бету: '
+            f'<b>{len(fw_rows)}</b></span></div><div class="idea">{items}</div></div>'
+        )
+    html = ADMIN_PAGE.format(
+        count=len(rows), cards=focus_block + ("".join(cards) or "<p>Пока пусто.</p>"), token=ADMIN_TOKEN
+    )
     return HTMLResponse(html)
 
 

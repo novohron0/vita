@@ -75,6 +75,35 @@
 
   .fnote { text-align: center; color: #6e6e73; font-size: 12px; line-height: 1.5; margin: 16px 4px 0; }
   .fnote b { color: #c8c8cc; }
+
+  /* ——— лендинг-секции ——— */
+  .sect-h { font-size: 12px; letter-spacing: 1.4px; text-transform: uppercase; color: #6e6e73;
+    margin: 36px 4px 12px; text-align: center; }
+  .sites, .feats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .site, .feat { background: #101012; border: 1px solid #1d1d20; border-radius: 14px;
+    padding: 13px 14px; transition: border-color .3s, transform .2s; }
+  .site:hover, .feat:hover { border-color: #2e2e34; transform: translateY(-2px); }
+  .site b { display: flex; align-items: center; gap: 7px; font-size: 14px; }
+  .site .g { color: #c8c8cc; font-size: 16px; width: 20px; text-align: center; }
+  .site span { display: block; color: #8a8a90; font-size: 11.5px; line-height: 1.45; margin-top: 5px; }
+  .feat .ic { font-size: 18px; filter: grayscale(1) brightness(1.35); display: block; margin-bottom: 7px; }
+  .feat b { font-size: 13.5px; display: block; }
+  .feat span { color: #8a8a90; font-size: 11.5px; line-height: 1.45; display: block; margin-top: 3px; }
+  .hiw { display: flex; flex-direction: column; gap: 8px; }
+  .hiw div { display: flex; gap: 12px; align-items: baseline; background: #101012;
+    border: 1px solid #1d1d20; border-radius: 14px; padding: 12px 14px; font-size: 13.5px; color: #c8c8cc; }
+  .hiw i { font-style: normal; color: #5c5c66; font-weight: 800; font-size: 15px; }
+  .beta { margin-top: 36px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.09);
+    border-radius: 20px; padding: 22px 16px; text-align: center;
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+  .beta b { font-size: 17px; }
+  .beta p { color: #8a8a90; font-size: 13.5px; margin: 6px 0 14px; line-height: 1.5; }
+  .beta .ok { color: #7fd4a3; font-weight: 600; font-size: 14px; margin-top: 10px; }
+  /* секции проявляются при скролле — тихо, один раз */
+  .sr { opacity: 0; transform: translateY(14px);
+    transition: opacity .6s cubic-bezier(.22,1,.36,1), transform .6s cubic-bezier(.22,1,.36,1); }
+  .sr.in { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) { .sr { opacity: 1; transform: none; } }
   .fdiv { display: flex; align-items: center; gap: 12px; color: #5c5c66; font-size: 12px; margin: 30px 0 16px; }
   .fdiv::before, .fdiv::after { content:""; flex:1; height:1px; background: rgba(255,255,255,0.08); }
   .player-h { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
@@ -109,6 +138,42 @@
 
   <p class="fnote">Это интерактивное превью панели. <b>Реальную блокировку</b> на youtube.com включает
     расширение Safari (готовим к App&nbsp;Store) — сайт по правилам браузера не может трогать чужой домен.</p>
+
+  <div class="sect-h sr">Что убирает</div>
+  <div class="sites">
+    <div class="site sr"><b><span class="g">▶</span>YouTube</b><span>Shorts · рекомендации · комменты · автоплей</span></div>
+    <div class="site sr"><b><span class="g">◎</span>Instagram</b><span>Reels · Explore · Stories</span></div>
+    <div class="site sr"><b><span class="g">𝕏</span>X</b><span>«Для вас» · тренды · кого читать</span></div>
+    <div class="site sr"><b><span class="g">◔</span>Reddit</b><span>лента · Popular / All</span></div>
+    <div class="site sr"><b><span class="g">ⓕ</span>Facebook</b><span>лента · Reels · Stories</span></div>
+    <div class="site sr"><b><span class="g">in</span>LinkedIn</b><span>лента · новости</span></div>
+  </div>
+
+  <div class="sect-h sr">Против срыва</div>
+  <div class="feats">
+    <div class="feat sr"><span class="ic">🔒</span><b>PIN + Face ID</b><span>выключить сгоряча не выйдет — сначала пароль</span></div>
+    <div class="feat sr"><span class="ic">⏰</span><b>Расписание</b><span>блокируй только в рабочие часы — вечером всё вернётся</span></div>
+    <div class="feat sr"><span class="ic">🎛</span><b>115+ тумблеров</b><span>каждый элемент каждого сайта — отдельно</span></div>
+    <div class="feat sr"><span class="ic">☁️</span><b>Синк по iCloud</b><span>iPhone · iPad · Mac — настройки везде одни</span></div>
+  </div>
+
+  <div class="sect-h sr">Как это будет</div>
+  <div class="hiw">
+    <div class="sr"><i>1</i>Ставишь из App Store</div>
+    <div class="sr"><i>2</i>Включаешь расширение в Safari</div>
+    <div class="sr"><i>3</i>Тишина. Соцсети снова инструменты</div>
+  </div>
+
+  <div class="beta sr">
+    <b>Хочешь в бету первым?</b>
+    <p>Оставь телегу или инсту — напишем, когда откроем тест.</p>
+    <div class="focus-row" id="betaRow">
+      <input id="betaContact" maxlength="64" placeholder="@nickname" autocomplete="off">
+      <button class="primary" id="betaBtn">Хочу в бету</button>
+    </div>
+    <p class="err" id="betaErr" hidden></p>
+    <p class="ok" id="betaOk" hidden>✓ Ты в списке — напишем, когда откроем бету</p>
+  </div>
 
   <div class="fdiv">а посмотреть чисто можно уже сейчас</div>
 
@@ -215,6 +280,36 @@ function updateScore() {
 buildTabs(); renderRows(); updateScore(); refreshTabs();
 requestAnimationFrame(()=>requestAnimationFrame(moveInd));
 window.addEventListener('resize', moveInd);
+
+// ——— лендинг: секции проявляются при скролле (один раз) ———
+const io = new IntersectionObserver(es => es.forEach(e => {
+  if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+}), { threshold: 0.15 });
+document.querySelectorAll('.sr').forEach(el => io.observe(el));
+
+// ——— вейтлист беты ———
+const betaBtn = $('#betaBtn'), betaIn = $('#betaContact'), betaErr = $('#betaErr'), betaOk = $('#betaOk');
+async function betaJoin() {
+  const contact = betaIn.value.trim();
+  betaErr.hidden = true;
+  if (contact.length < 2) { betaErr.textContent = 'Напиши телегу или инсту — хотя бы пару символов'; betaErr.hidden = false; return; }
+  betaBtn.disabled = true;
+  try {
+    const r = await fetch('/api/focus-wait', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contact })
+    });
+    if (!r.ok) throw 0;
+    $('#betaRow').hidden = true;
+    betaOk.hidden = false;
+  } catch {
+    betaErr.textContent = 'Нет связи с сервером — попробуй ещё раз';
+    betaErr.hidden = false;
+    betaBtn.disabled = false;
+  }
+}
+betaBtn.addEventListener('click', betaJoin);
+betaIn.addEventListener('keydown', e => { if (e.key === 'Enter') betaJoin(); });
 
 // ——— рабочий ютуб-плеер ———
 const err=$('#err'), stage=$('#stage'), frame=$('#frame'), urlIn=$('#url');
