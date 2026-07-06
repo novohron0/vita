@@ -6,7 +6,7 @@
   <link rel="icon" type="image/png" href="/static/img/favicon.png">
   <link rel="apple-touch-icon" href="/static/img/apple-touch.png">
 <title>Vita — цель</title>
-<link rel="stylesheet" href="/static/style.css?v=14">
+<link rel="stylesheet" href="/static/style.css?v=15">
 </head>
 <body>
 <header>
@@ -25,7 +25,11 @@
 const CODE = "{{CODE}}";
 const SHORTCUT = "{{SHORTCUT_URL}}";
 const app = document.getElementById('app');
-let G = null, done = new Set();
+let G = null, done = new Set(), lastPct = 0;
+
+// ?demo — луп для съёмки рилса: дни проживаются сами, в базу ничего не пишется
+const DEMO = new URLSearchParams(location.search).has('demo');
+if (DEMO) document.body.classList.add('demo-goal');
 
 const parseLocal = s => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); };
 const isoLocal = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -61,11 +65,14 @@ async function toggle(key) {
 }
 
 function render(anim) {
-  const start = parseLocal(G.start), t = today();
+  // в демо время «уже прошло» — ни одна точка не заблокирована как будущая
+  const start = parseLocal(G.start), t = DEMO ? addDays(start, G.days) : today();
   const doneCount = done.size;
   const pct = Math.round(doneCount / G.days * 100);
   const finished = doneCount >= G.days;
   const cols = G.days <= 42 ? 6 : G.days <= 120 ? 10 : 14;
+  const streak = DEMO ? doneCount : currentStreak();
+  const best = DEMO ? doneCount : bestStreak();
 
   const cells = [];
   let di = 0; // порядковый среди закрашенных — для каскадной задержки при загрузке
@@ -94,10 +101,10 @@ function render(anim) {
     </div>
     <div class="stats">
       <div><b>${doneCount}<span style="font-size:.5em;color:#6e6e73">/${G.days}</span></b><span>выполнено</span></div>
-      <div><b>${currentStreak()}🔥</b><span>стрик</span></div>
-      <div><b>${bestStreak()}</b><span>рекорд</span></div>
+      <div><b class="${anim && anim.pop ? 'stat-pop' : ''}">${streak}🔥</b><span>стрик</span></div>
+      <div><b>${best}</b><span>рекорд</span></div>
     </div>
-    <div class="gbar"><i style="width:${pct}%;background:${G.color}"></i></div>
+    <div class="gbar"><i style="width:${lastPct}%;background:${G.color}"></i></div>
     ${finished ? `<div class="celebrate"><h2>Цель закрыта! 🎉</h2><p>${G.reward ? 'Ты обещал себе: <b>' + escapeHtml(G.reward) + '</b>. Забирай.' : 'Ты дошёл. Гордись.'}</p></div>` : ''}
     <div class="gt-grid" style="grid-template-columns:repeat(${cols},1fr)">${cells.join('')}</div>
     <div class="actions">
@@ -118,6 +125,21 @@ function render(anim) {
     </details>
     <p class="page-foot" style="text-align:center">Отмечай каждый день, не разрывай цепочку</p>`;
 
+  // прогресс-бар плавно доезжает до нового значения (иначе innerHTML сбрасывает transition)
+  const bar = app.querySelector('.gbar > i');
+  requestAnimationFrame(() => requestAnimationFrame(() => { bar.style.width = pct + '%'; }));
+  lastPct = pct;
+
+  if (anim && anim.pop) {
+    const grid = app.querySelector('.gt-grid');
+    const cell = grid.querySelector(`[data-key="${anim.pop}"]`);
+    if (cell) {
+      burst(cell, G.color);
+      wave(grid, [...grid.children].indexOf(cell), cols);
+    }
+    if (finished) confetti(G.color);
+  }
+
   app.querySelector('.gt-grid').addEventListener('click', e => {
     const c = e.target.closest('.gt-cell');
     if (!c || c.disabled) return;
@@ -125,6 +147,72 @@ function render(anim) {
   });
   document.getElementById('share').addEventListener('click', shareLink);
   document.getElementById('join').addEventListener('click', join);
+}
+
+// брызги из тапнутой точки
+function burst(cell, color) {
+  const b = document.createElement('span');
+  b.className = 'gt-burst';
+  for (let i = 0; i < 9; i++) {
+    const p = document.createElement('i');
+    const a = Math.random() * Math.PI * 2, r = 26 + Math.random() * 30;
+    p.style.setProperty('--tx', Math.cos(a) * r + 'px');
+    p.style.setProperty('--ty', Math.sin(a) * r + 'px');
+    p.style.setProperty('--sz', 3 + Math.random() * 4 + 'px');
+    p.style.setProperty('--pc', Math.random() < 0.75 ? color : '#fff');
+    b.appendChild(p);
+  }
+  cell.appendChild(b);
+  setTimeout(() => b.remove(), 700);
+}
+
+// соседние точки подпрыгивают волной от места тапа
+function wave(grid, idx, cols) {
+  const cells = grid.children;
+  const r0 = Math.floor(idx / cols), c0 = idx % cols;
+  for (let i = 0; i < cells.length; i++) {
+    if (i === idx) continue;
+    const dist = Math.hypot(Math.floor(i / cols) - r0, (i % cols) - c0);
+    if (dist > 3.2) continue;
+    const el = cells[i];
+    el.style.setProperty('--wd', Math.round(dist * 55) + 'ms');
+    el.classList.add('gt-wave');
+    setTimeout(() => el.classList.remove('gt-wave'), 750 + dist * 55);
+  }
+}
+
+// конфетти на закрытии цели
+function confetti(color) {
+  if (document.querySelector('.confetti')) return;
+  const c = document.createElement('div');
+  c.className = 'confetti';
+  const colors = [color, '#fff', '#ffd60a', color];
+  for (let i = 0; i < 70; i++) {
+    const p = document.createElement('i');
+    p.style.setProperty('--x', Math.random() * 100 + 'vw');
+    p.style.setProperty('--pc', colors[Math.floor(Math.random() * colors.length)]);
+    p.style.setProperty('--r', Math.random() * 360 + 'deg');
+    p.style.setProperty('--t', 1.6 + Math.random() * 1.4 + 's');
+    p.style.setProperty('--cd', Math.random() * 0.5 + 's');
+    c.appendChild(p);
+  }
+  document.body.appendChild(c);
+  setTimeout(() => c.remove(), 3600);
+}
+
+// демо-луп: сетка пустеет → дни проживаются один за другим → конфетти → заново
+async function demoLoop() {
+  const start = parseLocal(G.start);
+  const keys = [];
+  for (let i = 0; i < G.days; i++) keys.push(isoLocal(addDays(start, i)));
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const stepMs = Math.max(90, Math.min(220, Math.round(5200 / G.days)));
+  for (;;) {
+    done = new Set(); lastPct = 0; render();
+    await sleep(1000);
+    for (const k of keys) { done.add(k); render({ pop: k }); await sleep(stepMs); }
+    await sleep(3400); // celebrate + конфетти в кадре
+  }
 }
 
 async function join() {
@@ -160,6 +248,7 @@ function escapeHtml(s) { const d = document.createElement('div'); d.textContent 
     if (!r.ok) { app.innerHTML = '<p class="err">Цель не найдена</p>'; return; }
     G = await r.json();
     done = new Set(G.done);
+    if (DEMO) { demoLoop(); return; }
     render('in');
   } catch {
     app.innerHTML = '<p class="err">Нет связи с сервером — обнови страницу</p>';

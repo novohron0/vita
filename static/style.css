@@ -374,6 +374,7 @@ header .logo { color: inherit; text-decoration: none; }
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   transition: transform 0.1s;
+  position: relative; /* якорь для брызг .gt-burst */
 }
 .gt-cell:active { transform: scale(0.86); }
 .gt-cell:disabled { cursor: default; opacity: 0.5; }
@@ -397,6 +398,46 @@ header .logo { color: inherit; text-decoration: none; }
 }
 @keyframes gtPop { 0% { transform: scale(.35); } 55% { transform: scale(1.18); } 100% { transform: scale(1); } }
 @keyframes gtRipple { from { box-shadow: 0 0 0 0 rgba(255,255,255,.55); } to { box-shadow: 0 0 0 11px rgba(255,255,255,0); } }
+
+/* волна от тапа: соседи подпрыгивают с задержкой по расстоянию (после gt-today, чтобы перебить дыхание) */
+.gt-cell.gt-wave .gt-dot { animation: gtWave .5s cubic-bezier(.34,1.56,.64,1); animation-delay: var(--wd, 0ms); }
+@keyframes gtWave { 35% { transform: scale(1.22); } }
+
+/* брызги из точки при тапе */
+.gt-burst { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+.gt-burst i {
+  position: absolute; left: 50%; top: 50%;
+  width: var(--sz, 4px); height: var(--sz, 4px);
+  border-radius: 50%; background: var(--pc, #fff);
+  animation: gtParticle .65s cubic-bezier(.16,.84,.44,1) forwards;
+}
+@keyframes gtParticle {
+  from { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  to { transform: translate(calc(-50% + var(--tx)), calc(-50% + var(--ty))) scale(.15); opacity: 0; }
+}
+
+/* стрик подпрыгивает при отметке */
+.stats b { display: inline-block; }
+.stats .stat-pop { animation: statPop .5s cubic-bezier(.34,1.56,.64,1); }
+@keyframes statPop { 40% { transform: scale(1.3); } }
+
+/* конфетти на закрытии цели */
+.confetti { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 90; }
+.confetti i {
+  position: absolute; top: -3vh; left: var(--x);
+  width: 8px; height: 14px; border-radius: 2px; background: var(--pc);
+  opacity: 0;
+  animation: confFall var(--t, 2s) cubic-bezier(.2,.6,.4,1) var(--cd, 0s) forwards;
+}
+@keyframes confFall {
+  0% { opacity: 1; transform: translateY(0) rotate(var(--r, 0deg)); }
+  100% { opacity: .9; transform: translateY(108vh) rotate(calc(var(--r, 0deg) + 540deg)); }
+}
+
+/* демо-луп цели (?demo) — чистый кадр для съёмки рилса: дни проживаются сами */
+body.demo-goal header, body.demo-goal .actions, body.demo-goal #join,
+body.demo-goal .screen, body.demo-goal .page-foot { display: none !important; }
+body.demo-goal main { pointer-events: none; }
 
 .celebrate { background: #0d1a12; border: 1px solid #1e3a2a; border-radius: 18px; padding: 18px; text-align: center; }
 .celebrate h2 { font-size: 20px; font-weight: 800; margin-bottom: 6px; }
