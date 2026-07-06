@@ -41,6 +41,17 @@
     padding: 0 8vw; text-align: center; background: rgba(0,0,0,.45);
   }
   .reel-text h1 { font-size: clamp(30px, 8.6vw, 46px); font-weight: 800; letter-spacing: -1px; color: #fff; }
+  /* хук: «Твоя жизнь — 4 000 недель», число набегает */
+  .reel-hook {
+    position: fixed; inset: 0; z-index: 65; background: #000; pointer-events: none;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 4px; text-align: center; padding: 0 6vw;
+  }
+  .reel-hook .l1 { color: #8a8a90; font-size: clamp(19px, 5.4vw, 28px); font-weight: 600; letter-spacing: .3px; opacity: 0; margin-bottom: 6px; }
+  .reel-hook .big { color: #fff; font-size: clamp(74px, 26vw, 150px); font-weight: 800; letter-spacing: -3px; line-height: .95; opacity: 0; font-variant-numeric: tabular-nums; text-shadow: 0 0 50px rgba(255,255,255,.3); }
+  .reel-hook .l3 { color: #fff; font-size: clamp(30px, 9vw, 52px); font-weight: 800; letter-spacing: -1px; opacity: 0; }
+  .reel-hook .in { animation: hookIn .5s cubic-bezier(.2,.8,.3,1) forwards; }
+  @keyframes hookIn { from { opacity: 0; transform: translateY(16px) scale(.9); filter: blur(7px); } to { opacity: 1; transform: none; filter: blur(0); } }
   .reel-dot { position: fixed; z-index: 61; border-radius: 50%; background: #fff; pointer-events: none; }
   .reel-end {
     position: fixed; inset: 0; z-index: 70; background: #000; pointer-events: none;
@@ -178,6 +189,6 @@
 
 <footer class="page-foot">от 49 ₽/мес · без автосписаний</footer>
 
-<script src="/static/app.js?v=11"></script>
+<script src="/static/app.js?v=13"></script>
 </body>
 </html>

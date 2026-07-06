@@ -468,7 +468,8 @@ async function reelPlay() {
     return { total, dot, x0: (W - gridW) / 2, y0: H * 0.55 - (rows * dot + (rows - 1) * gap) / 2 };
   };
   for (;;) {
-    // сцена 1: чёрный фон, пустая сетка, камера близко; фраза печатается
+    // сцена 0: ХУК — на чёрном набегает число «Твоя жизнь — 4 000 недель»,
+    // держится и гаснет. Рифмуется со следующей фразой «Твоя жизнь — в точках».
     cancelAnimationFrame(pulseRAF);
     state.mode = 'month'; state.title = TITLES.month;
     state.bg = 'black'; state.color = '#f2f2f2'; state.shape = 'circle';
@@ -477,6 +478,32 @@ async function reelPlay() {
     void phoneBox.offsetWidth;
     phoneBox.style.transition = '';
     draw(0);
+    if (!q.has('nohook')) {
+      const hook = document.createElement('div');
+      hook.className = 'reel-hook';
+      hook.innerHTML = '<span class="l1">Твоя жизнь —</span><b class="big" id="hn">0</b><span class="l3">недель</span>';
+      document.body.appendChild(hook);
+      await rafSleep(280);
+      hook.querySelector('.l1').classList.add('in');
+      await rafSleep(430);
+      hook.querySelector('.big').classList.add('in');
+      const hn = hook.querySelector('#hn'), tN = performance.now(), NUM = 4000, durN = 1000;
+      await new Promise(res => {
+        const st = now => {
+          const kk = Math.min(1, (now - tN) / durN);
+          hn.textContent = (Math.round(NUM * (1 - Math.pow(1 - kk, 3)) / 10) * 10).toLocaleString('ru-RU');
+          if (kk < 1) requestAnimationFrame(st); else res();
+        };
+        requestAnimationFrame(st);
+      });
+      hn.textContent = NUM.toLocaleString('ru-RU');
+      hook.querySelector('.l3').classList.add('in'); // «недель» вспыхивает, когда число село
+      await rafSleep(1500);
+      hook.style.transition = 'opacity .5s'; hook.style.opacity = 0;
+      await rafSleep(540);
+      hook.remove();
+    }
+    // сцена 1: чёрный фон, пустая сетка, камера близко; фраза печатается
     const ov = document.createElement('div');
     ov.className = 'reel-text';
     ov.innerHTML = '<h1><span id="rt"></span><span id="rp" style="opacity:0">.</span></h1>';
