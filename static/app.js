@@ -101,11 +101,16 @@ function drawWatermark(cx, cy, fill) {
   ctx.textAlign = 'center';
 }
 
-function draw() {
+function draw(reveal = 1) {
   const bgHex = BGS[state.bg];
   const empty = blend(state.color, bgHex, 0.18);
   const text = state.bg === 'white' ? '#8a857a' : '#8e8e8e';
-  const { total, done, current } = counts();
+  const { total, done: fullDone, current: fullCurrent } = counts();
+  // reveal < 1 — точки закрашиваются по одной (анимация загрузки/смены режима);
+  // счётчики и подпись бегут вместе с ними
+  const done = reveal >= 1 ? fullDone : Math.round(fullDone * reveal);
+  const current = reveal >= 1 ? fullCurrent : (done < total ? done : null);
+  const lead = reveal >= 1 ? -2 : current; // ведущая точка при анимации подсвечивается ярче
   const cols = gridCols(total), rows = Math.ceil(total / cols);
 
   ctx.fillStyle = bgHex;
@@ -126,7 +131,9 @@ function draw() {
     } else if (current !== null && i === current) {
       ctx.strokeStyle = state.color;
       ctx.lineWidth = Math.max(2, dot * 0.09);
+      if (i === lead) { ctx.shadowColor = state.color; ctx.shadowBlur = dot * 0.6; }
       ctx.stroke();
+      ctx.shadowBlur = 0;
     } else {
       ctx.fillStyle = empty;
       ctx.fill();
@@ -157,6 +164,21 @@ function draw() {
   ctx2.drawImage(cv, 0, 0);
 }
 
+// точки закрашиваются по одной при загрузке и смене режима — «оживает» на глазах
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let revealRAF = null;
+function animateReveal(dur = 1150) {
+  cancelAnimationFrame(revealRAF);
+  if (reduceMotion || counts().done <= 0) { draw(); return; }
+  const t0 = performance.now();
+  const step = now => {
+    const p = Math.min(1, (now - t0) / dur);
+    draw(1 - Math.pow(1 - p, 3)); // easeOutCubic
+    if (p < 1) revealRAF = requestAnimationFrame(step);
+  };
+  revealRAF = requestAnimationFrame(step);
+}
+
 // мини-превью в углу, пока большой телефон не виден — не нужно мотать вверх
 const phoneEl = document.querySelector('.phone');
 function updateMini() {
@@ -171,14 +193,14 @@ $('mini').addEventListener('click', () => {
 
 // --- контролы ---
 
-function bindSeg(id, apply) {
+function bindSeg(id, apply, anim) {
   const seg = $(id);
   seg.addEventListener('click', e => {
     const btn = e.target.closest('button');
     if (!btn) return;
     seg.querySelectorAll('button').forEach(b => b.classList.toggle('on', b === btn));
     apply(btn.dataset.v);
-    draw();
+    (anim ? animateReveal : draw)();
   });
 }
 
@@ -190,7 +212,7 @@ bindSeg('mode', v => {
     state.title = TITLES[v];
     $('title').value = state.title;
   }
-});
+}, true);
 bindSeg('shape', v => { state.shape = v; });
 bindSeg('footer', v => { state.footer = v === '1'; });
 bindSeg('bg', v => {
@@ -237,13 +259,13 @@ $('title').addEventListener('input', e => {
 
 $('birth').addEventListener('change', e => {
   state.birth = e.target.value || '2000-01-01';
-  draw();
+  animateReveal();
 });
 
 $('goalStart').value = state.start;
 $('goalEnd').value = state.end;
-$('goalStart').addEventListener('change', e => { state.start = e.target.value || todayISO; draw(); });
-$('goalEnd').addEventListener('change', e => { state.end = e.target.value || plus30; draw(); });
+$('goalStart').addEventListener('change', e => { state.start = e.target.value || todayISO; animateReveal(); });
+$('goalEnd').addEventListener('change', e => { state.end = e.target.value || plus30; animateReveal(); });
 
 $('dl').addEventListener('click', () => {
   cv.toBlob(blob => {
@@ -289,4 +311,4 @@ $('ideaSend').addEventListener('click', async () => {
   }
 });
 
-draw();
+animateReveal();
