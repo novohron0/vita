@@ -1,7 +1,7 @@
 // Превью и скачивание рендерятся на канвасе 1:1 с серверным рендером (app/render.py).
 const W = 1179, H = 2556, GAP = 0.45, LIFE_YEARS = 90;
 
-const COLORS = ['#f2f2f2', '#1c1c1e', '#3da9fc', '#34c759', '#ff9500', '#c7c7cc', '#a78bfa', '#ff6b81', '#ff5fa2'];
+const COLORS = ['#f2f2f2', '#000000', '#3da9fc', '#34c759', '#ff9500', '#c7c7cc', '#a78bfa', '#ff6b81', '#ff5fa2'];
 // base — опорный цвет фона: от него считаются пустые точки и контраст свотчей;
 // сцены (закат/горы/океан) рисуются градиентом + силуэтами в paintBG (зеркало render.py)
 const BGS = {
@@ -713,6 +713,7 @@ for (const c of COLORS) {
   b.className = 'swatch' + (c === state.color ? ' on' : '');
   b.style.background = c;
   b.dataset.v = c;
+  if (lum(c) < 0.12) b.classList.add('swatch-ink');
   swatches.appendChild(b);
 }
 refreshSwatches(); // сразу гасим цвета, нечитаемые на стартовом фоне (иначе графит на чёрном → невидимые точки)
