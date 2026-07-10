@@ -164,13 +164,15 @@ def _glass_dot(img: Image.Image, box, color: str, shape: str, mode: str = "fille
     img.paste(layer, (x0, y0), layer)
 
 
-def _solid_dot(img: Image.Image, box, color: str, shape: str, mode: str = "filled") -> None:
+def _classic_dot(img: Image.Image, box, color: str, shape: str, mode: str, bg_hex: str) -> None:
+    """Оригинальные точки: заливка цветом, пустые — blend(color, bg, 0.18), кольцо — обводка."""
     x0, y0, x1, y1 = int(box[0]), int(box[1]), int(box[2]), int(box[3])
     w, h = x1 - x0, y1 - y0
     if w < 2:
         return
     d = ImageDraw.Draw(img)
-    r, g, b = _rgb(color)
+    empty = _blend(color, bg_hex, 0.18)
+    col = _rgb(color)
     rad = int(min(w, h) * 0.3) if shape == "rounded" else 0
     ib = (x0, y0, x1 - 1, y1 - 1)
     lw, lh = w, h
@@ -179,9 +181,9 @@ def _solid_dot(img: Image.Image, box, color: str, shape: str, mode: str = "fille
         poly = _shape_points(shape, lw, lh)
         if poly is not None:
             shifted = [(x0 + px, y0 + py) for px, py in poly]
-            if fill:
+            if fill is not None:
                 d.polygon(shifted, fill=fill)
-            if outline:
+            if outline is not None:
                 d.polygon(shifted, outline=outline, width=width)
         elif shape == "circle":
             d.ellipse(ib, fill=fill, outline=outline, width=width)
@@ -191,19 +193,18 @@ def _solid_dot(img: Image.Image, box, color: str, shape: str, mode: str = "fille
             d.rounded_rectangle(ib, radius=rad, fill=fill, outline=outline, width=width)
 
     if mode == "empty":
-        shape_draw((255, 255, 255, 42), (255, 255, 255, 58), max(1, round(w * 0.06)))
+        shape_draw(empty)
     elif mode == "ring":
-        shape_draw((r, g, b, 32))
-        shape_draw(None, (r, g, b, 255), max(2, round(w * 0.09)))
+        shape_draw(None, col, max(2, round(w * 0.09)))
     else:
-        shape_draw((r, g, b, 255))
+        shape_draw(col)
 
 
-def _dot(img: Image.Image, box, color: str, shape: str, mode: str, glass: bool = True) -> None:
+def _dot(img: Image.Image, box, color: str, shape: str, mode: str, glass: bool, bg_hex: str) -> None:
     if glass:
         _glass_dot(img, box, color, shape, mode)
     else:
-        _solid_dot(img, box, color, shape, mode)
+        _classic_dot(img, box, color, shape, mode, bg_hex)
 
 
 def _star(draw: ImageDraw.ImageDraw, cx: float, cy: float, r: float, fill) -> None:
@@ -459,11 +460,11 @@ def render_goal(goal: dict, done: set[str], today: date | None = None) -> Image.
         x, y = x0 + c * (dot + gap), y0 + r * (dot + gap)
         box = (x, y, x + dot, y + dot)
         if i in done_idx:
-            _dot(img, box, color, shape, "filled")
+            _dot(img, box, color, shape, "filled", False, bg)
         elif i == today_idx:
-            _dot(img, box, color, shape, "ring")
+            _dot(img, box, color, shape, "ring", False, bg)
         else:
-            _dot(img, box, color, shape, "empty")
+            _dot(img, box, color, shape, "empty", False, bg)
 
     if title:
         draw.text((W / 2, y0 - 190), title, font=_font(64), fill=color, anchor="mm")
@@ -484,7 +485,7 @@ def render_wallpaper(cfg: dict, today: date | None = None, expired: bool = False
     if not re.fullmatch(r"#[0-9a-fA-F]{6}", color):
         color = "#f2f2f2"
     shape = cfg.get("shape", "circle")
-    glass = cfg.get("glass", True)
+    glass = cfg.get("glass", False)
     title = (cfg.get("title") or "").strip().upper()
 
     text = "#8a857a" if bg_key == "white" else "#8e8e8e"
@@ -511,11 +512,11 @@ def render_wallpaper(cfg: dict, today: date | None = None, expired: bool = False
         x, y = x0 + c * (dot + gap), y0 + r * (dot + gap)
         box = (x, y, x + dot, y + dot)
         if i < done:
-            _dot(img, box, color, shape, "filled", glass)
+            _dot(img, box, color, shape, "filled", glass, bg)
         elif current is not None and i == current:
-            _dot(img, box, color, shape, "ring", glass)
+            _dot(img, box, color, shape, "ring", glass, bg)
         else:
-            _dot(img, box, color, shape, "empty", glass)
+            _dot(img, box, color, shape, "empty", glass, bg)
 
     if title:
         draw.text((W / 2, y0 - 190), title, font=_font(64), fill=color, anchor="mm")

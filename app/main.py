@@ -107,7 +107,7 @@ class LinkIn(BaseModel):
     bg: str = "black"
     bgImage: str = ""
     shape: str = "circle"
-    glass: bool = True
+    glass: bool = False
     title: str = ""
     footer: bool = True
     brand: bool = True  # лого vita на обоях; в render.py уже есть cfg.get("brand", True)

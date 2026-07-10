@@ -32,7 +32,7 @@ const plus30 = new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10);
 
 const state = {
   mode: 'month', color: '#f2f2f2', bg: 'black', bgImageId: null, shape: 'circle',
-  glass: true, title: TITLES.month, footer: true, brand: true, birth: '2000-01-01',
+  glass: false, title: TITLES.month, footer: true, brand: true, birth: '2000-01-01',
   start: todayISO, end: plus30,
 };
 let customTitle = false;
@@ -353,37 +353,24 @@ function dotPath(c, x, y, d) {
   }
 }
 
-// точки: классика или «жидкое стекло» (блик, кромка, глубина)
-function solidDot(c, x, y, d, color, mode = 'filled', pulse = 0) {
-  const [cr, cg, cb] = rgb(color);
-  const emptyFill = blend('#ffffff', effectiveBgHex(), 0.14);
-  c.save();
+// Стандарт — как в оригинале; Стандарт 2.0 — жидкое стекло
+function classicDot(c, x, y, d, color, mode = 'filled', pulse = 0, isLead = false) {
+  const empty = blend(color, effectiveBgHex(), 0.18);
   dotPath(c, x, y, d);
-  if (mode === 'empty') {
-    c.fillStyle = emptyFill;
+  if (mode === 'filled') {
+    c.fillStyle = color;
     c.fill();
   } else if (mode === 'ring') {
-    c.fillStyle = blend(color, effectiveBgHex(), 0.12);
-    c.fill();
-  } else {
-    const g = c.createRadialGradient(x + d * 0.35, y + d * 0.3, 0, x + d / 2, y + d / 2, d * 0.72);
-    g.addColorStop(0, `rgba(${cr},${cg},${cb},1)`);
-    g.addColorStop(1, `rgba(${Math.round(cr * 0.82)},${Math.round(cg * 0.82)},${Math.round(cb * 0.82)},1)`);
-    c.fillStyle = g;
-    c.fill();
-  }
-  dotPath(c, x, y, d);
-  if (mode === 'ring') {
     c.strokeStyle = color;
     c.lineWidth = Math.max(2, d * 0.09);
-    if (pulse > 0) { c.shadowColor = color; c.shadowBlur = d * 0.5 * pulse; }
-  } else if (mode !== 'filled') {
-    c.strokeStyle = blend('#ffffff', effectiveBgHex(), 0.22);
-    c.lineWidth = Math.max(1, d * 0.06);
+    if (isLead) { c.shadowColor = color; c.shadowBlur = d * 0.6; }
+    else if (pulse > 0) { c.shadowColor = color; c.shadowBlur = d * 0.55 * pulse; }
+    c.stroke();
+    c.shadowBlur = 0;
+  } else {
+    c.fillStyle = empty;
+    c.fill();
   }
-  c.stroke();
-  c.shadowBlur = 0;
-  c.restore();
 }
 
 function glassDot(c, x, y, d, color, mode = 'filled', pulse = 0) {
@@ -446,8 +433,9 @@ function glassDot(c, x, y, d, color, mode = 'filled', pulse = 0) {
   c.restore();
 }
 
-const drawDot = (c, x, y, d, color, mode, pulse) =>
-  state.glass ? glassDot(c, x, y, d, color, mode, pulse) : solidDot(c, x, y, d, color, mode, pulse);
+const drawDot = (c, x, y, d, color, mode, pulse, isLead) =>
+  state.glass ? glassDot(c, x, y, d, color, mode, pulse)
+              : classicDot(c, x, y, d, color, mode, pulse, isLead);
 
 function effectiveBgHex() {
   if (state.bg === 'custom') return '#1a1a1a';
@@ -504,11 +492,11 @@ function draw(reveal = 1, pulse = 0, fx = null) {
     }
     const dx = x + (dot - dd) / 2, dy = y + (dot - dd) / 2;
     if (i < done) {
-      drawDot(ctx, dx, dy, dd, state.color, 'filled');
+      drawDot(ctx, dx, dy, dd, state.color, 'filled', 0, false);
     } else if (current !== null && i === current) {
-      drawDot(ctx, x, y, dot, state.color, 'ring', i === lead ? 0 : pulse);
+      drawDot(ctx, x, y, dot, state.color, 'ring', pulse, i === lead);
     } else {
-      drawDot(ctx, x, y, dot, state.color, 'empty');
+      drawDot(ctx, x, y, dot, state.color, 'empty', 0, false);
     }
   }
 
@@ -520,7 +508,7 @@ function draw(reveal = 1, pulse = 0, fx = null) {
     const hop = Math.max(dot * 0.9, Math.hypot(cx(i1) - cx(i0), cy(i1) - cy(i0)) * 0.22);
     const lx = cx(i0) + (cx(i1) - cx(i0)) * frac;
     const ly = cy(i0) + (cy(i1) - cy(i0)) * frac - hop * Math.sin(Math.PI * frac);
-    drawDot(ctx, lx - dot / 2, ly - dot / 2, dot, state.color, 'filled');
+    drawDot(ctx, lx - dot / 2, ly - dot / 2, dot, state.color, 'filled', 0, false);
   }
 
   ctx.textAlign = 'center';
