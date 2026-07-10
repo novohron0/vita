@@ -62,7 +62,7 @@ xcrun safari-web-extension-converter . \
 - [x] YouTube: Shorts, рекомендации, комменты, похожие, автоплей
 - [x] Instagram / X / Reddit content scripts (базовые селекторы)
 - [x] Popup-панель
-- [ ] PIN перед выключением
+- [x] PIN перед выключением (popup)
 - [ ] Расписание блокировки
 - [ ] App Store / TestFlight
 

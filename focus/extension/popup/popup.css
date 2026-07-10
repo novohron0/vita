@@ -31,3 +31,11 @@ header b { font-size: 14px; }
 .row.on .sw::after { transform: translateX(18px); }
 footer { margin-top: 12px; text-align: center; }
 footer a { color: #7fd4a3; font-size: 11px; text-decoration: none; }
+.pin { margin-top: 10px; padding: 10px; border-radius: 12px; border: 1px solid #242428; background: #121214; }
+.pin-head { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 12px; }
+.pin-head span { color: #7fd4a3; }
+#pinIn { width: 100%; border: 1px solid #2a2a2e; background: #0e0e10; color: #fff; border-radius: 10px; padding: 8px 10px; font: inherit; }
+.pin-actions { display: flex; gap: 6px; margin-top: 8px; }
+.pin-actions button { flex: 1; border: 0; border-radius: 10px; padding: 8px; font: inherit; font-size: 12px; cursor: pointer; background: #34c759; color: #04220f; font-weight: 700; }
+.pin-actions button.ghost { background: #242428; color: #c8c8cc; font-weight: 600; }
+.pin-msg { margin-top: 6px; font-size: 11px; color: #ff6b6b; }
