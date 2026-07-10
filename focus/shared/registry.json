@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "sites": [
     {
       "id": "youtube",
@@ -8,12 +8,13 @@
       "hosts": ["www.youtube.com", "m.youtube.com", "youtube.com"],
       "toggles": [
         { "id": "yt_shorts", "label": "Shorts", "desc": "Полки, вкладка и раздел" },
-        { "id": "yt_recs", "label": "Рекомендации на главной", "desc": "Вся сетка видео" },
+        { "id": "yt_recs", "label": "Рекомендации на главной", "desc": "Сетка на home и подписках" },
         { "id": "yt_comments", "label": "Комментарии", "desc": "Блок под видео" },
         { "id": "yt_related", "label": "Похожие видео", "desc": "Колонка справа" },
         { "id": "yt_autoplay", "label": "Автовоспроизведение", "desc": "Автоплей следующего" },
-        { "id": "yt_thumbs", "label": "Только названия", "desc": "Скрыть превью, оставить текст" },
-        { "id": "yt_endscreen", "label": "Заставка в конце", "desc": "Карточки и похожие после видео" },
+        { "id": "yt_thumbs", "label": "Только названия", "desc": "Скрыть превью в списках" },
+        { "id": "yt_blur", "label": "Размыть превью", "desc": "Серый blur вместо картинок" },
+        { "id": "yt_endscreen", "label": "Заставка в конце", "desc": "Карточки после видео" },
         { "id": "yt_notifications", "label": "Уведомления", "desc": "Колокольчик сверху" }
       ]
     },
@@ -23,7 +24,8 @@
       "glyph": "◎",
       "hosts": ["www.instagram.com", "instagram.com"],
       "toggles": [
-        { "id": "ig_reels", "label": "Reels", "desc": "Вкладка и лента" },
+        { "id": "ig_feed", "label": "Лента", "desc": "Посты на главной" },
+        { "id": "ig_reels", "label": "Reels", "desc": "Вкладка и раздел" },
         { "id": "ig_explore", "label": "Интересное", "desc": "Explore-лента" },
         { "id": "ig_stories", "label": "Истории", "desc": "Карусель сверху" }
       ]
@@ -34,7 +36,7 @@
       "glyph": "𝕏",
       "hosts": ["x.com", "twitter.com", "mobile.twitter.com"],
       "toggles": [
-        { "id": "x_foryou", "label": "«Для вас»", "desc": "Алгоритмическая лента" },
+        { "id": "x_feed", "label": "Лента", "desc": "Посты на главной" },
         { "id": "x_trends", "label": "Тренды", "desc": "«Что происходит»" },
         { "id": "x_follow", "label": "Кого читать", "desc": "Рекомендации" }
       ]
@@ -46,7 +48,30 @@
       "hosts": ["www.reddit.com", "old.reddit.com", "reddit.com"],
       "toggles": [
         { "id": "rd_feed", "label": "Домашняя лента", "desc": "Бесконечный скролл" },
-        { "id": "rd_popular", "label": "Popular / All", "desc": "Ссылки в меню" }
+        { "id": "rd_popular", "label": "Popular / All", "desc": "Ссылки в меню" },
+        { "id": "rd_sidebar", "label": "Сайдбар", "desc": "Популярное справа" }
+      ]
+    },
+    {
+      "id": "facebook",
+      "name": "Facebook",
+      "glyph": "ⓕ",
+      "hosts": ["www.facebook.com", "m.facebook.com", "facebook.com"],
+      "toggles": [
+        { "id": "fb_feed", "label": "Лента", "desc": "Посты на главной" },
+        { "id": "fb_reels", "label": "Reels", "desc": "Клипы и раздел" },
+        { "id": "fb_stories", "label": "Истории", "desc": "Карусель сверху" }
+      ]
+    },
+    {
+      "id": "linkedin",
+      "name": "LinkedIn",
+      "glyph": "in",
+      "hosts": ["www.linkedin.com", "linkedin.com"],
+      "toggles": [
+        { "id": "li_feed", "label": "Лента", "desc": "Посты в feed" },
+        { "id": "li_news", "label": "Новости", "desc": "Блок новостей" },
+        { "id": "li_suggestions", "label": "Рекомендации", "desc": "Кого добавить и прочее" }
       ]
     }
   ]

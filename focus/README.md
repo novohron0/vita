@@ -59,14 +59,18 @@ xcrun safari-web-extension-converter . \
 ## MVP (сейчас)
 
 - [x] Реестр тумблеров (сайт + расширение)
-- [x] YouTube: Shorts, рекомендации, комменты, похожие, автоплей
-- [x] Instagram / X / Reddit content scripts (базовые селекторы)
-- [x] Popup-панель
-- [x] PIN перед выключением (popup)
-- [x] Расписание блокировки (часы)
-- [x] Задержка 12ч перед выключением тумблера
+- [x] YouTube: Shorts, реки, комменты, похожие, превью, blur, заставка, автоплей
+- [x] Instagram / X / Reddit / Facebook / LinkedIn
+- [x] Popup, PIN, расписание, задержка 12ч
 - [ ] Face ID
 - [ ] App Store / TestFlight
+
+## Синк после правок
+
+```bash
+./focus/sync-registry.sh
+./focus/sync-safari.sh
+```
 
 ## Бета-вейтлист
 

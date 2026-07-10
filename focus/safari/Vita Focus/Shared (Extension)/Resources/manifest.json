@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Vita Focus",
-  "description": "Убираем Shorts, ленты, рекомендации и комментарии. Остаётся только то, ради чего ты зашёл.",
-  "version": "0.1.1",
+  "description": "UnTrap + SocialFocus в одном: Shorts, ленты, рекомендации — тишина в Safari.",
+  "version": "0.3.0",
   "icons": {
     "48": "icons/icon48.png",
     "96": "icons/icon96.png",
@@ -14,7 +14,10 @@
     "*://*.instagram.com/*",
     "*://x.com/*",
     "*://*.twitter.com/*",
-    "*://*.reddit.com/*"
+    "*://*.reddit.com/*",
+    "*://*.facebook.com/*",
+    "*://facebook.com/*",
+    "*://*.linkedin.com/*"
   ],
   "background": {
     "service_worker": "background.js",
@@ -33,17 +36,27 @@
     },
     {
       "matches": ["*://*.instagram.com/*"],
-      "js": ["content/instagram.js"],
+      "js": ["content/helpers.js", "content/instagram.js"],
       "run_at": "document_start"
     },
     {
       "matches": ["*://x.com/*", "*://*.twitter.com/*"],
-      "js": ["content/x.js"],
+      "js": ["content/helpers.js", "content/x.js"],
       "run_at": "document_start"
     },
     {
       "matches": ["*://*.reddit.com/*"],
-      "js": ["content/reddit.js"],
+      "js": ["content/helpers.js", "content/reddit.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["*://*.facebook.com/*", "*://facebook.com/*"],
+      "js": ["content/helpers.js", "content/facebook.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["*://*.linkedin.com/*"],
+      "js": ["content/helpers.js", "content/linkedin.js"],
       "run_at": "document_start"
     }
   ],

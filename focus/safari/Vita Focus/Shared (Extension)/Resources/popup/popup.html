@@ -12,6 +12,16 @@
   </header>
   <nav id="tabs"></nav>
   <div id="rows"></div>
+  <section id="schedBox" class="pin">
+    <div class="pin-head"><b>Расписание</b><span id="schedState">выкл</span></div>
+    <label class="sched-row"><input type="checkbox" id="schedOn"> Блоки только в эти часы</label>
+    <div class="sched-times">
+      <label>с <input type="number" id="schedStart" min="0" max="23" value="9"></label>
+      <label>до <input type="number" id="schedEnd" min="0" max="23" value="22"></label>
+    </div>
+    <label class="sched-row"><input type="checkbox" id="cooldownOn"> Задержка 12ч перед выключением</label>
+    <p id="pendingMsg" class="pin-msg" hidden></p>
+  </section>
   <section id="pinBox" class="pin">
     <div class="pin-head"><b>Защита PIN</b><span id="pinState">выкл</span></div>
     <input id="pinIn" type="password" inputmode="numeric" maxlength="8" placeholder="4–8 цифр" autocomplete="off">

@@ -6,6 +6,7 @@ const DEFAULT_SETTINGS = {
   yt_related: false,
   yt_autoplay: false,
   yt_thumbs: false,
+  yt_blur: false,
   yt_endscreen: false,
   yt_notifications: false,
 };

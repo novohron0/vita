@@ -61,11 +61,12 @@ const DEFAULTS = {
   yt_related: false,
   yt_autoplay: false,
   yt_thumbs: false,
+  yt_blur: false,
   yt_endscreen: false,
   yt_notifications: false,
 };
 
-const THUMB_CSS = `
+const THUMB_SEL = `
   ytd-browse ytd-thumbnail,
   ytd-item-section-renderer ytd-thumbnail,
   ytd-rich-item-renderer ytd-thumbnail,
@@ -79,7 +80,11 @@ const THUMB_CSS = `
   ytm-rich-item-renderer ytm-thumbnail-cover,
   ytm-compact-video-renderer ytm-thumbnail-cover,
   ytm-video-with-context-renderer ytm-thumbnail-cover,
-  ytm-item-section-renderer ytm-thumbnail-cover {
+  ytm-item-section-renderer ytm-thumbnail-cover
+`;
+
+const THUMB_CSS = `
+  ${THUMB_SEL.trim().split(/\s*,\s*/).join(', ')} {
     display: none !important;
     width: 0 !important;
     height: 0 !important;
@@ -111,6 +116,14 @@ const THUMB_CSS = `
   }
 `;
 
+const BLUR_CSS = `
+  ${THUMB_SEL.trim().split(/\s*,\s*/).join(', ')} img,
+  ${THUMB_SEL.trim().split(/\s*,\s*/).join(', ')} yt-image-shadow {
+    filter: grayscale(1) blur(10px) !important;
+    opacity: 0.35 !important;
+  }
+`;
+
 let settings = { ...DEFAULTS };
 let styleEl = null;
 let tickScheduled = false;
@@ -131,6 +144,7 @@ function applyCss() {
     blocks.push(`${RULES.yt_endscreen.trim().split(/\s*,\s*/).join(', ')} { display: none !important; visibility: hidden !important; pointer-events: none !important; }`);
   }
   if (settings.yt_thumbs) blocks.push(THUMB_CSS);
+  if (settings.yt_blur && !settings.yt_thumbs) blocks.push(BLUR_CSS);
   styleEl.textContent = blocks.join('\n');
 }
 
