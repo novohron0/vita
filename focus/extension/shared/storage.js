@@ -5,6 +5,7 @@ const DEFAULT_SETTINGS = {
   yt_comments: false,
   yt_related: false,
   yt_autoplay: false,
+  yt_thumbs: false,
 };
 
 export async function getSettings() {

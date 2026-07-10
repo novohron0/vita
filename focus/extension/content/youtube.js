@@ -34,7 +34,47 @@ const DEFAULTS = {
   yt_comments: false,
   yt_related: false,
   yt_autoplay: false,
+  yt_thumbs: false,
 };
+
+/* Превью в списках — не трогаем плеер на странице просмотра */
+const THUMB_CSS = `
+  ytd-browse ytd-thumbnail,
+  ytd-item-section-renderer ytd-thumbnail,
+  ytd-rich-item-renderer ytd-thumbnail,
+  ytd-video-renderer ytd-thumbnail,
+  ytd-grid-video-renderer ytd-thumbnail,
+  ytd-compact-video-renderer ytd-thumbnail,
+  ytd-playlist-video-renderer ytd-thumbnail,
+  ytd-watch-next-secondary-results-renderer ytd-thumbnail,
+  ytd-shelf-renderer ytd-thumbnail,
+  ytd-reel-item-renderer ytd-thumbnail {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+  ytd-rich-item-renderer #content,
+  ytd-video-renderer #dismissible,
+  ytd-compact-video-renderer .details {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 4px !important;
+  }
+  ytd-rich-item-renderer #video-title,
+  ytd-video-renderer #video-title,
+  ytd-compact-video-renderer #video-title {
+    font-size: 15px !important;
+    line-height: 1.35 !important;
+    -webkit-line-clamp: unset !important;
+    max-height: none !important;
+  }
+`;
 
 let settings = { ...DEFAULTS };
 let styleEl = null;
@@ -51,6 +91,7 @@ function applyCss() {
       blocks.push(`${sel.trim().split(/\s*,\s*/).join(', ')} { display: none !important; visibility: hidden !important; }`);
     }
   }
+  if (settings.yt_thumbs) blocks.push(THUMB_CSS);
   styleEl.textContent = blocks.join('\n');
 }
 
