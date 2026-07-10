@@ -225,7 +225,7 @@ def robots():
 @app.get("/sitemap.xml")
 def sitemap():
     urls = "".join(
-        f"<url><loc>https://vitadots.ru/{p}</loc></url>" for p in ("", "goals", "feed", "focus")
+        f"<url><loc>https://vitadots.ru/{p}</loc></url>" for p in ("", "goals", "feed", "focus", "privacy")
     )
     return Response(
         f'<?xml version="1.0" encoding="UTF-8"?>'
@@ -421,6 +421,16 @@ def goals_new():
 @app.get("/focus")
 def focus_page():
     return FileResponse(ROOT / "static" / "focus.html", headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/privacy")
+def privacy_page():
+    return FileResponse(ROOT / "static" / "privacy.html", headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/.well-known/security.txt")
+def security_txt():
+    return FileResponse(ROOT / "static" / ".well-known/security.txt", media_type="text/plain")
 
 
 @app.post("/api/focus-wait")

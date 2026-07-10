@@ -1,0 +1,4 @@
+Contact: https://vitadots.ru/privacy
+Preferred-Languages: ru, en
+Canonical: https://vitadots.ru/.well-known/security.txt
+Policy: https://vitadots.ru/privacy
