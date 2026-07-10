@@ -651,13 +651,19 @@ bindSeg('bg', v => {
   animateReveal();
 }, true);
 
-const usable = c => Math.abs(lum(c) - lum(effectiveBgHex())) >= 0.13;
+const contrastOk = (c, bgHex = effectiveBgHex()) => Math.abs(lum(c) - lum(bgHex)) >= 0.13;
 
 function refreshSwatches() {
   const btns = [...$('colors').querySelectorAll('.swatch')];
-  for (const b of btns) b.disabled = !usable(b.dataset.v);
-  if (!customColor && !usable(state.color)) {
-    const first = btns.find(b => !b.disabled);
+  for (const b of btns) {
+    const c = b.dataset.v;
+    const ok = contrastOk(c);
+    b.disabled = false;
+    b.classList.toggle('swatch-dim', !ok);
+    b.title = ok ? '' : 'На этом фоне точки будут почти не видны';
+  }
+  if (!customColor && !contrastOk(state.color)) {
+    const first = btns.find(b => contrastOk(b.dataset.v));
     if (first) {
       state.color = first.dataset.v;
       btns.forEach(b => b.classList.toggle('on', b === first));

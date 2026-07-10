@@ -383,6 +383,8 @@ main { width: 100%; max-width: 430px; display: flex; flex-direction: column; gap
 .swatch.on { border-color: var(--swatch-ring); box-shadow: 0 0 0 3px var(--swatch-halo), 0 0 14px rgba(255, 255, 255, 0.35); }
 [data-theme="light"] .swatch.on { box-shadow: 0 0 0 3px var(--swatch-halo), 0 0 10px rgba(0, 0, 0, 0.08); }
 .swatch:disabled { opacity: 0.22; cursor: default; }
+.swatch-dim { opacity: 0.42; }
+.swatch-dim:not(.on):hover { opacity: 0.62; }
 .swatch-ink:not(:disabled) { border-color: rgba(255, 255, 255, 0.3); }
 [data-theme="light"] .swatch-ink:not(:disabled) { border-color: rgba(0, 0, 0, 0.18); }
 .swatches { flex-wrap: wrap; }
