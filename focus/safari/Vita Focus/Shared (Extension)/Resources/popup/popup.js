@@ -34,6 +34,9 @@ async function init() {
   bindIO();
   bindYtExtras();
   bindSiteBulk();
+  bindToggleFilter();
+  const ver = chrome.runtime.getManifest().version;
+  $('header b').textContent = `⠿ vita focus · ${ver}`;
 }
 
 function scheduleActive(sched) {
@@ -163,6 +166,7 @@ function buildTabs() {
     b.addEventListener('click', () => {
       active = s.id;
       chrome.storage.sync.set({ activeSite: active });
+      $('#toggleFilter').value = '';
       buildTabs();
       renderRows();
       updateYtExtras();
@@ -221,12 +225,18 @@ function bindSiteBulk() {
   });
 }
 
+function bindToggleFilter() {
+  $('#toggleFilter').addEventListener('input', renderRows);
+}
+
 function renderRows() {
   const site = sites.find(s => s.id === active);
   const box = $('#rows');
   box.innerHTML = '';
   if (!site) return;
+  const q = ($('#toggleFilter')?.value || '').trim().toLowerCase();
   site.toggles.forEach(t => {
+    if (q && !`${t.label} ${t.desc}`.toLowerCase().includes(q)) return;
     const on = !!settings[t.id];
     const row = document.createElement('div');
     row.className = 'row' + (on ? ' on' : '');

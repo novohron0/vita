@@ -72,6 +72,12 @@ xcrun safari-web-extension-converter . \
 ./focus/sync-safari.sh
 ```
 
+### v0.9
+
+- Hacker News, Spotify Web, Amazon
+- Профиль **Стримы** (YouTube + Twitch)
+- Popup: поиск тумблеров, версия в шапке, скролл вкладок
+
 ### v0.8
 
 - Discord, Twitch, Medium

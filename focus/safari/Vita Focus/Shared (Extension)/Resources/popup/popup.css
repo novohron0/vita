@@ -11,7 +11,12 @@ header b { font-size: 14px; }
 .badge-off { background: #3a2a14; color: #ffb347; border: 1px solid #5a4018; }
 .badge-on { background: #0d2a18; color: #7fd4a3; border: 1px solid #1a4a2e; }
 #score { font-size: 12px; color: #7fd4a3; font-weight: 700; margin-left: auto; }
-#tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 10px; }
+#tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px; max-height: 72px; overflow-y: auto; }
+#toggleFilter {
+  width: 100%; margin-bottom: 8px; padding: 7px 10px; border-radius: 10px;
+  border: 1px solid #2a2a2e; background: #161618; color: #f2f2f2; font: inherit; font-size: 12px;
+}
+#toggleFilter:focus { outline: none; border-color: #3a3a40; }
 #siteBulk { margin-bottom: 8px; }
 #presets { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px; }
 .preset {

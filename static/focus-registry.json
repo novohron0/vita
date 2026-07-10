@@ -1,5 +1,5 @@
 {
-  "version": 6,
+  "version": 7,
   "presets": [
     {
       "id": "work",
@@ -61,6 +61,19 @@
         "vk_clips": true,
         "vk_stories": true,
         "pin_home": true
+      }
+    },
+    {
+      "id": "streams",
+      "name": "Стримы",
+      "glyph": "📺",
+      "settings": {
+        "yt_livechat": true,
+        "yt_recs": true,
+        "tw_rec": true,
+        "tw_clips": true,
+        "tw_sidebar": true,
+        "tw_browse": true
       }
     },
     {
@@ -268,6 +281,39 @@
         { "id": "md_feed", "label": "Лента", "desc": "Посты на главной" },
         { "id": "md_rec", "label": "Рекомендации", "desc": "Боковая колонка" },
         { "id": "md_meter", "label": "Paywall", "desc": "Блоки member-only" }
+      ]
+    },
+    {
+      "id": "hackernews",
+      "name": "HN",
+      "glyph": "Y",
+      "hosts": ["news.ycombinator.com"],
+      "toggles": [
+        { "id": "hn_comments", "label": "Комментарии", "desc": "Дерево под постом" },
+        { "id": "hn_ask", "label": "Ask HN", "desc": "Раздел и ссылки" },
+        { "id": "hn_show", "label": "Show HN", "desc": "Раздел и ссылки" }
+      ]
+    },
+    {
+      "id": "spotify",
+      "name": "Spotify",
+      "glyph": "♫",
+      "hosts": ["open.spotify.com"],
+      "toggles": [
+        { "id": "sp_rec", "label": "Главная", "desc": "Рекомендации home" },
+        { "id": "sp_podcasts", "label": "Подкасты", "desc": "Раздел и карточки" },
+        { "id": "sp_charts", "label": "Чарты", "desc": "Топы и плейлисты" }
+      ]
+    },
+    {
+      "id": "amazon",
+      "name": "Amazon",
+      "glyph": "a",
+      "hosts": ["www.amazon.com", "amazon.com", "www.amazon.de", "www.amazon.co.uk"],
+      "toggles": [
+        { "id": "am_rec", "label": "Рекомендации", "desc": "Карусели на главной" },
+        { "id": "am_deals", "label": "Deals", "desc": "Акции и goldbox" },
+        { "id": "am_sponsored", "label": "Реклама", "desc": "Sponsored в выдаче" }
       ]
     }
   ]

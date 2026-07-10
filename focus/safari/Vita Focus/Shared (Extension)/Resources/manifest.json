@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Vita Focus",
   "description": "UnTrap + SocialFocus в одном: Shorts, ленты, рекомендации — тишина в Safari.",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "icons": {
     "48": "icons/icon48.png",
     "96": "icons/icon96.png",
@@ -29,7 +29,13 @@
     "*://discord.com/*",
     "*://*.discord.com/*",
     "*://*.twitch.tv/*",
-    "*://*.medium.com/*"
+    "*://*.medium.com/*",
+    "*://news.ycombinator.com/*",
+    "*://open.spotify.com/*",
+    "*://www.amazon.com/*",
+    "*://amazon.com/*",
+    "*://www.amazon.de/*",
+    "*://www.amazon.co.uk/*"
   ],
   "background": {
     "service_worker": "background.js",
@@ -119,6 +125,26 @@
     {
       "matches": ["*://*.medium.com/*"],
       "js": ["content/helpers.js", "content/medium.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["*://news.ycombinator.com/*"],
+      "js": ["content/helpers.js", "content/hackernews.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["*://open.spotify.com/*"],
+      "js": ["content/helpers.js", "content/spotify.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "*://www.amazon.com/*",
+        "*://amazon.com/*",
+        "*://www.amazon.de/*",
+        "*://www.amazon.co.uk/*"
+      ],
+      "js": ["content/helpers.js", "content/amazon.js"],
       "run_at": "document_start"
     }
   ],
