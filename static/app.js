@@ -18,6 +18,7 @@ const SCENE_GRADS = {
   honeymoon: [['#4a2038', 0], ['#6b3050', .38], ['#1f1018', 1]],
 };
 const TITLES = { month: 'ТВОЙ МЕСЯЦ', year: 'ТВОЙ ГОД', life: 'ТВОЯ ЖИЗНЬ', goal: 'ДО ЦЕЛИ' };
+const BG_TITLES = { dembel: 'ДО ДЕМБЕЛЯ', ramadan: 'МЕСЯЦ РАМАДАН', honeymoon: 'МЕДОВЫЙ МЕСЯЦ' };
 const STAT_LABELS = {
   month: ['дней позади', 'впереди'],
   year: ['дней позади', 'впереди'],
@@ -30,10 +31,11 @@ const plus30 = new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10);
 
 const state = {
   mode: 'month', color: '#f2f2f2', bg: 'black', bgImageId: null, shape: 'circle',
-  title: TITLES.month, footer: true, brand: true, birth: '2000-01-01',
+  glass: true, title: TITLES.month, footer: true, brand: true, birth: '2000-01-01',
   start: todayISO, end: plus30,
 };
 let customTitle = false;
+let bgAutoTitle = false;
 let customBgImg = null;
 let customColor = false;
 
@@ -101,6 +103,70 @@ function paintBG(c) {
   };
   const circle = (x, y, r, fill) => { c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fillStyle = fill; c.fill(); };
   const hline = (x1, x2, y, wd, fill) => { c.fillStyle = fill; c.fillRect(x1, y - wd / 2, x2 - x1, wd); };
+  const star = (cx, cy, r, fill) => {
+    const pts = [];
+    for (let i = 0; i < 10; i++) {
+      const a = -Math.PI / 2 + (i * Math.PI) / 5;
+      const rr = i % 2 ? r * 0.42 : r;
+      pts.push([cx + Math.cos(a) * rr, cy + Math.sin(a) * rr]);
+    }
+    poly(pts, fill);
+  };
+  const crescent = (cx, cy, r, gold, sky) => {
+    c.save();
+    c.beginPath();
+    c.arc(cx, cy, r, 0, Math.PI * 2);
+    c.fillStyle = gold;
+    c.fill();
+    c.globalCompositeOperation = 'destination-out';
+    c.beginPath();
+    c.arc(cx + r * 0.38, cy - r * 0.12, r * 0.86, 0, Math.PI * 2);
+    c.fill();
+    c.restore();
+    c.beginPath();
+    c.arc(cx - r * 0.08, cy + r * 0.05, r * 0.92, 0, Math.PI * 2);
+    c.strokeStyle = blend('#fff8e8', sky, 0.22);
+    c.lineWidth = 2;
+    c.stroke();
+  };
+  const lantern = (x, y, base) => {
+    const w = 72, h = 96;
+    c.strokeStyle = blend('#b8942e', base, 0.55);
+    c.lineWidth = 2.5;
+    c.beginPath();
+    c.moveTo(x, y - 72);
+    c.lineTo(x, y - 6);
+    c.stroke();
+    const body = c.createLinearGradient(x - w / 2, y, x + w / 2, y + h);
+    body.addColorStop(0, blend('#a88420', base, 0.65));
+    body.addColorStop(0.5, blend('#f5e6b8', base, 0.92));
+    body.addColorStop(1, blend('#a88420', base, 0.65));
+    c.fillStyle = body;
+    c.beginPath();
+    c.roundRect(x - w / 2, y, w, h, 10);
+    c.fill();
+    c.beginPath();
+    c.arc(x, y, w / 2, Math.PI, 0);
+    c.fill();
+    const glow = c.createRadialGradient(x, y + h * 0.45, 4, x, y + h * 0.55, w * 1.1);
+    glow.addColorStop(0, blend('#f5e6b8', base, 0.42));
+    glow.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = glow;
+    c.fillRect(x - w * 1.2, y - 20, w * 2.4, h * 2.2);
+    c.fillStyle = blend('#f5e6b8', base, 0.28);
+    c.beginPath();
+    c.moveTo(x - w * 0.35, y + h);
+    c.lineTo(x, y + h + 70);
+    c.lineTo(x + w * 0.35, y + h);
+    c.closePath();
+    c.fill();
+  };
+  const pine = (x, baseH, h, fill) => {
+    poly([[x, baseH - h], [x - h * 0.34, baseH - h * 0.42], [x + h * 0.34, baseH - h * 0.42]], fill);
+    poly([[x, baseH - h * 0.62], [x - h * 0.28, baseH - h * 0.16], [x + h * 0.28, baseH - h * 0.16]], fill);
+    c.fillStyle = fill;
+    c.fillRect(x - h * 0.07, baseH - h * 0.14, h * 0.14, h * 0.14);
+  };
   if (key === 'mountains') {
     circle(985, 310, 45, blend('#e8eef5', base, 0.5));
     poly([[0, 2556], [0, 2440], [300, 2280], [620, 2470], [830, 2360], [1179, 2520], [1179, 2556]], '#141c28');
@@ -115,34 +181,82 @@ function paintBG(c) {
     circle(W / 2, 2730, 400, blend('#ff9b6a', base, 0.32));
     hline(0, W, 2330, 3, blend('#ffb37c', base, 0.20));
   } else if (key === 'dembel') {
-    [[180, 280, 2.5], [320, 220, 2], [890, 350, 2.5], [1020, 190, 1.5]].forEach(([x, y, r]) =>
-      circle(x, y, r, blend('#e8e4c8', base, 0.55)));
-    hline(0, W, 2480, 4, blend('#5a6a38', base, 0.32));
-    poly([[0, 2556], [0, 2460], [180, 2460], [180, 2380], [280, 2320], [380, 2380], [380, 2460],
-      [620, 2460], [620, 2400], [720, 2340], [820, 2400], [820, 2460], [1179, 2460], [1179, 2556]], '#1e2618');
-    poly([[950, 2556], [980, 2340], [1010, 2340], [1040, 2556]], '#161c10');
-    poly([[60, 2556], [60, 2440], [95, 2440], [95, 2556]], '#1a2214');
-    // звезда — символ службы
-    const sx = 200, sy = 360, sr = 22;
-    const star = [];
-    for (let i = 0; i < 10; i++) {
-      const a = (Math.PI / 2) * -1 + (i * Math.PI) / 5;
-      const rr = i % 2 ? sr * 0.42 : sr;
-      star.push([sx + Math.cos(a) * rr, sy + Math.sin(a) * rr]);
+    const glow = c.createLinearGradient(0, H * 0.52, 0, H * 0.78);
+    glow.addColorStop(0, blend('#c8a86a', base, 0.2));
+    glow.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = glow;
+    c.fillRect(0, H * 0.52, W, H * 0.3);
+    [[110, 170, 2], [260, 130, 1.8], [420, 210, 2.2], [640, 150, 1.6], [860, 190, 2], [1020, 120, 1.7], [1120, 240, 1.5]]
+      .forEach(([x, y, r]) => circle(x, y, r, blend('#e8e4c8', base, 0.62)));
+    star(195, 370, 40, blend('#e8d890', base, 0.72));
+    star(1010, 255, 16, blend('#d4cfa0', base, 0.5));
+    poly([[0, 2556], [0, 2490], [220, 2490], [220, 2410], [310, 2350], [400, 2410], [400, 2490],
+      [580, 2490], [580, 2430], [680, 2370], [780, 2430], [780, 2490], [1179, 2490], [1179, 2556]], '#1c2416');
+    [[95, 2490, 110], [720, 2490, 95], [980, 2490, 88]].forEach(([bx, by, bh]) => {
+      c.fillStyle = '#222a18';
+      c.fillRect(bx, by - bh, 130, bh);
+      for (let wy = by - bh + 22; wy < by - 14; wy += 28) {
+        for (let wx = bx + 18; wx < bx + 108; wx += 34) {
+          c.fillStyle = blend('#f0d878', base, 0.55);
+          c.fillRect(wx, wy, 16, 12);
+        }
+      }
+    });
+    pine(55, 2490, 130, '#182010');
+    pine(1120, 2490, 150, '#161e10');
+    pine(890, 2490, 115, '#1a2214');
+    hline(0, W, 2518, 3, blend('#5a6a38', base, 0.35));
+    for (let i = 0; i < 9; i++) {
+      hline(80 + i * 128, 160 + i * 128, 2540, 5, blend('#4a5a30', base, 0.22));
     }
-    poly(star, blend('#c8c4a0', base, 0.45));
+    poly([[940, 2556], [970, 2320], [1000, 2320], [1030, 2556]], '#141a0e');
   } else if (key === 'ramadan') {
-    [[120, 200, 2], [450, 180, 1.5], [780, 240, 2], [200, 400, 1.5], [600, 150, 1.5]].forEach(([x, y, r]) =>
-      circle(x, y, r, blend('#f5e6b8', base, 0.75)));
-    circle(920, 320, 48, blend('#f5e6b8', base, 0.78));
-    circle(948, 308, 40, '#0f1a3d');
-    poly([[0, 2556], [0, 2500], [1179, 2500], [1179, 2556]], '#0c1020');
-    poly([[160, 2556], [160, 2420], [200, 2420], [200, 2556]], '#0c1020');
-    poly([[150, 2420], [210, 2420], [180, 2360]], '#0c1020');
-    poly([[480, 2556], [480, 2440], [700, 2440], [700, 2556]], '#0c1020');
-    circle(590, 2380, 90, '#0c1020');
-    poly([[960, 2556], [960, 2420], [1000, 2420], [1000, 2556]], '#0c1020');
-    poly([[950, 2420], [1010, 2420], [980, 2350]], '#0c1020');
+    [[90, 160, 1.8], [240, 120, 1.4], [390, 200, 1.6], [540, 95, 1.3], [700, 170, 1.7], [850, 130, 1.5],
+      [1000, 210, 1.6], [180, 320, 1.3], [320, 280, 1.2], [620, 340, 1.4], [1080, 320, 1.5]]
+      .forEach(([x, y, r]) => circle(x, y, r, blend('#f5e6b8', base, 0.78)));
+    crescent(930, 340, 62, blend('#f5e6b8', base, 0.9), base);
+    lantern(210, 520, base);
+    lantern(980, 560, base);
+    poly([[0, 2556], [0, 2510], [1179, 2510], [1179, 2556]], '#080c18');
+    c.fillStyle = '#0a0e1c';
+    c.fillRect(420, 2440, 340, 116);
+    c.beginPath();
+    c.ellipse(590, 2440, 118, 72, 0, Math.PI, 0);
+    c.fill();
+    c.fillRect(455, 2440, 48, 116);
+    c.beginPath();
+    c.moveTo(479, 2440);
+    c.lineTo(467, 2280);
+    c.lineTo(491, 2280);
+    c.closePath();
+    c.fill();
+    c.beginPath();
+    c.moveTo(467, 2280);
+    c.lineTo(479, 2250);
+    c.lineTo(491, 2280);
+    c.closePath();
+    c.fill();
+    c.fillRect(677, 2460, 38, 96);
+    c.beginPath();
+    c.moveTo(696, 2460);
+    c.lineTo(686, 2320);
+    c.lineTo(706, 2320);
+    c.closePath();
+    c.fill();
+    c.beginPath();
+    c.moveTo(686, 2320);
+    c.lineTo(696, 2295);
+    c.lineTo(706, 2320);
+    c.closePath();
+    c.fill();
+    c.beginPath();
+    c.ellipse(590, 2500, 42, 52, 0, 0, Math.PI * 2);
+    c.fillStyle = blend('#f5e6b8', base, 0.18);
+    c.fill();
+    c.fillStyle = '#0a0e1c';
+    c.beginPath();
+    c.ellipse(590, 2500, 30, 38, 0, 0, Math.PI * 2);
+    c.fill();
   } else if (key === 'honeymoon') {
     circle(W / 2, 2720, 360, blend('#ffb8c8', base, 0.28));
     circle(W / 2, 2740, 280, blend('#ffd4a8', base, 0.22));
@@ -207,7 +321,39 @@ function dotPath(c, x, y, d) {
   else c.arc(x + d / 2, y + d / 2, d / 2, 0, Math.PI * 2);
 }
 
-// точки «жидкое стекло»: блик, полупрозрачная заливка, светлая кромка
+// точки: классика или «жидкое стекло» (блик, кромка, глубина)
+function solidDot(c, x, y, d, color, mode = 'filled', pulse = 0) {
+  const [cr, cg, cb] = rgb(color);
+  const emptyFill = blend('#ffffff', effectiveBgHex(), 0.14);
+  c.save();
+  dotPath(c, x, y, d);
+  if (mode === 'empty') {
+    c.fillStyle = emptyFill;
+    c.fill();
+  } else if (mode === 'ring') {
+    c.fillStyle = blend(color, effectiveBgHex(), 0.12);
+    c.fill();
+  } else {
+    const g = c.createRadialGradient(x + d * 0.35, y + d * 0.3, 0, x + d / 2, y + d / 2, d * 0.72);
+    g.addColorStop(0, `rgba(${cr},${cg},${cb},1)`);
+    g.addColorStop(1, `rgba(${Math.round(cr * 0.82)},${Math.round(cg * 0.82)},${Math.round(cb * 0.82)},1)`);
+    c.fillStyle = g;
+    c.fill();
+  }
+  dotPath(c, x, y, d);
+  if (mode === 'ring') {
+    c.strokeStyle = color;
+    c.lineWidth = Math.max(2, d * 0.09);
+    if (pulse > 0) { c.shadowColor = color; c.shadowBlur = d * 0.5 * pulse; }
+  } else if (mode !== 'filled') {
+    c.strokeStyle = blend('#ffffff', effectiveBgHex(), 0.22);
+    c.lineWidth = Math.max(1, d * 0.06);
+  }
+  c.stroke();
+  c.shadowBlur = 0;
+  c.restore();
+}
+
 function glassDot(c, x, y, d, color, mode = 'filled', pulse = 0) {
   const cx = x + d / 2, cy = y + d / 2;
   const [cr, cg, cb] = rgb(color);
@@ -215,28 +361,41 @@ function glassDot(c, x, y, d, color, mode = 'filled', pulse = 0) {
   dotPath(c, x, y, d);
   c.clip();
   if (mode === 'empty') {
-    const g = c.createRadialGradient(cx - d * 0.2, cy - d * 0.25, 0, cx, cy, d * 0.72);
-    g.addColorStop(0, 'rgba(255,255,255,0.26)');
-    g.addColorStop(1, 'rgba(255,255,255,0.07)');
+    const g = c.createRadialGradient(cx - d * 0.22, cy - d * 0.28, 0, cx, cy, d * 0.78);
+    g.addColorStop(0, 'rgba(255,255,255,0.34)');
+    g.addColorStop(0.55, 'rgba(255,255,255,0.12)');
+    g.addColorStop(1, 'rgba(255,255,255,0.04)');
     c.fillStyle = g;
     c.fillRect(x, y, d, d);
+    const frost = c.createLinearGradient(x, y, x + d, y + d);
+    frost.addColorStop(0, 'rgba(255,255,255,0.08)');
+    frost.addColorStop(0.5, 'rgba(255,255,255,0)');
+    frost.addColorStop(1, 'rgba(255,255,255,0.06)');
+    c.fillStyle = frost;
+    c.fillRect(x, y, d, d);
   } else if (mode === 'ring') {
-    const g = c.createRadialGradient(cx - d * 0.2, cy - d * 0.25, 0, cx, cy, d * 0.72);
-    g.addColorStop(0, 'rgba(255,255,255,0.2)');
-    g.addColorStop(1, `rgba(${cr},${cg},${cb},0.1)`);
+    const g = c.createRadialGradient(cx - d * 0.2, cy - d * 0.25, 0, cx, cy, d * 0.76);
+    g.addColorStop(0, 'rgba(255,255,255,0.26)');
+    g.addColorStop(1, `rgba(${cr},${cg},${cb},0.12)`);
     c.fillStyle = g;
     c.fillRect(x, y, d, d);
   } else {
-    const g = c.createRadialGradient(cx - d * 0.28, cy - d * 0.32, d * 0.05, cx, cy, d * 0.75);
-    g.addColorStop(0, 'rgba(255,255,255,0.75)');
-    g.addColorStop(0.38, `rgba(${cr},${cg},${cb},0.78)`);
-    g.addColorStop(1, `rgba(${cr},${cg},${cb},0.55)`);
+    const g = c.createRadialGradient(cx - d * 0.32, cy - d * 0.36, d * 0.04, cx, cy, d * 0.82);
+    g.addColorStop(0, 'rgba(255,255,255,0.88)');
+    g.addColorStop(0.28, `rgba(${Math.min(255, cr + 40)},${Math.min(255, cg + 40)},${Math.min(255, cb + 40)},0.82)`);
+    g.addColorStop(0.62, `rgba(${cr},${cg},${cb},0.78)`);
+    g.addColorStop(1, `rgba(${Math.round(cr * 0.72)},${Math.round(cg * 0.72)},${Math.round(cb * 0.72)},0.62)`);
     c.fillStyle = g;
     c.fillRect(x, y, d, d);
-    const sh = c.createLinearGradient(x, y + d * 0.45, x, y + d);
+    const sh = c.createLinearGradient(x, y + d * 0.42, x, y + d);
     sh.addColorStop(0, 'rgba(0,0,0,0)');
-    sh.addColorStop(1, 'rgba(0,0,0,0.16)');
+    sh.addColorStop(1, 'rgba(0,0,0,0.22)');
     c.fillStyle = sh;
+    c.fillRect(x, y, d, d);
+    const spec = c.createRadialGradient(cx - d * 0.15, cy - d * 0.22, 0, cx - d * 0.1, cy - d * 0.15, d * 0.28);
+    spec.addColorStop(0, 'rgba(255,255,255,0.55)');
+    spec.addColorStop(1, 'rgba(255,255,255,0)');
+    c.fillStyle = spec;
     c.fillRect(x, y, d, d);
   }
   c.restore();
@@ -247,13 +406,16 @@ function glassDot(c, x, y, d, color, mode = 'filled', pulse = 0) {
     c.lineWidth = Math.max(2, d * 0.09);
     if (pulse > 0) { c.shadowColor = color; c.shadowBlur = d * 0.55 * pulse; }
   } else {
-    c.strokeStyle = mode === 'filled' ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.22)';
+    c.strokeStyle = mode === 'filled' ? 'rgba(255,255,255,0.52)' : 'rgba(255,255,255,0.26)';
     c.lineWidth = Math.max(1, d * 0.065);
   }
   c.stroke();
   c.shadowBlur = 0;
   c.restore();
 }
+
+const drawDot = (c, x, y, d, color, mode, pulse) =>
+  state.glass ? glassDot(c, x, y, d, color, mode, pulse) : solidDot(c, x, y, d, color, mode, pulse);
 
 function effectiveBgHex() {
   if (state.bg === 'custom') return '#1a1a1a';
@@ -310,11 +472,11 @@ function draw(reveal = 1, pulse = 0, fx = null) {
     }
     const dx = x + (dot - dd) / 2, dy = y + (dot - dd) / 2;
     if (i < done) {
-      glassDot(ctx, dx, dy, dd, state.color, 'filled');
+      drawDot(ctx, dx, dy, dd, state.color, 'filled');
     } else if (current !== null && i === current) {
-      glassDot(ctx, x, y, dot, state.color, 'ring', i === lead ? 0 : pulse);
+      drawDot(ctx, x, y, dot, state.color, 'ring', i === lead ? 0 : pulse);
     } else {
-      glassDot(ctx, x, y, dot, state.color, 'empty');
+      drawDot(ctx, x, y, dot, state.color, 'empty');
     }
   }
 
@@ -326,7 +488,7 @@ function draw(reveal = 1, pulse = 0, fx = null) {
     const hop = Math.max(dot * 0.9, Math.hypot(cx(i1) - cx(i0), cy(i1) - cy(i0)) * 0.22);
     const lx = cx(i0) + (cx(i1) - cx(i0)) * frac;
     const ly = cy(i0) + (cy(i1) - cy(i0)) * frac - hop * Math.sin(Math.PI * frac);
-    glassDot(ctx, lx - dot / 2, ly - dot / 2, dot, state.color, 'filled');
+    drawDot(ctx, lx - dot / 2, ly - dot / 2, dot, state.color, 'filled');
   }
 
   ctx.textAlign = 'center';
@@ -440,12 +602,13 @@ bindSeg('mode', v => {
   state.mode = v;
   $('birthRow').hidden = v !== 'life';
   $('goalRow').hidden = v !== 'goal';
-  if (!customTitle) {
+  if (!customTitle && !bgAutoTitle) {
     state.title = TITLES[v];
     $('title').value = state.title;
   }
 }, true);
 bindSeg('shape', v => { state.shape = v; });
+bindSeg('glass', v => { state.glass = v === '1'; }, true);
 bindSeg('footer', v => { state.footer = v === '1'; });
 bindSeg('brand', v => { state.brand = v === '1'; });
 bindSeg('bg', v => {
@@ -453,6 +616,17 @@ bindSeg('bg', v => {
   state.bg = v;
   customBgImg = null;
   state.bgImageId = null;
+  if (BG_TITLES[v]) {
+    state.title = BG_TITLES[v];
+    $('title').value = state.title;
+    bgAutoTitle = true;
+    customTitle = false;
+  } else if (bgAutoTitle) {
+    state.title = TITLES[state.mode];
+    $('title').value = state.title;
+    bgAutoTitle = false;
+    customTitle = false;
+  }
   refreshSwatches();
   animateReveal();
 }, true);
@@ -530,6 +704,7 @@ $('colorPick').addEventListener('input', e => {
 // любое ручное изменение (включая полное стирание) — воля юзера, дефолт не навязываем
 $('title').addEventListener('input', e => {
   customTitle = true;
+  bgAutoTitle = false;
   state.title = e.target.value;
   draw();
 });
@@ -573,7 +748,7 @@ $('ideaSend').addEventListener('click', async () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         mode: state.mode, color: state.color, bg: state.bg,
-        bgImage: state.bgImageId || '', shape: state.shape,
+        bgImage: state.bgImageId || '', shape: state.shape, glass: state.glass,
         title: state.title, footer: state.footer, brand: state.brand, birth: state.birth,
         start: state.start, end: state.end,
         idea: $('idea').value, contact: $('contact').value,

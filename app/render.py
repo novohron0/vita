@@ -94,12 +94,12 @@ def _paint_wallpaper_bg(cfg: dict, bg_key: str) -> Image.Image:
         return Image.new("RGB", (W, H), BGS["custom"])
     bg = BGS[bg_key]
     img = Image.new("RGB", (W, H), bg)
-    _paint_bg(ImageDraw.Draw(img), bg_key, bg)
+    _paint_bg(img, bg_key, bg)
     return img
 
 
 def _glass_dot(img: Image.Image, box, color: str, shape: str, mode: str = "filled") -> None:
-    """Точка «жидкое стекло» — полупрозрачная заливка, блик, кромка."""
+    """Точка «жидкое стекло» — блик, глубина, светлая кромка."""
     x0, y0, x1, y1 = int(box[0]), int(box[1]), int(box[2]), int(box[3])
     w, h = x1 - x0, y1 - y0
     if w < 2:
@@ -119,19 +119,95 @@ def _glass_dot(img: Image.Image, box, color: str, shape: str, mode: str = "fille
             d.rounded_rectangle(ib, radius=rad, fill=fill, outline=outline, width=width)
 
     if mode == "empty":
-        shape_draw((255, 255, 255, 50), (255, 255, 255, 75), max(1, round(w * 0.06)))
+        shape_draw((255, 255, 255, 62), (255, 255, 255, 82), max(1, round(w * 0.06)))
+        d.ellipse((int(w * 0.08), int(h * 0.06), int(w * 0.55), int(h * 0.38)), fill=(255, 255, 255, 28))
     elif mode == "ring":
-        shape_draw((255, 255, 255, 40))
-        shape_draw(None, (r, g, b, 215), max(2, round(w * 0.09)))
+        shape_draw((255, 255, 255, 52))
+        shape_draw(None, (r, g, b, 230), max(2, round(w * 0.09)))
     else:
-        shape_draw((r, g, b, 168))
-        d.ellipse((int(w * 0.12), int(h * 0.08), int(w * 0.62), int(h * 0.42)), fill=(255, 255, 255, 88))
-        shape_draw(None, (255, 255, 255, 105), max(1, round(w * 0.065)))
+        shape_draw((r, g, b, 178))
+        d.ellipse((int(w * 0.1), int(h * 0.06), int(w * 0.58), int(w * 0.4)), fill=(255, 255, 255, 105))
+        d.ellipse((int(w * 0.52), int(h * 0.48), int(w * 0.98), int(h * 0.96)), fill=(0, 0, 0, 38))
+        shape_draw(None, (255, 255, 255, 118), max(1, round(w * 0.065)))
     img.paste(layer, (x0, y0), layer)
 
 
-def _paint_bg(draw: ImageDraw.ImageDraw, key: str, base: str) -> None:
+def _solid_dot(img: Image.Image, box, color: str, shape: str, mode: str = "filled") -> None:
+    x0, y0, x1, y1 = int(box[0]), int(box[1]), int(box[2]), int(box[3])
+    w, h = x1 - x0, y1 - y0
+    if w < 2:
+        return
+    d = ImageDraw.Draw(img)
+    r, g, b = _rgb(color)
+    rad = int(min(w, h) * 0.3) if shape == "rounded" else 0
+    ib = (x0, y0, x1 - 1, y1 - 1)
+
+    def shape_draw(fill=None, outline=None, width=0):
+        if shape == "circle":
+            d.ellipse(ib, fill=fill, outline=outline, width=width)
+        elif shape == "square":
+            d.rectangle(ib, fill=fill, outline=outline, width=width)
+        else:
+            d.rounded_rectangle(ib, radius=rad, fill=fill, outline=outline, width=width)
+
+    if mode == "empty":
+        shape_draw((255, 255, 255, 42), (255, 255, 255, 58), max(1, round(w * 0.06)))
+    elif mode == "ring":
+        shape_draw((r, g, b, 32))
+        shape_draw(None, (r, g, b, 255), max(2, round(w * 0.09)))
+    else:
+        shape_draw((r, g, b, 255))
+
+
+def _dot(img: Image.Image, box, color: str, shape: str, mode: str, glass: bool = True) -> None:
+    if glass:
+        _glass_dot(img, box, color, shape, mode)
+    else:
+        _solid_dot(img, box, color, shape, mode)
+
+
+def _star(draw: ImageDraw.ImageDraw, cx: float, cy: float, r: float, fill) -> None:
+    pts = []
+    for i in range(10):
+        a = -math.pi / 2 + (i * math.pi) / 5
+        rr = r * 0.42 if i % 2 else r
+        pts.append((cx + math.cos(a) * rr, cy + math.sin(a) * rr))
+    draw.polygon(pts, fill=fill)
+
+
+def _crescent(img: Image.Image, cx: int, cy: int, r: int, fill_rgb: tuple[int, int, int]) -> None:
+    size = int(r * 2.8)
+    layer = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    pad = int(r * 0.4)
+    ld = ImageDraw.Draw(layer)
+    ld.ellipse((pad, pad, pad + 2 * r, pad + 2 * r), fill=fill_rgb + (225,))
+    mask = Image.new("L", (size, size), 0)
+    md = ImageDraw.Draw(mask)
+    md.ellipse((pad, pad, pad + 2 * r, pad + 2 * r), fill=255)
+    md.ellipse((pad + int(r * 0.62), pad - int(r * 0.12), pad + int(r * 0.62) + int(r * 1.7), pad - int(r * 0.12) + int(r * 1.7)), fill=0)
+    layer.putalpha(mask)
+    img.paste(layer, (int(cx - r - pad), int(cy - r - pad)), layer)
+
+
+def _lantern(draw: ImageDraw.ImageDraw, x: int, y: int, base: str) -> None:
+    w, h = 72, 96
+    draw.line(((x, y - 72), (x, y - 6)), fill=_blend("#b8942e", base, 0.55), width=3)
+    body = _blend("#f5e6b8", base, 0.9)
+    draw.rounded_rectangle((x - w // 2, y, x + w // 2, y + h), radius=10, fill=body)
+    draw.pieslice((x - w // 2, y - w // 2, x + w // 2, y + w // 2), 180, 0, fill=body)
+    glow = _blend("#f5e6b8", base, 0.28)
+    draw.polygon([(x - int(w * 0.35), y + h), (x, y + h + 70), (x + int(w * 0.35), y + h)], fill=glow)
+
+
+def _pine(draw: ImageDraw.ImageDraw, x: int, base_h: int, h: int, fill: str) -> None:
+    draw.polygon([(x, base_h - h), (x - h * 0.34, base_h - h * 0.42), (x + h * 0.34, base_h - h * 0.42)], fill=fill)
+    draw.polygon([(x, base_h - h * 0.62), (x - h * 0.28, base_h - h * 0.16), (x + h * 0.28, base_h - h * 0.16)], fill=fill)
+    draw.rectangle((x - h * 0.07, base_h - h * 0.14, x + h * 0.07, base_h), fill=fill)
+
+
+def _paint_bg(img: Image.Image, key: str, base: str) -> None:
     """Сцена-фон: вертикальный градиент + силуэты (горы/океан/закат). Для сплошных — no-op."""
+    draw = ImageDraw.Draw(img)
     stops = SCENE_GRADS.get(key)
     if not stops:
         return
@@ -160,33 +236,49 @@ def _paint_bg(draw: ImageDraw.ImageDraw, key: str, base: str) -> None:
         draw.ellipse((W / 2 - 400, 2330, W / 2 + 400, 3130), fill=_blend("#ff9b6a", base, 0.32))
         draw.line(((0, 2330), (W, 2330)), fill=_blend("#ffb37c", base, 0.20), width=3)
     elif key == "dembel":
-        for x, y, r in ((180, 280, 2.5), (320, 220, 2), (890, 350, 2.5), (1020, 190, 1.5)):
-            draw.ellipse((x - r, y - r, x + r, y + r), fill=_blend("#e8e4c8", base, 0.55))
-        draw.line(((0, 2480), (W, 2480)), fill=_blend("#5a6a38", base, 0.32), width=4)
-        draw.polygon([(0, 2556), (0, 2460), (180, 2460), (180, 2380), (280, 2320), (380, 2380),
-                      (380, 2460), (620, 2460), (620, 2400), (720, 2340), (820, 2400), (820, 2460),
-                      (1179, 2460), (1179, 2556)], fill="#1e2618")
-        draw.polygon([(950, 2556), (980, 2340), (1010, 2340), (1040, 2556)], fill="#161c10")
-        draw.rectangle((60, 2440, 95, 2556), fill="#1a2214")
-        sx, sy, sr = 200, 360, 22
-        star = []
-        for i in range(10):
-            a = -math.pi / 2 + (i * math.pi) / 5
-            rr = sr * 0.42 if i % 2 else sr
-            star.append((sx + math.cos(a) * rr, sy + math.sin(a) * rr))
-        draw.polygon(star, fill=_blend("#c8c4a0", base, 0.45))
+        for y in range(int(H * 0.52), int(H * 0.82)):
+            t = (y - H * 0.52) / (H * 0.3)
+            col = _blend("#c8a86a", base, 0.2 * (1 - t))
+            draw.line(((0, y), (W, y)), fill=col)
+        for x, y, r in ((110, 170, 2), (260, 130, 1.8), (420, 210, 2.2), (640, 150, 1.6),
+                        (860, 190, 2), (1020, 120, 1.7), (1120, 240, 1.5)):
+            draw.ellipse((x - r, y - r, x + r, y + r), fill=_blend("#e8e4c8", base, 0.62))
+        _star(draw, 195, 370, 40, _blend("#e8d890", base, 0.72))
+        _star(draw, 1010, 255, 16, _blend("#d4cfa0", base, 0.5))
+        draw.polygon([(0, 2556), (0, 2490), (220, 2490), (220, 2410), (310, 2350), (400, 2410),
+                      (400, 2490), (580, 2490), (580, 2430), (680, 2370), (780, 2430), (780, 2490),
+                      (1179, 2490), (1179, 2556)], fill="#1c2416")
+        for bx, by, bh in ((95, 2490, 110), (720, 2490, 95), (980, 2490, 88)):
+            draw.rectangle((bx, by - bh, bx + 130, by), fill="#222a18")
+            for wy in range(by - bh + 22, by - 14, 28):
+                for wx in range(bx + 18, bx + 108, 34):
+                    draw.rectangle((wx, wy, wx + 16, wy + 12), fill=_blend("#f0d878", base, 0.55))
+        _pine(draw, 55, 2490, 130, "#182010")
+        _pine(draw, 1120, 2490, 150, "#161e10")
+        _pine(draw, 890, 2490, 115, "#1a2214")
+        draw.line(((0, 2518), (W, 2518)), fill=_blend("#5a6a38", base, 0.35), width=3)
+        for i in range(9):
+            x1, x2 = 80 + i * 128, 160 + i * 128
+            draw.line(((x1, 2540), (x2, 2540)), fill=_blend("#4a5a30", base, 0.22), width=5)
+        draw.polygon([(940, 2556), (970, 2320), (1000, 2320), (1030, 2556)], fill="#141a0e")
     elif key == "ramadan":
-        for x, y, r in ((120, 200, 2), (450, 180, 1.5), (780, 240, 2), (200, 400, 1.5), (600, 150, 1.5)):
-            draw.ellipse((x - r, y - r, x + r, y + r), fill=_blend("#f5e6b8", base, 0.75))
-        draw.ellipse((872, 272, 968, 368), fill=_blend("#f5e6b8", base, 0.78))
-        draw.ellipse((908, 268, 988, 348), fill=(15, 26, 61))
-        draw.rectangle((0, 2500, W, 2556), fill="#0c1020")
-        draw.rectangle((160, 2420, 200, 2556), fill="#0c1020")
-        draw.polygon([(150, 2420), (210, 2420), (180, 2360)], fill="#0c1020")
-        draw.rectangle((480, 2440, 700, 2556), fill="#0c1020")
-        draw.ellipse((500, 2290, 680, 2470), fill="#0c1020")
-        draw.rectangle((960, 2420, 1000, 2556), fill="#0c1020")
-        draw.polygon([(950, 2420), (1010, 2420), (980, 2350)], fill="#0c1020")
+        for x, y, r in ((90, 160, 1.8), (240, 120, 1.4), (390, 200, 1.6), (540, 95, 1.3), (700, 170, 1.7),
+                        (850, 130, 1.5), (1000, 210, 1.6), (180, 320, 1.3), (320, 280, 1.2), (620, 340, 1.4),
+                        (1080, 320, 1.5)):
+            draw.ellipse((x - r, y - r, x + r, y + r), fill=_blend("#f5e6b8", base, 0.78))
+        _crescent(img, 930, 340, 62, _blend("#f5e6b8", base, 0.9))
+        _lantern(draw, 210, 520, base)
+        _lantern(draw, 980, 560, base)
+        draw.rectangle((0, 2510, W, 2556), fill="#080c18")
+        draw.rectangle((420, 2440, 760, 2556), fill="#0a0e1c")
+        draw.pieslice((472, 2368, 708, 2440), 180, 0, fill="#0a0e1c")
+        draw.rectangle((455, 2440, 503, 2556), fill="#0a0e1c")
+        draw.polygon([(467, 2440), (479, 2440), (491, 2280), (467, 2280)], fill="#0a0e1c")
+        draw.polygon([(467, 2280), (479, 2250), (491, 2280)], fill="#0a0e1c")
+        draw.rectangle((677, 2460, 715, 2556), fill="#0a0e1c")
+        draw.polygon([(686, 2320), (696, 2295), (706, 2320)], fill="#0a0e1c")
+        draw.ellipse((548, 2462, 632, 2538), fill=_blend("#f5e6b8", base, 0.18))
+        draw.ellipse((560, 2474, 620, 2526), fill="#0a0e1c")
     elif key == "honeymoon":
         draw.ellipse((W / 2 - 360, 2360, W / 2 + 360, 3080), fill=_blend("#ffb8c8", base, 0.28))
         draw.ellipse((W / 2 - 280, 2460, W / 2 + 280, 3020), fill=_blend("#ffd4a8", base, 0.22))
@@ -309,7 +401,7 @@ def render_goal(goal: dict, done: set[str], today: date | None = None) -> Image.
     img = _paint_wallpaper_bg(goal, bg_key) if bg_key == "custom" else None
     if img is None:
         img = Image.new("RGB", (W, H), bg)
-        _paint_bg(ImageDraw.Draw(img), bg_key, bg)
+        _paint_bg(img, bg_key, bg)
     draw = ImageDraw.Draw(img)
 
     max_w, max_h = W * 0.72, H * 0.50
@@ -327,11 +419,11 @@ def render_goal(goal: dict, done: set[str], today: date | None = None) -> Image.
         x, y = x0 + c * (dot + gap), y0 + r * (dot + gap)
         box = (x, y, x + dot, y + dot)
         if i in done_idx:
-            _glass_dot(img, box, color, shape, "filled")
+            _dot(img, box, color, shape, "filled")
         elif i == today_idx:
-            _glass_dot(img, box, color, shape, "ring")
+            _dot(img, box, color, shape, "ring")
         else:
-            _glass_dot(img, box, color, shape, "empty")
+            _dot(img, box, color, shape, "empty")
 
     if title:
         draw.text((W / 2, y0 - 190), title, font=_font(64), fill=color, anchor="mm")
@@ -352,6 +444,7 @@ def render_wallpaper(cfg: dict, today: date | None = None, expired: bool = False
     if not re.fullmatch(r"#[0-9a-fA-F]{6}", color):
         color = "#f2f2f2"
     shape = cfg.get("shape", "circle")
+    glass = cfg.get("glass", True)
     title = (cfg.get("title") or "").strip().upper()
 
     text = "#8a857a" if bg_key == "white" else "#8e8e8e"
@@ -378,11 +471,11 @@ def render_wallpaper(cfg: dict, today: date | None = None, expired: bool = False
         x, y = x0 + c * (dot + gap), y0 + r * (dot + gap)
         box = (x, y, x + dot, y + dot)
         if i < done:
-            _glass_dot(img, box, color, shape, "filled")
+            _dot(img, box, color, shape, "filled", glass)
         elif current is not None and i == current:
-            _glass_dot(img, box, color, shape, "ring")
+            _dot(img, box, color, shape, "ring", glass)
         else:
-            _glass_dot(img, box, color, shape, "empty")
+            _dot(img, box, color, shape, "empty", glass)
 
     if title:
         draw.text((W / 2, y0 - 190), title, font=_font(64), fill=color, anchor="mm")

@@ -1,15 +1,16 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 :root {
-  --glass-blur: 22px;
-  --glass-saturate: 1.55;
-  --glass-bg: rgba(16, 16, 20, 0.48);
-  --glass-bg-soft: rgba(255, 255, 255, 0.06);
-  --glass-bg-lift: rgba(255, 255, 255, 0.10);
-  --glass-border: rgba(255, 255, 255, 0.11);
-  --glass-edge: rgba(255, 255, 255, 0.24);
-  --glass-shadow: 0 10px 36px rgba(0, 0, 0, 0.34);
-  --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  --glass-blur: 32px;
+  --glass-saturate: 1.72;
+  --glass-bg: rgba(14, 14, 18, 0.44);
+  --glass-bg-soft: rgba(255, 255, 255, 0.055);
+  --glass-bg-lift: rgba(255, 255, 255, 0.11);
+  --glass-border: rgba(255, 255, 255, 0.13);
+  --glass-edge: rgba(255, 255, 255, 0.32);
+  --glass-shadow: 0 14px 48px rgba(0, 0, 0, 0.38), 0 2px 0 rgba(255, 255, 255, 0.04);
+  --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.18), inset 0 -1px 0 rgba(0, 0, 0, 0.12);
+  --glass-shine: linear-gradient(148deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.03) 42%, rgba(255, 255, 255, 0) 58%);
   --seg-track-border: rgba(255, 255, 255, 0.08);
   --seg-track-inset: inset 0 1px 0 rgba(255, 255, 255, 0.1);
 
@@ -49,13 +50,14 @@
 }
 
 [data-theme="light"] {
-  --glass-bg: rgba(255, 255, 255, 0.78);
-  --glass-bg-soft: rgba(255, 255, 255, 0.62);
-  --glass-bg-lift: rgba(255, 255, 255, 0.92);
-  --glass-border: rgba(0, 0, 0, 0.09);
-  --glass-edge: rgba(255, 255, 255, 0.95);
-  --glass-shadow: 0 10px 32px rgba(0, 0, 0, 0.07);
-  --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  --glass-bg: rgba(255, 255, 255, 0.76);
+  --glass-bg-soft: rgba(255, 255, 255, 0.64);
+  --glass-bg-lift: rgba(255, 255, 255, 0.9);
+  --glass-border: rgba(0, 0, 0, 0.08);
+  --glass-edge: rgba(255, 255, 255, 0.98);
+  --glass-shadow: 0 14px 40px rgba(0, 0, 0, 0.08), 0 1px 0 rgba(255, 255, 255, 0.9);
+  --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.98), inset 0 -1px 0 rgba(0, 0, 0, 0.04);
+  --glass-shine: linear-gradient(148deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.45) 40%, rgba(255, 255, 255, 0) 62%);
   --seg-track-border: rgba(0, 0, 0, 0.07);
   --seg-track-inset: inset 0 1px 0 rgba(255, 255, 255, 0.9);
 
@@ -121,6 +123,7 @@ header {
   margin-bottom: 8px;
   border-radius: 18px;
   background: var(--header-bg);
+  background-image: var(--glass-shine);
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   border: 1px solid var(--glass-border);
@@ -402,6 +405,7 @@ main { width: 100%; max-width: 430px; display: flex; flex-direction: column; gap
 
 .linkbox {
   background: var(--glass-bg);
+  background-image: var(--glass-shine);
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   border: 1px solid var(--glass-border);
@@ -451,6 +455,7 @@ main { width: 100%; max-width: 430px; display: flex; flex-direction: column; gap
   max-height: 92vh;
   overflow-y: auto;
   background: var(--modal-bg);
+  background-image: var(--glass-shine);
   backdrop-filter: blur(28px) saturate(1.6);
   -webkit-backdrop-filter: blur(28px) saturate(1.6);
   border: 1px solid var(--glass-border);
@@ -524,6 +529,7 @@ main { width: 100%; max-width: 430px; display: flex; flex-direction: column; gap
   width: 100%;
   text-align: left;
   background: var(--glass-bg);
+  background-image: var(--glass-shine);
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   border: 1px solid var(--glass-border);
@@ -714,6 +720,7 @@ body.demo-goal main { pointer-events: none; }
 
 .screen {
   background: var(--glass-bg);
+  background-image: var(--glass-shine);
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   border: 1px solid var(--glass-border);
