@@ -194,6 +194,13 @@ function bindYtExtras() {
   $('#chIn').addEventListener('blur', saveCh);
 }
 
+function updateSiteScore() {
+  const site = sites.find(s => s.id === active);
+  if (!site) return;
+  const act = site.toggles.filter(t => settings[t.id]).length;
+  $('#siteScore').textContent = `${site.glyph} ${act}/${site.toggles.length}`;
+}
+
 function bindSiteBulk() {
   $('#siteAllOn').addEventListener('click', async () => {
     const site = sites.find(s => s.id === active);
@@ -202,6 +209,7 @@ function bindSiteBulk() {
     settings = await setSettings(patch);
     renderRows();
     updateScore();
+    updateSiteScore();
     await refreshSchedBadge();
   });
   $('#siteAllOff').addEventListener('click', async () => {
@@ -220,6 +228,7 @@ function bindSiteBulk() {
     settings = await setSettings(patch);
     renderRows();
     updateScore();
+    updateSiteScore();
     await refreshScheduleUi();
     await refreshSchedBadge();
   });
@@ -261,6 +270,7 @@ function renderRows() {
     });
     box.appendChild(row);
   });
+  updateSiteScore();
 }
 
 function updateScore() {

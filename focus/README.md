@@ -72,6 +72,13 @@ xcrun safari-web-extension-converter . \
 ./focus/sync-safari.sh
 ```
 
+### v0.11
+
+- Ozon, Habr, Дзен (RU)
+- YouTube: **Up next** оверлей
+- Popup: счётчик блоков текущего сайта
+- Лендинг: профили в превью-панели
+
 ### v0.10
 
 - GitHub, Netflix, Slack, Google News, Wildberries

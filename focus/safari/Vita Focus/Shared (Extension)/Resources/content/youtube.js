@@ -121,6 +121,13 @@ const RULES = {
     ytm-watch #related,
     #below ytm-item-section-renderer
   `,
+  yt_upnext: `
+    .ytp-autonav-endscreen-countdown-container,
+    .ytp-suggestion-set,
+    .ytp-upnext,
+    .ytp-ce-covering-overlay,
+    .ytp-pause-overlay
+  `,
 };
 
 const DEFAULTS = {
@@ -146,6 +153,7 @@ const DEFAULTS = {
   yt_explore: false,
   yt_theater: false,
   yt_watch_clean: false,
+  yt_upnext: false,
 };
 
 const THUMB_SEL = `

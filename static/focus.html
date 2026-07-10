@@ -131,6 +131,13 @@
   .fdiv { display: flex; align-items: center; gap: 12px; color: #5c5c66; font-size: 12px; margin: 30px 0 16px; }
   .fdiv::before, .fdiv::after { content:""; flex:1; height:1px; background: rgba(255,255,255,0.08); }
   .player-h { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+  .fpresets { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+  .fpreset {
+    border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.04);
+    color: #8a8a90; border-radius: 10px; padding: 6px 11px; cursor: pointer;
+    font: inherit; font-size: 12px; font-weight: 600; transition: background .2s, color .2s;
+  }
+  .fpreset:hover { background: rgba(255,255,255,0.08); color: #f4f4f7; }
 </style>
 </head>
 <body>
@@ -156,6 +163,7 @@
       <div class="score"><b id="count">0</b><b><i>／<span id="total">0</span></i></b><span>блоков активно</span></div>
       <div class="badge">превью</div>
     </div>
+    <nav class="fpresets" id="fpresets"></nav>
     <nav class="tabs" id="tabs"><span class="tab-ind" id="tabInd"></span></nav>
     <div id="rows"></div>
   </div>
@@ -189,6 +197,9 @@
     <div class="site sr"><b><span class="g">#</span>Slack</b><span>activity · huddles</span></div>
     <div class="site sr"><b><span class="g">G</span>Google News</b><span>лента · для вас</span></div>
     <div class="site sr"><b><span class="g">🛍</span>Wildberries</b><span>реки · stories · реклама</span></div>
+    <div class="site sr"><b><span class="g">O</span>Ozon</b><span>реки · stories · flash</span></div>
+    <div class="site sr"><b><span class="g">H</span>Habr</b><span>лента · сайдбар · компании</span></div>
+    <div class="site sr"><b><span class="g">Д</span>Дзен</b><span>лента · shorts · рекомендации</span></div>
   </div>
 
   <div class="sect-h sr">Против срыва</div>
@@ -245,6 +256,7 @@
 const $ = s => document.querySelector(s);
 const el = (t,c) => { const e=document.createElement(t); if(c) e.className=c; return e; };
 let SITES = [];
+let PRESETS = [];
 let S = JSON.parse(localStorage.vfocus || '{}');
 let active = S.active || 'youtube';
 const settings = S.settings || {};
@@ -252,6 +264,24 @@ const settings = S.settings || {};
 const all = () => SITES.flatMap(s=>s.toggles);
 const siteN = s => s.toggles.filter(t=>settings[t.id]).length;
 const save = () => localStorage.vfocus = JSON.stringify({ settings, active });
+
+function buildPresets() {
+  const nav = $('#fpresets');
+  if (!nav) return;
+  nav.innerHTML = '';
+  PRESETS.forEach(p => {
+    const b = el('button', 'fpreset');
+    b.textContent = `${p.glyph || ''} ${p.name}`.trim();
+    b.addEventListener('click', () => applyPreset(p));
+    nav.appendChild(b);
+  });
+}
+function applyPreset(p) {
+  const ids = all().map(t => t.id);
+  ids.forEach(id => { settings[id] = false; });
+  Object.assign(settings, p.settings || {});
+  save(); renderRows(); updateScore(); refreshTabs();
+}
 
 function buildTabs() {
   const tabs = $('#tabs');
@@ -310,10 +340,11 @@ async function initPanel() {
   const r = await fetch('/static/focus-registry.json');
   const data = await r.json();
   SITES = data.sites;
+  PRESETS = data.presets || [];
   if (!SITES.some(s => s.id === active)) active = SITES[0]?.id || 'youtube';
   const stats = $('#fstats');
   if (stats) stats.textContent = `${SITES.length} сайтов · ${data.sites.flatMap(s=>s.toggles).length} блоков`;
-  buildTabs(); renderRows(); updateScore(); refreshTabs();
+  buildPresets(); buildTabs(); renderRows(); updateScore(); refreshTabs();
   requestAnimationFrame(()=>requestAnimationFrame(moveInd));
 }
 initPanel();

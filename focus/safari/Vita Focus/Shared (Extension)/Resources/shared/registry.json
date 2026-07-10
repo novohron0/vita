@@ -1,5 +1,5 @@
 {
-  "version": 8,
+  "version": 9,
   "presets": [
     {
       "id": "work",
@@ -67,6 +67,25 @@
       }
     },
     {
+      "id": "ru",
+      "name": "RU",
+      "glyph": "🇷🇺",
+      "settings": {
+        "vk_feed": true,
+        "vk_clips": true,
+        "vk_stories": true,
+        "dz_feed": true,
+        "dz_shorts": true,
+        "dz_recommend": true,
+        "hb_feed": true,
+        "hb_sidebar": true,
+        "wb_rec": true,
+        "wb_stories": true,
+        "oz_rec": true,
+        "oz_flash": true
+      }
+    },
+    {
       "id": "shop",
       "name": "Шопинг",
       "glyph": "🛒",
@@ -77,6 +96,9 @@
         "wb_rec": true,
         "wb_stories": true,
         "wb_ads": true,
+        "oz_rec": true,
+        "oz_stories": true,
+        "oz_flash": true,
         "pin_shopping": true
       }
     },
@@ -126,7 +148,8 @@
         { "id": "yt_channels", "label": "Блок каналов", "desc": "Скрыть видео по авторам" },
         { "id": "yt_explore", "label": "Тренды / Explore", "desc": "Скрыть раздел и редирект" },
         { "id": "yt_theater", "label": "Кинотеатр", "desc": "Включать theater mode на watch" },
-        { "id": "yt_watch_clean", "label": "Только плеер", "desc": "Скрыть всё под видео на watch" }
+        { "id": "yt_watch_clean", "label": "Только плеер", "desc": "Скрыть всё под видео на watch" },
+        { "id": "yt_upnext", "label": "Up next", "desc": "Оверлей «следующее видео»" }
       ]
     },
     {
@@ -388,6 +411,39 @@
         { "id": "wb_rec", "label": "Рекомендации", "desc": "Лента на главной" },
         { "id": "wb_stories", "label": "Stories", "desc": "Карусель брендов" },
         { "id": "wb_ads", "label": "Реклама", "desc": "Баннеры и промо" }
+      ]
+    },
+    {
+      "id": "ozon",
+      "name": "Ozon",
+      "glyph": "O",
+      "hosts": ["www.ozon.ru", "ozon.ru"],
+      "toggles": [
+        { "id": "oz_rec", "label": "Рекомендации", "desc": "Подборки на главной" },
+        { "id": "oz_stories", "label": "Stories", "desc": "Карусель брендов" },
+        { "id": "oz_flash", "label": "Flash", "desc": "Акции и распродажи" }
+      ]
+    },
+    {
+      "id": "habr",
+      "name": "Habr",
+      "glyph": "H",
+      "hosts": ["habr.com", "www.habr.com"],
+      "toggles": [
+        { "id": "hb_feed", "label": "Лента", "desc": "Посты на главной" },
+        { "id": "hb_sidebar", "label": "Сайдбар", "desc": "Блоки справа" },
+        { "id": "hb_companies", "label": "Компании", "desc": "Раздел и ссылки" }
+      ]
+    },
+    {
+      "id": "dzen",
+      "name": "Дзен",
+      "glyph": "Д",
+      "hosts": ["dzen.ru", "www.dzen.ru"],
+      "toggles": [
+        { "id": "dz_feed", "label": "Лента", "desc": "Статьи на главной" },
+        { "id": "dz_shorts", "label": "Shorts", "desc": "Видео и редирект" },
+        { "id": "dz_recommend", "label": "Рекомендации", "desc": "Боковая колонка" }
       ]
     }
   ]

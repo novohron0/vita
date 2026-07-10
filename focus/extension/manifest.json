@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Vita Focus",
   "description": "UnTrap + SocialFocus в одном: Shorts, ленты, рекомендации — тишина в Safari.",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "icons": {
     "48": "icons/icon48.png",
     "96": "icons/icon96.png",
@@ -43,7 +43,13 @@
     "*://app.slack.com/*",
     "*://news.google.com/*",
     "*://www.wildberries.ru/*",
-    "*://wildberries.ru/*"
+    "*://wildberries.ru/*",
+    "*://www.ozon.ru/*",
+    "*://ozon.ru/*",
+    "*://habr.com/*",
+    "*://www.habr.com/*",
+    "*://dzen.ru/*",
+    "*://www.dzen.ru/*"
   ],
   "background": {
     "service_worker": "background.js",
@@ -178,6 +184,21 @@
     {
       "matches": ["*://www.wildberries.ru/*", "*://wildberries.ru/*"],
       "js": ["content/helpers.js", "content/wildberries.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["*://www.ozon.ru/*", "*://ozon.ru/*"],
+      "js": ["content/helpers.js", "content/ozon.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["*://habr.com/*", "*://www.habr.com/*"],
+      "js": ["content/helpers.js", "content/habr.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["*://dzen.ru/*", "*://www.dzen.ru/*"],
+      "js": ["content/helpers.js", "content/dzen.js"],
       "run_at": "document_start"
     }
   ],

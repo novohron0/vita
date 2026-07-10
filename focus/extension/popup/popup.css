@@ -17,7 +17,8 @@ header b { font-size: 14px; }
   border: 1px solid #2a2a2e; background: #161618; color: #f2f2f2; font: inherit; font-size: 12px;
 }
 #toggleFilter:focus { outline: none; border-color: #3a3a40; }
-#siteBulk { margin-bottom: 8px; }
+#siteBulk { margin-bottom: 8px; align-items: center; }
+.site-score { flex: 1; text-align: left; font-size: 11px; color: #8e8e93; font-weight: 600; }
 #presets { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px; }
 .preset {
   border: 1px solid #2a2a2e; background: #161618; color: #8e8e93;
