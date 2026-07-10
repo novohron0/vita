@@ -6,8 +6,8 @@
   <link rel="icon" type="image/png" href="/static/img/favicon.png">
   <link rel="apple-touch-icon" href="/static/img/apple-touch.png">
 <title>Vita — цель</title>
-<script src="/static/theme.js?v=1"></script>
-<link rel="stylesheet" href="/static/style.css?v=19">
+<script src="/static/theme.js?v=2"></script>
+<link rel="stylesheet" href="/static/style.css?v=20">
 </head>
 <body>
 <header>
@@ -101,7 +101,7 @@ function render(anim) {
       ${G.peers >= 2 ? `<span style="color:#ff9f45;font-size:13px;font-weight:600;text-transform:none">🔥 ${G.peers} уже с этой целью</span>` : ''}
     </div>
     <div class="stats">
-      <div><b>${doneCount}<span style="font-size:.5em;color:#6e6e73">/${G.days}</span></b><span>выполнено</span></div>
+      <div><b>${doneCount}<span class="stat-dim">/${G.days}</span></b><span>выполнено</span></div>
       <div><b class="${anim && anim.pop ? 'stat-pop' : ''}">${streak}🔥</b><span>стрик</span></div>
       <div><b>${best}</b><span>рекорд</span></div>
     </div>

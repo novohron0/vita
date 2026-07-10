@@ -6,8 +6,8 @@
   <link rel="icon" type="image/png" href="/static/img/favicon.png">
   <link rel="apple-touch-icon" href="/static/img/apple-touch.png">
 <title>Vita — челлендж</title>
-<script src="/static/theme.js?v=1"></script>
-<link rel="stylesheet" href="/static/style.css?v=19">
+<script src="/static/theme.js?v=2"></script>
+<link rel="stylesheet" href="/static/style.css?v=20">
 </head>
 <body>
 <header>
@@ -67,11 +67,11 @@ function render() {
   app.innerHTML = `
     <div class="field" style="gap:4px">
       <span class="goal-title" style="text-transform:none">${escapeHtml(G.title)}</span>
-      <span style="color:#c8c8cc;font-size:14px;font-weight:600;text-transform:none">🔥 ${peersText(G.peers)} эту цель</span>
-      ${G.completed > 0 ? `<span style="color:#34c759;font-size:14px;font-weight:600;text-transform:none"> · ✓ ${completedText(G.completed)}</span>` : ''}
+      <span class="ch-sub">🔥 ${peersText(G.peers)} эту цель</span>
+      ${G.completed > 0 ? `<span class="ch-done"> · ✓ ${completedText(G.completed)}</span>` : ''}
     </div>
     <div class="stats">
-      <div><b>${doneCount}<span style="font-size:.5em;color:#6e6e73">/${G.days}</span></b><span>выполнено</span></div>
+      <div><b>${doneCount}<span class="stat-dim">/${G.days}</span></b><span>выполнено</span></div>
       <div><b>${currentStreak()}🔥</b><span>стрик</span></div>
       <div><b>${bestStreak()}</b><span>рекорд</span></div>
     </div>

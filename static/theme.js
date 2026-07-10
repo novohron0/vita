@@ -4,6 +4,13 @@
   const light = stored === 'light'
     || (stored !== 'dark' && matchMedia('(prefers-color-scheme: light)').matches);
   if (light) document.documentElement.dataset.theme = 'light';
+  let meta = document.querySelector('meta[name="theme-color"]');
+  if (!meta) {
+    meta = document.createElement('meta');
+    meta.name = 'theme-color';
+    document.head.appendChild(meta);
+  }
+  meta.content = light ? '#f4f1ec' : '#000000';
 })();
 
 function syncThemeToggle(btn) {
@@ -11,6 +18,13 @@ function syncThemeToggle(btn) {
   btn.classList.toggle('is-light', light);
   btn.setAttribute('aria-label', light ? 'Тёмная тема' : 'Светлая тема');
   btn.setAttribute('aria-pressed', light ? 'true' : 'false');
+  let meta = document.querySelector('meta[name="theme-color"]');
+  if (!meta) {
+    meta = document.createElement('meta');
+    meta.name = 'theme-color';
+    document.head.appendChild(meta);
+  }
+  meta.content = light ? '#f4f1ec' : '#000000';
 }
 
 document.addEventListener('DOMContentLoaded', () => {
