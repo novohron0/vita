@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Vita Focus",
   "description": "UnTrap + SocialFocus в одном: Shorts, ленты, рекомендации — тишина в Safari.",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "icons": {
     "48": "icons/icon48.png",
     "96": "icons/icon96.png",
@@ -35,7 +35,15 @@
     "*://www.amazon.com/*",
     "*://amazon.com/*",
     "*://www.amazon.de/*",
-    "*://www.amazon.co.uk/*"
+    "*://www.amazon.co.uk/*",
+    "*://github.com/*",
+    "*://*.github.com/*",
+    "*://www.netflix.com/*",
+    "*://netflix.com/*",
+    "*://app.slack.com/*",
+    "*://news.google.com/*",
+    "*://www.wildberries.ru/*",
+    "*://wildberries.ru/*"
   ],
   "background": {
     "service_worker": "background.js",
@@ -145,6 +153,31 @@
         "*://www.amazon.co.uk/*"
       ],
       "js": ["content/helpers.js", "content/amazon.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["*://github.com/*", "*://*.github.com/*"],
+      "js": ["content/helpers.js", "content/github.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["*://www.netflix.com/*", "*://netflix.com/*"],
+      "js": ["content/helpers.js", "content/netflix.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["*://app.slack.com/*"],
+      "js": ["content/helpers.js", "content/slack.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["*://news.google.com/*"],
+      "js": ["content/helpers.js", "content/googlenews.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["*://www.wildberries.ru/*", "*://wildberries.ru/*"],
+      "js": ["content/helpers.js", "content/wildberries.js"],
       "run_at": "document_start"
     }
   ],

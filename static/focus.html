@@ -147,8 +147,8 @@
 <main class="fpage">
   <div class="fhero">
     <h1>Vita&nbsp;Focus</h1>
-    <p>Убираем Shorts, ленты, рекомендации и комментарии.<br>Остаётся только то, ради чего ты зашёл.</p>
-    <div class="fcta">🍎 Скоро в App&nbsp;Store <small>· Safari · iPhone · iPad · Mac</small></div>
+    <p>Убираем Shorts, ленты, рекомендации и комментарии.<br>Остаётся только то, ради чего ты зашёл.<br><small id="fstats" style="color:#6e6e73"></small></p>
+    <div class="fcta">🍎 Бета в Safari <small>· Xcode · iPhone · iPad · Mac</small></div>
   </div>
 
   <div class="panel">
@@ -184,6 +184,11 @@
     <div class="site sr"><b><span class="g">Y</span>Hacker News</b><span>комменты · ask · show</span></div>
     <div class="site sr"><b><span class="g">♫</span>Spotify</b><span>home · подкасты · чарты</span></div>
     <div class="site sr"><b><span class="g">a</span>Amazon</b><span>реки · deals · реклама</span></div>
+    <div class="site sr"><b><span class="g">⌥</span>GitHub</b><span>лента · trending · explore</span></div>
+    <div class="site sr"><b><span class="g">N</span>Netflix</b><span>каталог · превью · top 10</span></div>
+    <div class="site sr"><b><span class="g">#</span>Slack</b><span>activity · huddles</span></div>
+    <div class="site sr"><b><span class="g">G</span>Google News</b><span>лента · для вас</span></div>
+    <div class="site sr"><b><span class="g">🛍</span>Wildberries</b><span>реки · stories · реклама</span></div>
   </div>
 
   <div class="sect-h sr">Против срыва</div>
@@ -306,6 +311,8 @@ async function initPanel() {
   const data = await r.json();
   SITES = data.sites;
   if (!SITES.some(s => s.id === active)) active = SITES[0]?.id || 'youtube';
+  const stats = $('#fstats');
+  if (stats) stats.textContent = `${SITES.length} сайтов · ${data.sites.flatMap(s=>s.toggles).length} блоков`;
   buildTabs(); renderRows(); updateScore(); refreshTabs();
   requestAnimationFrame(()=>requestAnimationFrame(moveInd));
 }

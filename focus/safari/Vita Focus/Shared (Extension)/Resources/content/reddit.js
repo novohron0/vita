@@ -1,6 +1,6 @@
 vfocusBoot({
   id: 'vita-focus-rd',
-  defaults: { rd_feed: false, rd_popular: false, rd_sidebar: false },
+  defaults: { rd_feed: false, rd_popular: false, rd_sidebar: false, rd_recs: false },
   rules: {
     rd_feed: `
       shreddit-feed,
@@ -19,6 +19,11 @@ vfocusBoot({
       aside,
       #right-sidebar-container,
       shreddit-async-loader[bundlename="right_sidebar"]
+    `,
+    rd_recs: `
+      [data-testid="promoted-community"],
+      faceplate-tracker[noun="recommended_community"],
+      shreddit-subreddit-header ~ [slot="related"]
     `,
   },
   beforeTick(s) {

@@ -1,5 +1,5 @@
 {
-  "version": 7,
+  "version": 8,
   "presets": [
     {
       "id": "work",
@@ -15,6 +15,9 @@
         "yt_blur": true,
         "yt_endscreen": true,
         "yt_home_subs": true,
+        "yt_watch_clean": true,
+        "gn_feed": true,
+        "gn_for_you": true,
         "ig_feed": true,
         "ig_reels": true,
         "ig_stories": true,
@@ -61,6 +64,20 @@
         "vk_clips": true,
         "vk_stories": true,
         "pin_home": true
+      }
+    },
+    {
+      "id": "shop",
+      "name": "Шопинг",
+      "glyph": "🛒",
+      "settings": {
+        "am_rec": true,
+        "am_deals": true,
+        "am_sponsored": true,
+        "wb_rec": true,
+        "wb_stories": true,
+        "wb_ads": true,
+        "pin_shopping": true
       }
     },
     {
@@ -144,7 +161,8 @@
       "toggles": [
         { "id": "rd_feed", "label": "Домашняя лента", "desc": "Бесконечный скролл" },
         { "id": "rd_popular", "label": "Popular / All", "desc": "Ссылки в меню" },
-        { "id": "rd_sidebar", "label": "Сайдбар", "desc": "Популярное справа" }
+        { "id": "rd_sidebar", "label": "Сайдбар", "desc": "Популярное справа" },
+        { "id": "rd_recs", "label": "Рекомендации", "desc": "Suggested communities" }
       ]
     },
     {
@@ -314,6 +332,62 @@
         { "id": "am_rec", "label": "Рекомендации", "desc": "Карусели на главной" },
         { "id": "am_deals", "label": "Deals", "desc": "Акции и goldbox" },
         { "id": "am_sponsored", "label": "Реклама", "desc": "Sponsored в выдаче" }
+      ]
+    },
+    {
+      "id": "github",
+      "name": "GitHub",
+      "glyph": "⌥",
+      "hosts": ["github.com", "www.github.com"],
+      "toggles": [
+        { "id": "gh_feed", "label": "Лента", "desc": "Activity feed" },
+        { "id": "gh_trending", "label": "Trending", "desc": "Тренды dev/repo" },
+        { "id": "gh_explore", "label": "Explore", "desc": "Обзор и редирект" },
+        { "id": "gh_sponsor", "label": "Sponsors", "desc": "Промо спонсорства" }
+      ]
+    },
+    {
+      "id": "netflix",
+      "name": "Netflix",
+      "glyph": "N",
+      "hosts": ["www.netflix.com", "netflix.com"],
+      "toggles": [
+        { "id": "nf_browse", "label": "Каталог", "desc": "Ряды на главной" },
+        { "id": "nf_previews", "label": "Превью", "desc": "Автоплей трейлеров" },
+        { "id": "nf_top", "label": "Top 10", "desc": "Подборки топа" }
+      ]
+    },
+    {
+      "id": "slack",
+      "name": "Slack",
+      "glyph": "#",
+      "hosts": ["app.slack.com"],
+      "toggles": [
+        { "id": "sl_activity", "label": "Activity", "desc": "Лента активности" },
+        { "id": "sl_huddle", "label": "Huddles", "desc": "Голосовые комнаты" },
+        { "id": "sl_apps", "label": "Apps", "desc": "Вкладка приложений" }
+      ]
+    },
+    {
+      "id": "googlenews",
+      "name": "News",
+      "glyph": "G",
+      "hosts": ["news.google.com"],
+      "toggles": [
+        { "id": "gn_feed", "label": "Лента", "desc": "Главная новостей" },
+        { "id": "gn_for_you", "label": "Для вас", "desc": "Персональная лента" },
+        { "id": "gn_local", "label": "Местные", "desc": "Локальные новости" }
+      ]
+    },
+    {
+      "id": "wildberries",
+      "name": "WB",
+      "glyph": "🛍",
+      "hosts": ["www.wildberries.ru", "wildberries.ru"],
+      "toggles": [
+        { "id": "wb_rec", "label": "Рекомендации", "desc": "Лента на главной" },
+        { "id": "wb_stories", "label": "Stories", "desc": "Карусель брендов" },
+        { "id": "wb_ads", "label": "Реклама", "desc": "Баннеры и промо" }
       ]
     }
   ]

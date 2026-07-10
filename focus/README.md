@@ -72,6 +72,13 @@ xcrun safari-web-extension-converter . \
 ./focus/sync-safari.sh
 ```
 
+### v0.10
+
+- GitHub, Netflix, Slack, Google News, Wildberries
+- Reddit: рекомендации сообществ
+- Профиль **Шопинг** (Amazon + WB + Pinterest)
+- Лендинг: счётчик сайтов/блоков, бета через Xcode
+
 ### v0.9
 
 - Hacker News, Spotify Web, Amazon
