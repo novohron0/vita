@@ -3,10 +3,15 @@ from __future__ import annotations
 
 import calendar
 import math
+import os
 import re
 from datetime import date, timedelta
+from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
+
+ROOT = Path(__file__).resolve().parent.parent
+DATA = Path(os.environ.get("VITA_DATA") or (ROOT / "data"))
 
 W, H = 1179, 2556  # iPhone Pro, любое iOS-устройство отмасштабирует
 GAP = 0.45  # зазор между точками, в долях диаметра
@@ -19,6 +24,7 @@ BGS = {
     "black": "#000000", "white": "#f4f1ec", "navy": "#0d1526",
     "sunset": "#2a1230", "mountains": "#0e1520", "ocean": "#0a1a2b",
     "dembel": "#1a1f14", "ramadan": "#0a1228", "honeymoon": "#2a1520",
+    "custom": "#1a1a1a",
 }
 SCENE_GRADS = {
     "sunset": (("#331539", 0.0), ("#4a1c40", 0.45), ("#1c0d24", 1.0)),
@@ -58,7 +64,70 @@ def _blend(fg: str, bg: str, alpha: float) -> tuple[int, int, int]:
 
 
 def _bg_key(raw) -> str:
+    if raw == "custom":
+        return "custom"
     return raw if raw in BGS else "black"
+
+
+def cover_crop(img: Image.Image, tw: int, th: int) -> Image.Image:
+    iw, ih = img.size
+    scale = max(tw / iw, th / ih)
+    nw, nh = int(iw * scale), int(ih * scale)
+    img = img.resize((nw, nh), Image.Resampling.LANCZOS)
+    left, top = (nw - tw) // 2, (nh - th) // 2
+    return img.crop((left, top, left + tw, top + th))
+
+
+def _load_custom_bg(bg_id: str) -> Image.Image | None:
+    path = DATA / "bg" / f"{bg_id}.jpg"
+    if not path.exists():
+        return None
+    return Image.open(path).convert("RGB")
+
+
+def _paint_wallpaper_bg(cfg: dict, bg_key: str) -> Image.Image:
+    if bg_key == "custom":
+        bg_id = cfg.get("bgImage", "")
+        custom = _load_custom_bg(bg_id) if bg_id else None
+        if custom:
+            return custom
+        return Image.new("RGB", (W, H), BGS["custom"])
+    bg = BGS[bg_key]
+    img = Image.new("RGB", (W, H), bg)
+    _paint_bg(ImageDraw.Draw(img), bg_key, bg)
+    return img
+
+
+def _glass_dot(img: Image.Image, box, color: str, shape: str, mode: str = "filled") -> None:
+    """Точка «жидкое стекло» — полупрозрачная заливка, блик, кромка."""
+    x0, y0, x1, y1 = int(box[0]), int(box[1]), int(box[2]), int(box[3])
+    w, h = x1 - x0, y1 - y0
+    if w < 2:
+        return
+    layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    r, g, b = _rgb(color)
+    rad = int(min(w, h) * 0.3) if shape == "rounded" else 0
+    ib = (0, 0, w - 1, h - 1)
+
+    def shape_draw(fill=None, outline=None, width=0):
+        if shape == "circle":
+            d.ellipse(ib, fill=fill, outline=outline, width=width)
+        elif shape == "square":
+            d.rectangle(ib, fill=fill, outline=outline, width=width)
+        else:
+            d.rounded_rectangle(ib, radius=rad, fill=fill, outline=outline, width=width)
+
+    if mode == "empty":
+        shape_draw((255, 255, 255, 50), (255, 255, 255, 75), max(1, round(w * 0.06)))
+    elif mode == "ring":
+        shape_draw((255, 255, 255, 40))
+        shape_draw(None, (r, g, b, 215), max(2, round(w * 0.09)))
+    else:
+        shape_draw((r, g, b, 168))
+        d.ellipse((int(w * 0.12), int(h * 0.08), int(w * 0.62), int(h * 0.42)), fill=(255, 255, 255, 88))
+        shape_draw(None, (255, 255, 255, 105), max(1, round(w * 0.065)))
+    img.paste(layer, (x0, y0), layer)
 
 
 def _paint_bg(draw: ImageDraw.ImageDraw, key: str, base: str) -> None:
@@ -226,22 +295,22 @@ def render_goal(goal: dict, done: set[str], today: date | None = None) -> Image.
     start = _parse_date(goal.get("start"), today)
     days = max(1, min(int(goal.get("days", 30)), 365))
 
-    # индексы выполненных дней относительно старта + индекс «сегодня»
     done_idx = {(_parse_date(d, start) - start).days for d in done}
     done_idx = {i for i in done_idx if 0 <= i < days}
     today_idx = (today - start).days
     done_count = len(done_idx)
     streak = _streak(done_idx, min(today_idx, days - 1))
 
-    empty = _blend(color, bg, 0.18)
-    text = "#8a857a" if bg == BGS["white"] else "#8e8e8e"
+    text = "#8a857a" if bg_key == "white" else "#8e8e8e"
 
     cols = _cols("goal", days)
     rows = math.ceil(days / cols)
 
-    img = Image.new("RGB", (W, H), bg)
+    img = _paint_wallpaper_bg(goal, bg_key) if bg_key == "custom" else None
+    if img is None:
+        img = Image.new("RGB", (W, H), bg)
+        _paint_bg(ImageDraw.Draw(img), bg_key, bg)
     draw = ImageDraw.Draw(img)
-    _paint_bg(draw, bg_key, bg)
 
     max_w, max_h = W * 0.72, H * 0.50
     dot = min(max_w / (cols + (cols - 1) * GAP), max_h / (rows + (rows - 1) * GAP))
@@ -258,17 +327,11 @@ def render_goal(goal: dict, done: set[str], today: date | None = None) -> Image.
         x, y = x0 + c * (dot + gap), y0 + r * (dot + gap)
         box = (x, y, x + dot, y + dot)
         if i in done_idx:
-            fill, outline, width = color, None, 0
+            _glass_dot(img, box, color, shape, "filled")
         elif i == today_idx:
-            fill, outline, width = None, color, max(2, round(dot * 0.09))
+            _glass_dot(img, box, color, shape, "ring")
         else:
-            fill, outline, width = empty, None, 0
-        if shape == "square":
-            draw.rectangle(box, fill=fill, outline=outline, width=width)
-        elif shape == "rounded":
-            draw.rounded_rectangle(box, radius=dot * 0.3, fill=fill, outline=outline, width=width)
-        else:
-            draw.ellipse(box, fill=fill, outline=outline, width=width)
+            _glass_dot(img, box, color, shape, "empty")
 
     if title:
         draw.text((W / 2, y0 - 190), title, font=_font(64), fill=color, anchor="mm")
@@ -291,16 +354,14 @@ def render_wallpaper(cfg: dict, today: date | None = None, expired: bool = False
     shape = cfg.get("shape", "circle")
     title = (cfg.get("title") or "").strip().upper()
 
-    empty = _blend(color, bg, 0.18)
-    text = "#8a857a" if bg == BGS["white"] else "#8e8e8e"
+    text = "#8a857a" if bg_key == "white" else "#8e8e8e"
 
     total, done, current = _counts(cfg, mode, today)
     cols = _cols(mode, total)
     rows = math.ceil(total / cols)
 
-    img = Image.new("RGB", (W, H), bg)
+    img = _paint_wallpaper_bg(cfg, bg_key)
     draw = ImageDraw.Draw(img)
-    _paint_bg(draw, bg_key, bg)
 
     max_w, max_h = W * 0.72, H * 0.50
     dot = min(max_w / (cols + (cols - 1) * GAP), max_h / (rows + (rows - 1) * GAP))
@@ -317,17 +378,11 @@ def render_wallpaper(cfg: dict, today: date | None = None, expired: bool = False
         x, y = x0 + c * (dot + gap), y0 + r * (dot + gap)
         box = (x, y, x + dot, y + dot)
         if i < done:
-            fill, outline, width = color, None, 0
+            _glass_dot(img, box, color, shape, "filled")
         elif current is not None and i == current:
-            fill, outline, width = None, color, max(2, round(dot * 0.09))
+            _glass_dot(img, box, color, shape, "ring")
         else:
-            fill, outline, width = empty, None, 0
-        if shape == "square":
-            draw.rectangle(box, fill=fill, outline=outline, width=width)
-        elif shape == "rounded":
-            draw.rounded_rectangle(box, radius=dot * 0.3, fill=fill, outline=outline, width=width)
-        else:
-            draw.ellipse(box, fill=fill, outline=outline, width=width)
+            _glass_dot(img, box, color, shape, "empty")
 
     if title:
         draw.text((W / 2, y0 - 190), title, font=_font(64), fill=color, anchor="mm")

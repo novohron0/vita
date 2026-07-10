@@ -29,11 +29,13 @@ const todayISO = new Date().toISOString().slice(0, 10);
 const plus30 = new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10);
 
 const state = {
-  mode: 'month', color: '#f2f2f2', bg: 'black', shape: 'circle',
+  mode: 'month', color: '#f2f2f2', bg: 'black', bgImageId: null, shape: 'circle',
   title: TITLES.month, footer: true, brand: true, birth: '2000-01-01',
   start: todayISO, end: plus30,
 };
 let customTitle = false;
+let customBgImg = null;
+let customColor = false;
 
 // ——— демо-режим для съёмки рилсов: /?demo[&mode=year&color=%2334c759&bg=black&shape=rounded]
 // чистый кадр (только телефон) + бесконечный цикл заполнения всей сетки
@@ -70,9 +72,18 @@ const lum = hx => {
 };
 const easeOutBack = t => { const u = t - 1; return 1 + 3.6 * u * u * u + 2.6 * u * u; };
 
-// фон: сплошной цвет или сцена (градиент + минималистичные силуэты внизу, луна сверху).
-// координаты 1:1 с _paint_bg в app/render.py — превью честное
+// фон: сплошной цвет, сцена или своё фото (cover-crop 1:1 с render.py)
 function paintBG(c) {
+  if (state.bg === 'custom' && customBgImg) {
+    const iw = customBgImg.width, ih = customBgImg.height;
+    const scale = Math.max(W / iw, H / ih);
+    const sw = W / scale, sh = H / scale;
+    const sx = (iw - sw) / 2, sy = (ih - sh) / 2;
+    c.drawImage(customBgImg, sx, sy, sw, sh, 0, 0, W, H);
+    c.fillStyle = 'rgba(0,0,0,0.12)';
+    c.fillRect(0, 0, W, H);
+    return;
+  }
   const key = state.bg, base = BGS[key], stops = SCENE_GRADS[key];
   if (!stops) {
     c.fillStyle = base;
@@ -189,11 +200,64 @@ function footerText(total, done) {
   return `день ${Math.min(done + 1, total)} из ${total}`;
 }
 
-function dotPath(x, y, d) {
-  ctx.beginPath();
-  if (state.shape === 'square') ctx.rect(x, y, d, d);
-  else if (state.shape === 'rounded') ctx.roundRect(x, y, d, d, d * 0.3);
-  else ctx.arc(x + d / 2, y + d / 2, d / 2, 0, Math.PI * 2);
+function dotPath(c, x, y, d) {
+  c.beginPath();
+  if (state.shape === 'square') c.rect(x, y, d, d);
+  else if (state.shape === 'rounded') c.roundRect(x, y, d, d, d * 0.3);
+  else c.arc(x + d / 2, y + d / 2, d / 2, 0, Math.PI * 2);
+}
+
+// точки «жидкое стекло»: блик, полупрозрачная заливка, светлая кромка
+function glassDot(c, x, y, d, color, mode = 'filled', pulse = 0) {
+  const cx = x + d / 2, cy = y + d / 2;
+  const [cr, cg, cb] = rgb(color);
+  c.save();
+  dotPath(c, x, y, d);
+  c.clip();
+  if (mode === 'empty') {
+    const g = c.createRadialGradient(cx - d * 0.2, cy - d * 0.25, 0, cx, cy, d * 0.72);
+    g.addColorStop(0, 'rgba(255,255,255,0.26)');
+    g.addColorStop(1, 'rgba(255,255,255,0.07)');
+    c.fillStyle = g;
+    c.fillRect(x, y, d, d);
+  } else if (mode === 'ring') {
+    const g = c.createRadialGradient(cx - d * 0.2, cy - d * 0.25, 0, cx, cy, d * 0.72);
+    g.addColorStop(0, 'rgba(255,255,255,0.2)');
+    g.addColorStop(1, `rgba(${cr},${cg},${cb},0.1)`);
+    c.fillStyle = g;
+    c.fillRect(x, y, d, d);
+  } else {
+    const g = c.createRadialGradient(cx - d * 0.28, cy - d * 0.32, d * 0.05, cx, cy, d * 0.75);
+    g.addColorStop(0, 'rgba(255,255,255,0.75)');
+    g.addColorStop(0.38, `rgba(${cr},${cg},${cb},0.78)`);
+    g.addColorStop(1, `rgba(${cr},${cg},${cb},0.55)`);
+    c.fillStyle = g;
+    c.fillRect(x, y, d, d);
+    const sh = c.createLinearGradient(x, y + d * 0.45, x, y + d);
+    sh.addColorStop(0, 'rgba(0,0,0,0)');
+    sh.addColorStop(1, 'rgba(0,0,0,0.16)');
+    c.fillStyle = sh;
+    c.fillRect(x, y, d, d);
+  }
+  c.restore();
+  c.save();
+  dotPath(c, x, y, d);
+  if (mode === 'ring') {
+    c.strokeStyle = color;
+    c.lineWidth = Math.max(2, d * 0.09);
+    if (pulse > 0) { c.shadowColor = color; c.shadowBlur = d * 0.55 * pulse; }
+  } else {
+    c.strokeStyle = mode === 'filled' ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.22)';
+    c.lineWidth = Math.max(1, d * 0.065);
+  }
+  c.stroke();
+  c.shadowBlur = 0;
+  c.restore();
+}
+
+function effectiveBgHex() {
+  if (state.bg === 'custom') return '#1a1a1a';
+  return BGS[state.bg] || '#000000';
 }
 
 function drawWatermark(cx, cy, fill) {
@@ -214,8 +278,6 @@ function drawWatermark(cx, cy, fill) {
 }
 
 function draw(reveal = 1, pulse = 0, fx = null) {
-  const bgHex = BGS[state.bg];
-  const empty = blend(state.color, bgHex, 0.18);
   const text = state.bg === 'white' ? '#8a857a' : '#8e8e8e';
   const { total, done: realDone, current: realCurrent } = counts();
   // демо/рилс: заполняем всю сетку, последняя точка остаётся дышащим кольцом
@@ -241,31 +303,22 @@ function draw(reveal = 1, pulse = 0, fx = null) {
 
   for (let i = 0; i < total; i++) {
     const x = x0 + (i % cols) * (dot + gap), y = y0 + Math.floor(i / cols) * (dot + gap);
-    dotPath(x, y, dot);
+    let dd = dot;
+    if (i < done && fx) {
+      const k = Math.min(1, (fx.p - i) * fx.interval / 300);
+      if (k < 1) dd = dot * (0.5 + 0.5 * easeOutBack(k));
+    }
+    const dx = x + (dot - dd) / 2, dy = y + (dot - dd) / 2;
     if (i < done) {
-      ctx.fillStyle = state.color;
-      if (fx) { // свежепроштампованная точка выпрыгивает с перелётом
-        const k = Math.min(1, (fx.p - i) * fx.interval / 300);
-        if (k < 1) {
-          const d2 = dot * (0.5 + 0.5 * easeOutBack(k));
-          dotPath(x + (dot - d2) / 2, y + (dot - d2) / 2, d2);
-        }
-      }
-      ctx.fill();
+      glassDot(ctx, dx, dy, dd, state.color, 'filled');
     } else if (current !== null && i === current) {
-      ctx.strokeStyle = state.color;
-      ctx.lineWidth = Math.max(2, dot * 0.09);
-      if (i === lead) { ctx.shadowColor = state.color; ctx.shadowBlur = dot * 0.6; }
-      else if (pulse > 0) { ctx.shadowColor = state.color; ctx.shadowBlur = dot * 0.55 * pulse; }
-      ctx.stroke();
-      ctx.shadowBlur = 0;
+      glassDot(ctx, x, y, dot, state.color, 'ring', i === lead ? 0 : pulse);
     } else {
-      ctx.fillStyle = empty;
-      ctx.fill();
+      glassDot(ctx, x, y, dot, state.color, 'empty');
     }
   }
 
-  if (fx) { // шарик: летит дугой от точки к точке, между рядами — длинный прыжок
+  if (fx) {
     const p = Math.min(fx.p, fx.N);
     const i0 = Math.floor(p), i1 = Math.min(i0 + 1, fx.N), frac = p - i0;
     const cx = i => x0 + (i % cols) * (dot + gap) + dot / 2;
@@ -273,13 +326,7 @@ function draw(reveal = 1, pulse = 0, fx = null) {
     const hop = Math.max(dot * 0.9, Math.hypot(cx(i1) - cx(i0), cy(i1) - cy(i0)) * 0.22);
     const lx = cx(i0) + (cx(i1) - cx(i0)) * frac;
     const ly = cy(i0) + (cy(i1) - cy(i0)) * frac - hop * Math.sin(Math.PI * frac);
-    ctx.beginPath();
-    ctx.arc(lx, ly, dot / 2, 0, Math.PI * 2);
-    ctx.fillStyle = state.color;
-    ctx.shadowColor = state.color;
-    ctx.shadowBlur = dot * 0.7;
-    ctx.fill();
-    ctx.shadowBlur = 0;
+    glassDot(ctx, lx - dot / 2, ly - dot / 2, dot, state.color, 'filled');
   }
 
   ctx.textAlign = 'center';
@@ -402,23 +449,57 @@ bindSeg('shape', v => { state.shape = v; });
 bindSeg('footer', v => { state.footer = v === '1'; });
 bindSeg('brand', v => { state.brand = v === '1'; });
 bindSeg('bg', v => {
+  if (v === 'custom') { $('bgFile').click(); return; }
   state.bg = v;
+  customBgImg = null;
+  state.bgImageId = null;
   refreshSwatches();
-});
+  animateReveal();
+}, true);
 
-// цвета, сливающиеся с фоном, отключаем; если выбранный стал недоступен — берём первый доступный
-// порог 0.13: серый на белом ещё читается, чёрный на чёрном уже нет
-const usable = c => Math.abs(lum(c) - lum(BGS[state.bg])) >= 0.13;
+const usable = c => Math.abs(lum(c) - lum(effectiveBgHex())) >= 0.13;
 
 function refreshSwatches() {
   const btns = [...$('colors').querySelectorAll('.swatch')];
   for (const b of btns) b.disabled = !usable(b.dataset.v);
-  if (!usable(state.color)) {
+  if (!customColor && !usable(state.color)) {
     const first = btns.find(b => !b.disabled);
-    state.color = first.dataset.v;
-    btns.forEach(b => b.classList.toggle('on', b === first));
+    if (first) {
+      state.color = first.dataset.v;
+      btns.forEach(b => b.classList.toggle('on', b === first));
+      $('colorPick').value = state.color;
+    }
   }
 }
+
+async function uploadBgFile(file) {
+  const fd = new FormData();
+  fd.append('file', file);
+  const r = await fetch('/api/upload-bg', { method: 'POST', body: fd });
+  if (!r.ok) throw new Error('upload');
+  const j = await r.json();
+  state.bgImageId = j.id;
+}
+
+$('bgFile').addEventListener('change', e => {
+  const file = e.target.files?.[0];
+  e.target.value = '';
+  if (!file) return;
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = async () => {
+    customBgImg = img;
+    state.bg = 'custom';
+    $('bg').querySelectorAll('button').forEach(b =>
+      b.classList.toggle('on', b.dataset.v === 'custom'));
+    refreshSwatches();
+    animateReveal();
+    URL.revokeObjectURL(url);
+    try { await uploadBgFile(file); } catch { state.bgImageId = null; }
+  };
+  img.onerror = () => URL.revokeObjectURL(url);
+  img.src = url;
+});
 
 const swatches = $('colors');
 for (const c of COLORS) {
@@ -434,6 +515,15 @@ swatches.addEventListener('click', e => {
   if (!btn || btn.disabled) return;
   swatches.querySelectorAll('.swatch').forEach(s => s.classList.toggle('on', s === btn));
   state.color = btn.dataset.v;
+  customColor = false;
+  $('colorPick').value = state.color;
+  draw();
+});
+
+$('colorPick').addEventListener('input', e => {
+  customColor = true;
+  state.color = e.target.value;
+  swatches.querySelectorAll('.swatch').forEach(s => s.classList.remove('on'));
   draw();
 });
 
@@ -473,11 +563,17 @@ $('ideaSend').addEventListener('click', async () => {
   btn.disabled = true;
   err.hidden = true;
   try {
+    if (state.bg === 'custom' && !state.bgImageId) {
+      err.textContent = 'Сначала выбери своё фото в блоке «Фон»';
+      err.hidden = false;
+      return;
+    }
     const res = await fetch('/api/link', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        mode: state.mode, color: state.color, bg: state.bg, shape: state.shape,
+        mode: state.mode, color: state.color, bg: state.bg,
+        bgImage: state.bgImageId || '', shape: state.shape,
         title: state.title, footer: state.footer, brand: state.brand, birth: state.birth,
         start: state.start, end: state.end,
         idea: $('idea').value, contact: $('contact').value,

@@ -9,10 +9,11 @@ from datetime import date, timedelta
 from html import escape as esc
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from PIL import Image
 
 from .render import render_goal, render_wallpaper
 
@@ -104,6 +105,7 @@ class LinkIn(BaseModel):
     mode: str = "month"
     color: str = "#f2f2f2"
     bg: str = "black"
+    bgImage: str = ""
     shape: str = "circle"
     title: str = ""
     footer: bool = True
@@ -231,6 +233,28 @@ def sitemap():
     )
 
 
+@app.post("/api/upload-bg")
+async def upload_bg(file: UploadFile = File(...)):
+    """Своё фото для фона обоев — ресайз под экран iPhone, хранится на сервере."""
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(422, "Нужна картинка — JPG, PNG или HEIC")
+    raw = await file.read()
+    if len(raw) > 12 * 1024 * 1024:
+        raise HTTPException(422, "Слишком большой файл — до 12 МБ")
+    try:
+        img = Image.open(io.BytesIO(raw)).convert("RGB")
+    except Exception:
+        raise HTTPException(422, "Не получилось прочитать картинку")
+    from .render import W, H, cover_crop
+
+    img = cover_crop(img, W, H)
+    bg_dir = DATA / "bg"
+    bg_dir.mkdir(parents=True, exist_ok=True)
+    img_id = _gen_code()
+    img.save(bg_dir / f"{img_id}.jpg", "JPEG", quality=88)
+    return {"id": img_id}
+
+
 @app.post("/api/link")
 def create_link(cfg: LinkIn, request: Request):
     idea, contact = cfg.idea.strip(), cfg.contact.strip()
@@ -238,6 +262,11 @@ def create_link(cfg: LinkIn, request: Request):
         raise HTTPException(422, "Расскажи идею чуть подробнее — хотя бы пару слов")
     if len(contact) < 2:
         raise HTTPException(422, "Оставь телегу или инсту — туда придёт вторая неделя")
+    if cfg.bg == "custom":
+        if not cfg.bgImage or not re.fullmatch(r"[a-z0-9]{6}", cfg.bgImage):
+            raise HTTPException(422, "Загрузи своё фото для фона")
+        if not (DATA / "bg" / f"{cfg.bgImage}.jpg").exists():
+            raise HTTPException(422, "Фото не найдено — выбери снова")
     code = "".join(secrets.choice(CODE_ALPHABET) for _ in range(6))
     until = (date.today() + timedelta(days=TRIAL_DAYS)).isoformat()
     config = json.dumps(cfg.model_dump(exclude={"idea", "contact"}), ensure_ascii=False)

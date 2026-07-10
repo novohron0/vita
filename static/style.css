@@ -204,6 +204,20 @@ main { width: 100%; max-width: 430px; display: flex; flex-direction: column; gap
 .swatch:disabled { opacity: 0.22; cursor: default; }
 .swatches { flex-wrap: wrap; }
 
+.color-own {
+  display: flex; align-items: center; gap: 12px; margin-top: 4px;
+  color: #8e8e8e; font-size: 13px; letter-spacing: normal; text-transform: none;
+  cursor: pointer;
+}
+.color-own input[type="color"] {
+  -webkit-appearance: none; appearance: none;
+  width: 42px; height: 42px; padding: 0; border: 2px solid rgba(255,255,255,0.14);
+  border-radius: 50%; background: transparent; cursor: pointer;
+  box-shadow: var(--glass-inset);
+}
+.color-own input[type="color"]::-webkit-color-swatch-wrapper { padding: 3px; }
+.color-own input[type="color"]::-webkit-color-swatch { border: 0; border-radius: 50%; }
+
 .primary, .secondary {
   border: 0;
   border-radius: 16px;

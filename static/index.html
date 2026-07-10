@@ -120,6 +120,10 @@
 
     <div class="field">Цвет
       <div class="swatches" id="colors"></div>
+      <label class="color-own">
+        <input type="color" id="colorPick" value="#f2f2f2">
+        <span>Любой цвет</span>
+      </label>
     </div>
 
     <div class="field">Фон
@@ -133,7 +137,9 @@
         <button data-v="dembel">Дембель</button>
         <button data-v="ramadan">Рамадан</button>
         <button data-v="honeymoon">Мёд</button>
+        <button data-v="custom">Свои обои</button>
       </div>
+      <input type="file" id="bgFile" accept="image/*" hidden>
     </div>
 
     <div class="field">Точки
@@ -192,6 +198,6 @@
 
 <footer class="page-foot">от 49 ₽/мес · без автосписаний</footer>
 
-<script src="/static/app.js?v=16"></script>
+<script src="/static/app.js?v=18"></script>
 </body>
 </html>
