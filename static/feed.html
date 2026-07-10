@@ -6,45 +6,7 @@
   <link rel="icon" type="image/png" href="/static/img/favicon.png">
   <link rel="apple-touch-icon" href="/static/img/apple-touch.png">
 <title>Vita — лента челленджей</title>
-<link rel="stylesheet" href="/static/style.css?v=16">
-<style>
-  .feed-intro { color: #6e6e73; font-size: 14px; line-height: 1.5; margin: -4px 0 16px; }
-  .feed-top-h { font-size: 12px; letter-spacing: 1.2px; text-transform: uppercase; color: #8a8a90;
-    margin: 4px 0 10px; font-weight: 700; }
-  .feed-top { display: flex; flex-direction: column; gap: 8px; margin-bottom: 22px; }
-  .fc-top { border-color: #3a3a42; background: linear-gradient(135deg, #121214, #101012); }
-  .fc-rank { flex: none; width: 28px; height: 28px; border-radius: 9px; background: rgba(255,255,255,.08);
-    display: grid; place-items: center; font-size: 13px; font-weight: 800; color: #c8c8cc; }
-  .feed-list { display: flex; flex-direction: column; gap: 10px; }
-  .fc {
-    display: flex; align-items: center; gap: 14px; text-decoration: none;
-    background: #101012; border: 1px solid #232326; border-radius: 14px;
-    padding: 14px 16px; transition: border-color .15s, transform .1s;
-  }
-  .fc:active { transform: scale(0.99); }
-  .fc:hover { border-color: #34343a; transform: translateY(-2px); box-shadow: 0 12px 30px rgba(0,0,0,.4); }
-  .fc { animation: fcIn .5s cubic-bezier(.22,1,.36,1) both; animation-delay: var(--i, 0ms); }
-  @keyframes fcIn { from { opacity: 0; transform: translateY(12px); } }
-  .fc-dots { flex: none; display: grid; grid-template-columns: repeat(3, 8px); gap: 4px; }
-  .fc-dots span { width: 8px; height: 8px; border-radius: 50%; display: block; }
-  .fc-dots span.on { animation: fcDot .45s cubic-bezier(.34,1.56,.64,1) both; animation-delay: var(--dd, 0ms); }
-  @keyframes fcDot { from { opacity: 0; transform: scale(.2); } }
-  .fc-body { flex: 1; min-width: 0; }
-  .fc-title {
-    color: #f2f2f2; font-size: 16px; font-weight: 700; letter-spacing: -.3px; line-height: 1.25;
-    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-  }
-  .fc-meta { color: #6e6e73; font-size: 13px; margin-top: 3px; }
-  .fc-peers { color: #c8c8cc; font-weight: 600; }
-  .fc-done { color: #34c759; font-weight: 600; }
-  .fc-go { flex: none; color: #48484d; font-size: 20px; }
-  .feed-empty { text-align: center; color: #6e6e73; padding: 28px 8px; line-height: 1.6; }
-  .feed-empty b { color: #d9d9de; }
-  .fe-dots { display: flex; gap: 9px; justify-content: center; margin-bottom: 14px; }
-  .fe-dots span { width: 10px; height: 10px; border-radius: 50%; background: #f2f2f2; opacity: .12;
-    animation: feBlink 2.6s ease-in-out infinite; animation-delay: calc(var(--n) * .3s); }
-  @keyframes feBlink { 0%, 100% { opacity: .12; } 35% { opacity: .5; } }
-</style>
+<link rel="stylesheet" href="/static/style.css?v=17">
 </head>
 <body>
 <header>
