@@ -74,6 +74,8 @@ main { width: 100%; max-width: 430px; display: flex; flex-direction: column; gap
 }
 .seg.wide { width: 100%; }
 .seg.wide button { flex: 1; }
+.seg.bg-pick { flex-wrap: wrap; width: 100%; }
+.seg.bg-pick button { flex: 1 1 calc(33.33% - 4px); min-width: 0; font-size: 13px; padding: 9px 8px; }
 .seg button {
   border: 0;
   background: transparent;

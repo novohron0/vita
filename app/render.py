@@ -18,11 +18,15 @@ COLORS = ["#f2f2f2", "#3da9fc", "#34c759", "#ff9500", "#c7c7cc", "#a78bfa", "#ff
 BGS = {
     "black": "#000000", "white": "#f4f1ec", "navy": "#0d1526",
     "sunset": "#2a1230", "mountains": "#0e1520", "ocean": "#0a1a2b",
+    "dembel": "#1a1f14", "ramadan": "#0a1228", "honeymoon": "#2a1520",
 }
 SCENE_GRADS = {
     "sunset": (("#331539", 0.0), ("#4a1c40", 0.45), ("#1c0d24", 1.0)),
     "mountains": (("#16202e", 0.0), ("#0e1520", 0.6), ("#090d13", 1.0)),
     "ocean": (("#0e2138", 0.0), ("#0a1a2b", 0.55), ("#062433", 1.0)),
+    "dembel": (("#2a3320", 0.0), ("#3d4a2a", 0.42), ("#141a0e", 1.0)),
+    "ramadan": (("#0f1a3d", 0.0), ("#1a1445", 0.48), ("#080e20", 1.0)),
+    "honeymoon": (("#4a2038", 0.0), ("#6b3050", 0.38), ("#1f1018", 1.0)),
 }
 MODES = ("month", "year", "life", "goal")
 
@@ -86,6 +90,47 @@ def _paint_bg(draw: ImageDraw.ImageDraw, key: str, base: str) -> None:
     elif key == "sunset":
         draw.ellipse((W / 2 - 400, 2330, W / 2 + 400, 3130), fill=_blend("#ff9b6a", base, 0.32))
         draw.line(((0, 2330), (W, 2330)), fill=_blend("#ffb37c", base, 0.20), width=3)
+    elif key == "dembel":
+        for x, y, r in ((180, 280, 2.5), (320, 220, 2), (890, 350, 2.5), (1020, 190, 1.5)):
+            draw.ellipse((x - r, y - r, x + r, y + r), fill=_blend("#e8e4c8", base, 0.55))
+        draw.line(((0, 2480), (W, 2480)), fill=_blend("#5a6a38", base, 0.32), width=4)
+        draw.polygon([(0, 2556), (0, 2460), (180, 2460), (180, 2380), (280, 2320), (380, 2380),
+                      (380, 2460), (620, 2460), (620, 2400), (720, 2340), (820, 2400), (820, 2460),
+                      (1179, 2460), (1179, 2556)], fill="#1e2618")
+        draw.polygon([(950, 2556), (980, 2340), (1010, 2340), (1040, 2556)], fill="#161c10")
+        draw.rectangle((60, 2440, 95, 2556), fill="#1a2214")
+        sx, sy, sr = 200, 360, 22
+        star = []
+        for i in range(10):
+            a = -math.pi / 2 + (i * math.pi) / 5
+            rr = sr * 0.42 if i % 2 else sr
+            star.append((sx + math.cos(a) * rr, sy + math.sin(a) * rr))
+        draw.polygon(star, fill=_blend("#c8c4a0", base, 0.45))
+    elif key == "ramadan":
+        for x, y, r in ((120, 200, 2), (450, 180, 1.5), (780, 240, 2), (200, 400, 1.5), (600, 150, 1.5)):
+            draw.ellipse((x - r, y - r, x + r, y + r), fill=_blend("#f5e6b8", base, 0.75))
+        draw.ellipse((872, 272, 968, 368), fill=_blend("#f5e6b8", base, 0.78))
+        draw.ellipse((908, 268, 988, 348), fill=(15, 26, 61))
+        draw.rectangle((0, 2500, W, 2556), fill="#0c1020")
+        draw.rectangle((160, 2420, 200, 2556), fill="#0c1020")
+        draw.polygon([(150, 2420), (210, 2420), (180, 2360)], fill="#0c1020")
+        draw.rectangle((480, 2440, 700, 2556), fill="#0c1020")
+        draw.ellipse((500, 2290, 680, 2470), fill="#0c1020")
+        draw.rectangle((960, 2420, 1000, 2556), fill="#0c1020")
+        draw.polygon([(950, 2420), (1010, 2420), (980, 2350)], fill="#0c1020")
+    elif key == "honeymoon":
+        draw.ellipse((W / 2 - 360, 2360, W / 2 + 360, 3080), fill=_blend("#ffb8c8", base, 0.28))
+        draw.ellipse((W / 2 - 280, 2460, W / 2 + 280, 3020), fill=_blend("#ffd4a8", base, 0.22))
+        draw.line(((0, 2380), (W, 2380)), fill=_blend("#ffb8c8", base, 0.18), width=3)
+        draw.polygon([(120, 2556), (120, 2280), (155, 2180), (190, 2280), (190, 2556)], fill="#1a0c14")
+        draw.polygon([(990, 2556), (990, 2300), (1025, 2200), (1060, 2300), (1060, 2556)], fill="#1a0c14")
+        refl = _blend("#ffb8c8", base, 0.14)
+        for w2, yy in ((200, 2440), (150, 2485), (100, 2520)):
+            draw.line(((W / 2 - w2 / 2, yy), (W / 2 + w2 / 2, yy)), fill=refl, width=6)
+        draw.ellipse((322, 502, 358, 538), fill=_blend("#ff8fab", base, 0.35))
+        draw.ellipse((344, 506, 372, 534), fill=(74, 32, 56))
+        draw.ellipse((386, 546, 414, 574), fill=_blend("#ff8fab", base, 0.3))
+        draw.ellipse((403, 549, 425, 571), fill=(74, 32, 56))
 
 
 def _parse_date(value, fallback: date) -> date:

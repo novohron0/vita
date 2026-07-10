@@ -7,11 +7,15 @@ const COLORS = ['#f2f2f2', '#1c1c1e', '#3da9fc', '#34c759', '#ff9500', '#c7c7cc'
 const BGS = {
   black: '#000000', white: '#f4f1ec', navy: '#0d1526',
   sunset: '#2a1230', mountains: '#0e1520', ocean: '#0a1a2b',
+  dembel: '#1a1f14', ramadan: '#0a1228', honeymoon: '#2a1520',
 };
 const SCENE_GRADS = {
   sunset: [['#331539', 0], ['#4a1c40', .45], ['#1c0d24', 1]],
   mountains: [['#16202e', 0], ['#0e1520', .6], ['#090d13', 1]],
   ocean: [['#0e2138', 0], ['#0a1a2b', .55], ['#062433', 1]],
+  dembel: [['#2a3320', 0], ['#3d4a2a', .42], ['#141a0e', 1]],
+  ramadan: [['#0f1a3d', 0], ['#1a1445', .48], ['#080e20', 1]],
+  honeymoon: [['#4a2038', 0], ['#6b3050', .38], ['#1f1018', 1]],
 };
 const TITLES = { month: 'ТВОЙ МЕСЯЦ', year: 'ТВОЙ ГОД', life: 'ТВОЯ ЖИЗНЬ', goal: 'ДО ЦЕЛИ' };
 const STAT_LABELS = {
@@ -99,6 +103,47 @@ function paintBG(c) {
   } else if (key === 'sunset') {
     circle(W / 2, 2730, 400, blend('#ff9b6a', base, 0.32));
     hline(0, W, 2330, 3, blend('#ffb37c', base, 0.20));
+  } else if (key === 'dembel') {
+    [[180, 280, 2.5], [320, 220, 2], [890, 350, 2.5], [1020, 190, 1.5]].forEach(([x, y, r]) =>
+      circle(x, y, r, blend('#e8e4c8', base, 0.55)));
+    hline(0, W, 2480, 4, blend('#5a6a38', base, 0.32));
+    poly([[0, 2556], [0, 2460], [180, 2460], [180, 2380], [280, 2320], [380, 2380], [380, 2460],
+      [620, 2460], [620, 2400], [720, 2340], [820, 2400], [820, 2460], [1179, 2460], [1179, 2556]], '#1e2618');
+    poly([[950, 2556], [980, 2340], [1010, 2340], [1040, 2556]], '#161c10');
+    poly([[60, 2556], [60, 2440], [95, 2440], [95, 2556]], '#1a2214');
+    // звезда — символ службы
+    const sx = 200, sy = 360, sr = 22;
+    const star = [];
+    for (let i = 0; i < 10; i++) {
+      const a = (Math.PI / 2) * -1 + (i * Math.PI) / 5;
+      const rr = i % 2 ? sr * 0.42 : sr;
+      star.push([sx + Math.cos(a) * rr, sy + Math.sin(a) * rr]);
+    }
+    poly(star, blend('#c8c4a0', base, 0.45));
+  } else if (key === 'ramadan') {
+    [[120, 200, 2], [450, 180, 1.5], [780, 240, 2], [200, 400, 1.5], [600, 150, 1.5]].forEach(([x, y, r]) =>
+      circle(x, y, r, blend('#f5e6b8', base, 0.75)));
+    circle(920, 320, 48, blend('#f5e6b8', base, 0.78));
+    circle(948, 308, 40, '#0f1a3d');
+    poly([[0, 2556], [0, 2500], [1179, 2500], [1179, 2556]], '#0c1020');
+    poly([[160, 2556], [160, 2420], [200, 2420], [200, 2556]], '#0c1020');
+    poly([[150, 2420], [210, 2420], [180, 2360]], '#0c1020');
+    poly([[480, 2556], [480, 2440], [700, 2440], [700, 2556]], '#0c1020');
+    circle(590, 2380, 90, '#0c1020');
+    poly([[960, 2556], [960, 2420], [1000, 2420], [1000, 2556]], '#0c1020');
+    poly([[950, 2420], [1010, 2420], [980, 2350]], '#0c1020');
+  } else if (key === 'honeymoon') {
+    circle(W / 2, 2720, 360, blend('#ffb8c8', base, 0.28));
+    circle(W / 2, 2740, 280, blend('#ffd4a8', base, 0.22));
+    hline(0, W, 2380, 3, blend('#ffb8c8', base, 0.18));
+    poly([[120, 2556], [120, 2280], [155, 2180], [190, 2280], [190, 2556]], '#1a0c14');
+    poly([[990, 2556], [990, 2300], [1025, 2200], [1060, 2300], [1060, 2556]], '#1a0c14');
+    [[200, 2440, 100], [150, 2485, 70], [100, 2520, 50]].forEach(([w2, yy]) =>
+      hline(W / 2 - w2 / 2, W / 2 + w2 / 2, yy, 6, blend('#ffb8c8', base, 0.14)));
+    circle(340, 520, 18, blend('#ff8fab', base, 0.35));
+    circle(358, 520, 14, '#4a2038');
+    circle(400, 560, 14, blend('#ff8fab', base, 0.3));
+    circle(414, 560, 11, '#4a2038');
   }
 }
 
@@ -583,7 +628,10 @@ async function reelPlay() {
     cnt.style.transition = 'opacity .5s'; cnt.style.opacity = 0;
     await rafSleep(520); cnt.remove();
     // сцена 4: монтаж тем — горы, океан, закат, синий
-    for (const [bg, color] of [['mountains', '#34c759'], ['ocean', '#f2f2f2'], ['sunset', '#ff9500'], ['navy', '#3da9fc']]) {
+    for (const [bg, color] of [
+      ['mountains', '#34c759'], ['ocean', '#f2f2f2'], ['sunset', '#ff9500'],
+      ['dembel', '#c8c4a0'], ['ramadan', '#f5e6b8'], ['honeymoon', '#ffb8c8'], ['navy', '#3da9fc'],
+    ]) {
       state.bg = bg; state.color = color;
       draw(1, 0.5);
       await rafSleep(1150);
