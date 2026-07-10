@@ -2,6 +2,7 @@
 import io
 import json
 import os
+import re
 import secrets
 import sqlite3
 from datetime import date, timedelta
@@ -22,6 +23,13 @@ DATA.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA / "vita.db"
 
 CODE_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"
+
+# авто-модерация ленты: ссылки и явный спам в названии цели
+FEED_TITLE_BLOCK = re.compile(
+    r"(https?://|www\.|\.ru/|\.com/|t\.me/|@\w{5,}|"
+    r"порно|xxx|казино|ставк|vpn[\s-]?бот)",
+    re.IGNORECASE,
+)
 
 # Ссылка iCloud на мастер-ярлык «Vita» (создаётся один раз на iPhone владельца,
 # см. README). Пока пусто — на странице установки кнопка в состоянии «готовится».
@@ -79,6 +87,10 @@ def db() -> sqlite3.Connection:
         conn.execute("ALTER TABLE goals ADD COLUMN root TEXT")  # корень челленджа (NULL = сам себе корень)
     except sqlite3.OperationalError:
         pass
+    try:
+        conn.execute("ALTER TABLE goals ADD COLUMN feed_hidden INTEGER NOT NULL DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
     # вейтлист беты Vita Focus (contact = телега/инста, PRIMARY KEY даёт дедуп)
     conn.execute(
         "CREATE TABLE IF NOT EXISTS focus_wait("
@@ -134,6 +146,57 @@ def _valid_color(c: str) -> bool:
     return isinstance(c, str) and len(c) == 7 and c[0] == "#" and all(
         ch in "0123456789abcdefABCDEF" for ch in c[1:]
     )
+
+
+def _feed_title_ok(title: str) -> bool:
+    """Лента: без ссылок и явного спама в названии."""
+    t = title.strip()
+    if len(t) < 2:
+        return False
+    return not FEED_TITLE_BLOCK.search(t)
+
+
+def _challenge_root(code: str, root: str | None) -> str:
+    return root or code
+
+
+def _feed_items(conn: sqlite3.Connection, limit: int = 60) -> list[dict]:
+    rows = conn.execute(
+        "SELECT g.code, g.title, g.days, g.color, g.shape, cnt.peers, "
+        "       COALESCE(done.cnt, 0) "
+        "FROM (SELECT COALESCE(root, code) AS rc, COUNT(*) AS peers "
+        "      FROM goals WHERE COALESCE(feed_hidden, 0) = 0 "
+        "      GROUP BY rc HAVING peers >= 2) cnt "
+        "JOIN goals g ON g.code = cnt.rc "
+        "LEFT JOIN ("
+        "  SELECT COALESCE(g2.root, g2.code) AS rc, COUNT(*) AS cnt "
+        "  FROM goals g2 "
+        "  WHERE (SELECT COUNT(*) FROM checkins c WHERE c.code = g2.code) >= g2.days "
+        "  GROUP BY rc"
+        ") done ON done.rc = cnt.rc "
+        "WHERE COALESCE(g.feed_hidden, 0) = 0 "
+        "ORDER BY cnt.peers DESC, done.cnt DESC, g.created DESC "
+        f"LIMIT {int(limit)}"
+    ).fetchall()
+    items = []
+    for c, t, d, col, sh, peers, completed in rows:
+        if not _feed_title_ok(t):
+            continue
+        items.append({
+            "code": c, "title": t, "days": d, "color": col,
+            "shape": sh, "peers": peers, "completed": completed,
+        })
+    return items
+
+
+def _completed_for_challenge(conn: sqlite3.Connection, code: str, root: str | None) -> int:
+    key = _challenge_root(code, root)
+    return conn.execute(
+        "SELECT COUNT(*) FROM goals g "
+        "WHERE COALESCE(g.root, g.code) = ? "
+        "AND (SELECT COUNT(*) FROM checkins c WHERE c.code = g.code) >= g.days",
+        (key,),
+    ).fetchone()[0]
 
 
 app = FastAPI(title="vita")
@@ -348,23 +411,10 @@ def feed_page():
 
 @app.get("/api/feed")
 def feed_list():
-    """Лента челленджей: только те, что кто-то реально подхватил (peers >= 2 — значит,
-    цель шарили и она живёт). Группируем копии по корню, самые популярные — выше."""
+    """Лента челленджей: peers >= 2, без скрытых и спама в названии. top — топ-3 по участникам."""
     with db() as conn:
-        rows = conn.execute(
-            "SELECT g.code, g.title, g.days, g.color, g.shape, cnt.peers "
-            "FROM (SELECT COALESCE(root, code) AS rc, COUNT(*) AS peers "
-            "      FROM goals GROUP BY rc) cnt "
-            "JOIN goals g ON g.code = cnt.rc "
-            "WHERE cnt.peers >= 2 "
-            "ORDER BY cnt.peers DESC, g.created DESC LIMIT 60"
-        ).fetchall()
-    return {
-        "items": [
-            {"code": c, "title": t, "days": d, "color": col, "shape": sh, "peers": p}
-            for c, t, d, col, sh, p in rows
-        ]
-    }
+        items = _feed_items(conn, 60)
+    return {"top": items[:3], "items": items}
 
 
 @app.post("/api/goal")
@@ -372,6 +422,8 @@ def create_goal(g: GoalIn, request: Request):
     title = g.title.strip()
     if len(title) < 2:
         raise HTTPException(422, "Назови цель — хотя бы пару слов")
+    if not _feed_title_ok(title):
+        raise HTTPException(422, "В названии не должно быть ссылок и рекламы — только суть цели")
     days = min(max(int(g.days), 1), 365)
     start = _parse_start(g.start)
     color = g.color if _valid_color(g.color) else "#34c759"
@@ -443,10 +495,12 @@ def goal_state(code: str):
     if g is None:
         raise HTTPException(404, "Нет такой цели")
     _, title, days, start, reward, color, bg, shape, root = g
+    with db() as conn:
+        completed = _completed_for_challenge(conn, code, root)
     return {
         "title": title, "days": days, "start": start, "reward": reward,
         "color": color, "bg": bg, "shape": shape, "done": done,
-        "peers": _peers(code, root),
+        "peers": _peers(code, root), "completed": completed,
     }
 
 
@@ -536,12 +590,18 @@ button:hover {{ background:#2f2f33; }}
 button.copy {{ background:#12261a; color:#7fd4a3; }}
 button.copy:hover {{ background:#173324; }}
 button.copy.done {{ background:#1f7a4d; color:#fff; }}
+button.hide {{ background:#2a1418; color:#ff6b81; }}
+button.show {{ background:#12261a; color:#7fd4a3; }}
 .expired {{ color:#ff6b81; }}
 a {{ color:#7fd4a3; }}
 </style></head><body><h1>⠿ vita — идеи ({count})</h1>{cards}
 <script>
 async function ext(code, days) {{
   await fetch(`/admin/extend?token={token}&code=${{code}}&days=${{days}}`, {{ method: 'POST' }});
+  location.reload();
+}}
+async function feedMod(code, hide) {{
+  await fetch(`/admin/feed/hide?token={token}&code=${{code}}&hide=${{hide ? 1 : 0}}`, {{ method: 'POST' }});
   location.reload();
 }}
 async function copyCard(btn) {{
@@ -581,6 +641,19 @@ def admin(token: str = ""):
         ).fetchall()
         fw_rows = conn.execute(
             "SELECT contact, created FROM focus_wait ORDER BY created DESC"
+        ).fetchall()
+        feed_rows = conn.execute(
+            "SELECT g.code, g.title, cnt.peers, COALESCE(done.cnt, 0), COALESCE(g.feed_hidden, 0) "
+            "FROM (SELECT COALESCE(root, code) AS rc, COUNT(*) AS peers FROM goals GROUP BY rc) cnt "
+            "JOIN goals g ON g.code = cnt.rc "
+            "LEFT JOIN ("
+            "  SELECT COALESCE(g2.root, g2.code) AS rc, COUNT(*) AS cnt "
+            "  FROM goals g2 "
+            "  WHERE (SELECT COUNT(*) FROM checkins c WHERE c.code = g2.code) >= g2.days "
+            "  GROUP BY rc"
+            ") done ON done.rc = cnt.rc "
+            "WHERE cnt.peers >= 2 "
+            "ORDER BY cnt.peers DESC LIMIT 40"
         ).fetchall()
     reviews: dict[str, list[str]] = {}
     for r_code, r_text in rv_rows:
@@ -633,8 +706,31 @@ def admin(token: str = ""):
             f'<div class="card"><div class="meta"><span>🍎 Vita Focus — ждут бету: '
             f'<b>{len(fw_rows)}</b></span></div><div class="idea">{items}</div></div>'
         )
+    feed_block = ""
+    if feed_rows:
+        flines = []
+        for fcode, ftitle, fpeers, fdone, fhidden in feed_rows:
+            flag = "скрыта" if fhidden else "в ленте"
+            if not _feed_title_ok(ftitle):
+                flag += " · спам-фильтр"
+            btn = (
+                f'<button class="show" onclick="feedMod(\'{fcode}\',0)">показать</button>'
+                if fhidden else
+                f'<button class="hide" onclick="feedMod(\'{fcode}\',1)">скрыть</button>'
+            )
+            flines.append(
+                f'<div style="margin:8px 0"><b>{esc(ftitle)}</b> '
+                f'<span style="color:#8e8e8e">· {fpeers} делают · {fdone} закрыли · {flag}</span> '
+                f'<a href="/c/{fcode}">{fcode}</a> {btn}</div>'
+            )
+        feed_block = (
+            f'<div class="card"><div class="meta"><span>🔥 Лента — модерация ({len(feed_rows)})</span>'
+            f'</div><div class="idea">{"".join(flines)}</div></div>'
+        )
     html = ADMIN_PAGE.format(
-        count=len(rows), cards=focus_block + ("".join(cards) or "<p>Пока пусто.</p>"), token=ADMIN_TOKEN
+        count=len(rows),
+        cards=focus_block + feed_block + ("".join(cards) or "<p>Пока пусто.</p>"),
+        token=ADMIN_TOKEN,
     )
     return HTMLResponse(html)
 
@@ -649,6 +745,23 @@ def admin_extend(code: str, days: int, token: str = ""):
             raise HTTPException(404, "Нет такой ссылки")
         new_until = _extend(conn, code, days, row[0])
     return {"code": code, "access_until": new_until}
+
+
+@app.post("/admin/feed/hide")
+def admin_feed_hide(code: str, hide: int = 1, token: str = ""):
+    """Скрыть/вернуть челлендж в ленту (вся группа по корню)."""
+    if token != ADMIN_TOKEN:
+        raise HTTPException(403, "Нет доступа")
+    with db() as conn:
+        row = conn.execute("SELECT root FROM goals WHERE code = ?", (code,)).fetchone()
+        if row is None:
+            raise HTTPException(404, "Нет такой цели")
+        key = _challenge_root(code, row[0])
+        conn.execute(
+            "UPDATE goals SET feed_hidden = ? WHERE COALESCE(root, code) = ?",
+            (1 if hide else 0, key),
+        )
+    return {"code": code, "hidden": bool(hide)}
 
 
 app.mount("/static", StaticFiles(directory=ROOT / "static"), name="static")

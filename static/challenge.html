@@ -6,7 +6,7 @@
   <link rel="icon" type="image/png" href="/static/img/favicon.png">
   <link rel="apple-touch-icon" href="/static/img/apple-touch.png">
 <title>Vita — челлендж</title>
-<link rel="stylesheet" href="/static/style.css?v=15">
+<link rel="stylesheet" href="/static/style.css?v=16">
 </head>
 <body>
 <header>
@@ -66,7 +66,8 @@ function render() {
   app.innerHTML = `
     <div class="field" style="gap:4px">
       <span class="goal-title" style="text-transform:none">${escapeHtml(G.title)}</span>
-      <span style="color:#ff9f45;font-size:14px;font-weight:600;text-transform:none">🔥 ${peersText(G.peers)} эту цель</span>
+      <span style="color:#c8c8cc;font-size:14px;font-weight:600;text-transform:none">🔥 ${peersText(G.peers)} эту цель</span>
+      ${G.completed > 0 ? `<span style="color:#34c759;font-size:14px;font-weight:600;text-transform:none"> · ✓ ${completedText(G.completed)}</span>` : ''}
     </div>
     <div class="stats">
       <div><b>${doneCount}<span style="font-size:.5em;color:#6e6e73">/${G.days}</span></b><span>выполнено</span></div>
@@ -99,6 +100,12 @@ function peersText(n) {
   if (m10 === 1 && m100 !== 11) return `${n} человек делает`;
   if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return `${n} человека делают`;
   return `${n} человек делают`;
+}
+function completedText(n) {
+  const m10 = n % 10, m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return `${n} уже закрыл`;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return `${n} уже закрыли`;
+  return `${n} уже закрыли`;
 }
 
 (async () => {

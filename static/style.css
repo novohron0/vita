@@ -26,9 +26,16 @@ header {
 .logo { font-weight: 700; font-size: 20px; letter-spacing: 0.5px; }
 .tag { color: #6e6e73; font-size: 13px; }
 .navlink { color: #34c759; font-size: 13px; font-weight: 600; text-decoration: none; white-space: nowrap; }
-.nav { display: flex; gap: 16px; }
+.nav { display: flex; gap: 16px; flex-wrap: wrap; justify-content: flex-end; }
 .nav a { color: #8e8e8e; font-size: 14px; font-weight: 600; text-decoration: none; white-space: nowrap; }
 .nav a.on { color: #f2f2f2; }
+
+@media (max-width: 374px) {
+  header { flex-wrap: wrap; gap: 10px; padding-bottom: 14px; }
+  .nav { gap: 10px 12px; width: 100%; justify-content: flex-start; }
+  .nav a { font-size: 13px; }
+  body { padding-left: 12px; padding-right: 12px; }
+}
 
 main { width: 100%; max-width: 430px; display: flex; flex-direction: column; gap: 20px; }
 
@@ -499,6 +506,7 @@ main   { animation: fadeUp .7s cubic-bezier(.22,1,.36,1) both; }
 .primary, .secondary, .btn, .seg button, .tariff, .swatch, .gt-cell {
   transition: transform .2s cubic-bezier(.34,1.56,.64,1), box-shadow .3s,
               background .25s, color .2s, border-color .25s;
+  touch-action: manipulation;
 }
 .primary { will-change: transform; }
 .primary:hover { transform: translateY(-1px); box-shadow: 0 10px 34px rgba(255,255,255,.14); }
@@ -546,4 +554,12 @@ main   { animation: fadeUp .7s cubic-bezier(.22,1,.36,1) both; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001s !important; transition-duration: .08s !important; }
   body::before, .phone { animation: none; }
+}
+
+/* iOS: fixed background тормозит скролл */
+@media (max-width: 768px) {
+  body {
+    background-attachment: scroll;
+    background-size: cover;
+  }
 }
