@@ -1,5 +1,5 @@
 import {
-  getSettings, setSetting, getPinState, setPin, clearPin, verifyPin,
+  getSettings, setSetting, setSettings, getPinState, setPin, clearPin, verifyPin,
   getSchedule, setSchedule, getCooldownHours, setCooldownHours, getPendingInfo,
   exportBundle, importBundle,
 } from '../shared/storage.js';
@@ -8,6 +8,7 @@ const REGISTRY_URL = chrome.runtime.getURL('shared/registry.json');
 
 const $ = s => document.querySelector(s);
 let sites = [];
+let presets = [];
 let active = 'youtube';
 let settings = {};
 let pinEnabled = false;
@@ -16,12 +17,14 @@ async function init() {
   const r = await fetch(REGISTRY_URL);
   const data = await r.json();
   sites = data.sites;
+  presets = data.presets || [];
   settings = await getSettings();
   const stored = await chrome.storage.sync.get('activeSite');
   if (stored.activeSite && sites.some(s => s.id === stored.activeSite)) active = stored.activeSite;
   await refreshPinUi();
   await refreshScheduleUi();
   await refreshSchedBadge();
+  buildPresets();
   buildTabs();
   renderRows();
   updateScore();
@@ -112,6 +115,39 @@ async function needPinToDisable(wasOn, next) {
   }
   pinMsg('', false);
   return true;
+}
+
+function buildPresets() {
+  const nav = $('#presets');
+  nav.innerHTML = '';
+  presets.forEach(p => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'preset';
+    b.textContent = `${p.glyph || ''} ${p.name}`.trim();
+    b.addEventListener('click', () => applyPreset(p));
+    nav.appendChild(b);
+  });
+}
+
+async function applyPreset(preset) {
+  const ids = allToggles().map(t => t.id);
+  const turningOff = ids.filter(id => settings[id] && !(preset.settings[id]));
+  if (turningOff.length && pinEnabled) {
+    const pin = prompt('Введи PIN для смены профиля');
+    if (!pin || !(await verifyPin(pin))) {
+      pinMsg('Неверный PIN');
+      return;
+    }
+    pinMsg('', false);
+  }
+  const patch = Object.fromEntries(ids.map(id => [id, false]));
+  Object.assign(patch, preset.settings);
+  settings = await setSettings(patch);
+  renderRows();
+  updateScore();
+  await refreshScheduleUi();
+  await refreshSchedBadge();
 }
 
 function buildTabs() {

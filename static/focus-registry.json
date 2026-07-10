@@ -1,5 +1,51 @@
 {
-  "version": 2,
+  "version": 3,
+  "presets": [
+    {
+      "id": "work",
+      "name": "Работа",
+      "glyph": "💼",
+      "settings": {
+        "yt_shorts": true,
+        "yt_recs": true,
+        "yt_comments": true,
+        "yt_related": true,
+        "yt_autoplay": true,
+        "yt_thumbs": false,
+        "yt_blur": true,
+        "yt_endscreen": true,
+        "yt_home_subs": true,
+        "ig_feed": true,
+        "ig_reels": true,
+        "ig_stories": true,
+        "x_feed": true,
+        "x_trends": true,
+        "fb_feed": true,
+        "fb_reels": true
+      }
+    },
+    {
+      "id": "youtube",
+      "name": "YouTube",
+      "glyph": "▶",
+      "settings": {
+        "yt_shorts": true,
+        "yt_recs": true,
+        "yt_comments": true,
+        "yt_related": true,
+        "yt_autoplay": true,
+        "yt_thumbs": true,
+        "yt_endscreen": true,
+        "yt_home_subs": true
+      }
+    },
+    {
+      "id": "off",
+      "name": "Выкл всё",
+      "glyph": "○",
+      "settings": {}
+    }
+  ],
   "sites": [
     {
       "id": "youtube",
@@ -30,7 +76,8 @@
         { "id": "ig_feed", "label": "Лента", "desc": "Посты на главной" },
         { "id": "ig_reels", "label": "Reels", "desc": "Вкладка и раздел" },
         { "id": "ig_explore", "label": "Интересное", "desc": "Explore-лента" },
-        { "id": "ig_stories", "label": "Истории", "desc": "Карусель сверху" }
+        { "id": "ig_stories", "label": "Истории", "desc": "Карусель сверху" },
+        { "id": "ig_suggested", "label": "Рекомендации", "desc": "«Для вас» в ленте" }
       ]
     },
     {
@@ -76,6 +123,7 @@
         { "id": "li_news", "label": "Новости", "desc": "Блок новостей" },
         { "id": "li_suggestions", "label": "Рекомендации", "desc": "Кого добавить и прочее" }
       ]
+    },
     {
       "id": "gmail",
       "name": "Gmail",
@@ -85,6 +133,17 @@
         { "id": "gm_promo", "label": "Вкладки Promotions", "desc": "Соцсети и реклама" },
         { "id": "gm_forums", "label": "Forums", "desc": "Вкладка форумов" },
         { "id": "gm_updates", "label": "Updates", "desc": "Уведомления сервисов" }
+      ]
+    },
+    {
+      "id": "whatsapp",
+      "name": "WhatsApp",
+      "glyph": "◉",
+      "hosts": ["web.whatsapp.com"],
+      "toggles": [
+        { "id": "wa_status", "label": "Статусы", "desc": "Панель статусов слева" },
+        { "id": "wa_channels", "label": "Каналы", "desc": "Вкладка каналов" },
+        { "id": "wa_stickers", "label": "Стикер-панель", "desc": "Магазин стикеров" }
       ]
     }
   ]

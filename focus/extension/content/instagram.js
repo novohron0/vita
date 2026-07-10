@@ -1,6 +1,6 @@
 vfocusBoot({
   id: 'vita-focus-ig',
-  defaults: { ig_reels: false, ig_explore: false, ig_stories: false, ig_feed: false },
+  defaults: { ig_reels: false, ig_explore: false, ig_stories: false, ig_feed: false, ig_suggested: false },
   rules: {
     ig_reels: `
       a[href="/reels/"],
@@ -22,6 +22,10 @@ vfocusBoot({
       div._acaz,
       [aria-label*="Story"],
       [aria-label*="истори"]
+    `,
+    ig_suggested: `
+      article ~ div:not([role="presentation"]),
+      main section > div > div > div[style*="flex"] > div:not(article)
     `,
     ig_feed: `
       main[role="main"] article,

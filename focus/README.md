@@ -60,8 +60,8 @@ xcrun safari-web-extension-converter . \
 
 - [x] Реестр тумблеров (сайт + расширение)
 - [x] YouTube: Shorts, реки, комменты, похожие, превью, blur, заставка, автоплей
-- [x] Instagram / X / Reddit / Facebook / LinkedIn
-- [x] Popup, PIN, расписание, задержка 12ч
+- [x] Instagram / X / Reddit / Facebook / LinkedIn / Gmail / WhatsApp
+- [x] Popup, PIN, расписание, задержка 12ч, экспорт/импорт, профили
 - [ ] Face ID
 - [ ] App Store / TestFlight
 
