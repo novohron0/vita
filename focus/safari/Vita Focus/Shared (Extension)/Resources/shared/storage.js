@@ -17,6 +17,10 @@ const DEFAULT_SETTINGS = {
   yt_mix: false,
   yt_keywords: false,
   yt_kw: '',
+  yt_channels: false,
+  yt_ch: '',
+  yt_explore: false,
+  yt_theater: false,
 };
 
 const DEFAULT_SCHEDULE = { enabled: false, start: 9, end: 22 };

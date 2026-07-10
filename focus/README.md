@@ -60,7 +60,7 @@ xcrun safari-web-extension-converter . \
 
 - [x] Реестр тумблеров (сайт + расширение)
 - [x] YouTube: Shorts, реки, комменты, похожие, превью, blur, заставка, автоплей
-- [x] Instagram / X / Reddit / Facebook / LinkedIn / Gmail / WhatsApp / Telegram / TikTok
+- [x] Instagram / X / Reddit / Facebook / LinkedIn / Gmail / WhatsApp / Telegram / TikTok / Threads / Pinterest / VK
 - [x] Popup, PIN, расписание, задержка 12ч, экспорт/импорт, профили, фильтр слов
 - [ ] Face ID
 - [ ] App Store / TestFlight
@@ -71,6 +71,12 @@ xcrun safari-web-extension-converter . \
 ./focus/sync-registry.sh
 ./focus/sync-safari.sh
 ```
+
+### v0.7
+
+- YouTube: блок каналов, тренды/Explore, theater mode
+- Threads, Pinterest, VK
+- Профиль **Соцсети** в popup
 
 ### v0.6
 

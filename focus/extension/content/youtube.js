@@ -102,6 +102,15 @@ const RULES = {
     ytm-mix-playlist-renderer,
     ytd-playlist-panel-renderer[is-mix]
   `,
+  yt_explore: `
+    ytd-guide-entry-renderer a[title="Explore"],
+    ytd-guide-entry-renderer a[title="Trending"],
+    ytd-guide-entry-renderer a[title="Обзор"],
+    ytd-guide-entry-renderer a[title="В тренде"],
+    ytm-pivot-bar-renderer [tab-id="EXPLORE"],
+    ytd-browse[page-subtype="trending"] #contents,
+    ytm-browse[page-subtype="trending"] #contents
+  `,
 };
 
 const DEFAULTS = {
@@ -122,6 +131,10 @@ const DEFAULTS = {
   yt_mix: false,
   yt_keywords: false,
   yt_kw: '',
+  yt_channels: false,
+  yt_ch: '',
+  yt_explore: false,
+  yt_theater: false,
 };
 
 const THUMB_SEL = `
@@ -228,31 +241,68 @@ function tameAutoplay() {
   if (toggle?.getAttribute('aria-checked') === 'true') toggle.click();
 }
 
-function hideKeywordVideos() {
-  const raw = settings.yt_kw;
-  if (!settings.yt_keywords || !raw) return;
-  const words = String(raw).split(/[\n,;]+/).map(w => w.trim().toLowerCase()).filter(Boolean);
-  if (!words.length) return;
-  const titles = document.querySelectorAll(
-    '#video-title, ytd-video-renderer #video-title-link, ytm-video-with-context-renderer #video-title, .compact-media-item-headline'
+function blockExploreNav() {
+  if (!settings.yt_explore) return;
+  const p = location.pathname;
+  if (/^\/feed\/(trending|gaming|music|news|sports|fashion|learning)/.test(p)) {
+    location.replace('/feed/subscriptions');
+  }
+}
+
+function tryTheaterMode() {
+  if (!settings.yt_theater) return;
+  if (!/\/watch/.test(location.pathname)) return;
+  const btn = document.querySelector(
+    'button.ytp-size-button[aria-label*="Theater"], button.ytp-size-button[aria-label*="Кинотеатр"], button[aria-label*="Theater mode"]'
   );
-  titles.forEach(el => {
+  if (btn && btn.getAttribute('aria-pressed') !== 'true') btn.click();
+}
+
+function parseList(raw) {
+  return String(raw || '').split(/[\n,;]+/).map(w => w.trim().toLowerCase()).filter(Boolean);
+}
+
+function hideMatchingRows(selector, matcher) {
+  document.querySelectorAll(selector).forEach(el => {
     const text = (el.textContent || '').toLowerCase();
-    if (!words.some(w => text.includes(w))) return;
+    if (!matcher(text)) return;
     const row = el.closest(
-      'ytd-rich-item-renderer, ytd-video-renderer, ytd-compact-video-renderer, ytm-rich-item-renderer, ytm-compact-video-renderer, ytm-video-with-context-renderer'
+      'ytd-rich-item-renderer, ytd-video-renderer, ytd-compact-video-renderer, ytm-rich-item-renderer, ytm-compact-video-renderer, ytm-video-with-context-renderer, ytd-grid-video-renderer'
     );
     if (row) row.style.setProperty('display', 'none', 'important');
   });
 }
 
+function hideKeywordVideos() {
+  if (!settings.yt_keywords || !settings.yt_kw) return;
+  const words = parseList(settings.yt_kw);
+  if (!words.length) return;
+  hideMatchingRows(
+    '#video-title, ytd-video-renderer #video-title-link, ytm-video-with-context-renderer #video-title, .compact-media-item-headline',
+    text => words.some(w => text.includes(w))
+  );
+}
+
+function hideChannelVideos() {
+  if (!settings.yt_channels || !settings.yt_ch) return;
+  const channels = parseList(settings.yt_ch);
+  if (!channels.length) return;
+  hideMatchingRows(
+    'ytd-channel-name #text, #channel-name a, ytm-badge-and-byline-renderer .badge-style-type, .ytm-badge-and-byline-renderer, ytd-video-meta-block #metadata-line a',
+    text => channels.some(c => text.includes(c))
+  );
+}
+
 function tick() {
   tickScheduled = false;
   blockShortsNav();
+  blockExploreNav();
   redirectHomeToSubs();
   applyCss();
   tameAutoplay();
+  tryTheaterMode();
   hideKeywordVideos();
+  hideChannelVideos();
 }
 
 function scheduleTick() {

@@ -27,12 +27,12 @@ async function init() {
   buildPresets();
   buildTabs();
   renderRows();
-  updateKwBox();
+  updateYtExtras();
   updateScore();
   bindPin();
   bindSchedule();
   bindIO();
-  bindKeywords();
+  bindYtExtras();
 }
 
 function scheduleActive(sched) {
@@ -164,26 +164,29 @@ function buildTabs() {
       chrome.storage.sync.set({ activeSite: active });
       buildTabs();
       renderRows();
-      updateKwBox();
+      updateYtExtras();
     });
     nav.appendChild(b);
   });
 }
 
-function updateKwBox() {
-  const box = $('#kwBox');
+function updateYtExtras() {
+  const box = $('#ytExtras');
   const show = active === 'youtube';
   box.hidden = !show;
-  if (show) $('#kwIn').value = settings.yt_kw || '';
+  if (show) {
+    $('#kwIn').value = settings.yt_kw || '';
+    $('#chIn').value = settings.yt_ch || '';
+  }
 }
 
-function bindKeywords() {
-  const ta = $('#kwIn');
-  const save = async () => {
-    settings = await setSettings({ yt_kw: ta.value });
-  };
-  ta.addEventListener('change', save);
-  ta.addEventListener('blur', save);
+function bindYtExtras() {
+  const saveKw = async () => { settings = await setSettings({ yt_kw: $('#kwIn').value }); };
+  const saveCh = async () => { settings = await setSettings({ yt_ch: $('#chIn').value }); };
+  $('#kwIn').addEventListener('change', saveKw);
+  $('#kwIn').addEventListener('blur', saveKw);
+  $('#chIn').addEventListener('change', saveCh);
+  $('#chIn').addEventListener('blur', saveCh);
 }
 
 function renderRows() {
@@ -292,7 +295,7 @@ function bindIO() {
       settings = await getSettings();
       buildTabs();
       renderRows();
-      updateKwBox();
+      updateYtExtras();
       updateScore();
       await refreshScheduleUi();
       await refreshSchedBadge();

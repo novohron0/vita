@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "presets": [
     {
       "id": "work",
@@ -40,6 +40,30 @@
       }
     },
     {
+      "id": "social",
+      "name": "Соцсети",
+      "glyph": "📵",
+      "settings": {
+        "ig_feed": true,
+        "ig_reels": true,
+        "ig_stories": true,
+        "ig_suggested": true,
+        "x_feed": true,
+        "x_trends": true,
+        "x_follow": true,
+        "fb_feed": true,
+        "fb_reels": true,
+        "fb_stories": true,
+        "tt_foryou": true,
+        "tt_discover": true,
+        "th_feed": true,
+        "vk_feed": true,
+        "vk_clips": true,
+        "vk_stories": true,
+        "pin_home": true
+      }
+    },
+    {
       "id": "off",
       "name": "Выкл всё",
       "glyph": "○",
@@ -68,7 +92,10 @@
         { "id": "yt_shelf", "label": "Полки", "desc": "Горизонтальные карусели рекомендаций" },
         { "id": "yt_chips", "label": "Чипсы тем", "desc": "Фильтры на главной" },
         { "id": "yt_mix", "label": "Mix / радио", "desc": "Автоплейлисты и миксы" },
-        { "id": "yt_keywords", "label": "Фильтр слов", "desc": "Скрыть видео по списку в popup" }
+        { "id": "yt_keywords", "label": "Фильтр слов", "desc": "Скрыть видео по списку в popup" },
+        { "id": "yt_channels", "label": "Блок каналов", "desc": "Скрыть видео по авторам" },
+        { "id": "yt_explore", "label": "Тренды / Explore", "desc": "Скрыть раздел и редирект" },
+        { "id": "yt_theater", "label": "Кинотеатр", "desc": "Включать theater mode на watch" }
       ]
     },
     {
@@ -171,6 +198,40 @@
         { "id": "tt_discover", "label": "Discover", "desc": "Вкладка обзора" },
         { "id": "tt_live", "label": "Live", "desc": "Раздел трансляций" },
         { "id": "tt_sidebar", "label": "Рекомендации", "desc": "Боковая колонка" }
+      ]
+    },
+    {
+      "id": "threads",
+      "name": "Threads",
+      "glyph": "@",
+      "hosts": ["www.threads.net", "threads.net"],
+      "toggles": [
+        { "id": "th_feed", "label": "Лента", "desc": "Посты на главной" },
+        { "id": "th_suggest", "label": "Рекомендации", "desc": "Кого читать" },
+        { "id": "th_replies", "label": "Ответы", "desc": "Ветки комментариев" }
+      ]
+    },
+    {
+      "id": "pinterest",
+      "name": "Pinterest",
+      "glyph": "📌",
+      "hosts": ["www.pinterest.com", "pinterest.com", "ru.pinterest.com"],
+      "toggles": [
+        { "id": "pin_home", "label": "Главная", "desc": "Лента пинов" },
+        { "id": "pin_ideas", "label": "Идеи", "desc": "Вкладка и раздел" },
+        { "id": "pin_shopping", "label": "Покупки", "desc": "Shopping-лента" }
+      ]
+    },
+    {
+      "id": "vk",
+      "name": "VK",
+      "glyph": "В",
+      "hosts": ["vk.com", "m.vk.com", "www.vk.com"],
+      "toggles": [
+        { "id": "vk_feed", "label": "Лента", "desc": "Посты на главной" },
+        { "id": "vk_clips", "label": "Клипы", "desc": "Shorts VK" },
+        { "id": "vk_stories", "label": "Истории", "desc": "Кружки сверху" },
+        { "id": "vk_recommend", "label": "Рекомендации", "desc": "Блоки «вам может понравиться»" }
       ]
     }
   ]

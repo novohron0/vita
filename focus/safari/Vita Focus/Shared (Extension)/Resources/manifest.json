@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Vita Focus",
   "description": "UnTrap + SocialFocus в одном: Shorts, ленты, рекомендации — тишина в Safari.",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "icons": {
     "48": "icons/icon48.png",
     "96": "icons/icon96.png",
@@ -21,7 +21,11 @@
     "*://mail.google.com/*",
     "*://web.whatsapp.com/*",
     "*://web.telegram.org/*",
-    "*://*.tiktok.com/*"
+    "*://*.tiktok.com/*",
+    "*://*.threads.net/*",
+    "*://*.pinterest.com/*",
+    "*://*.vk.com/*",
+    "*://vk.com/*"
   ],
   "background": {
     "service_worker": "background.js",
@@ -81,6 +85,21 @@
     {
       "matches": ["*://*.tiktok.com/*"],
       "js": ["content/helpers.js", "content/tiktok.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["*://*.threads.net/*"],
+      "js": ["content/helpers.js", "content/threads.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["*://*.pinterest.com/*"],
+      "js": ["content/helpers.js", "content/pinterest.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["*://*.vk.com/*", "*://vk.com/*"],
+      "js": ["content/helpers.js", "content/vk.js"],
       "run_at": "document_start"
     }
   ],
