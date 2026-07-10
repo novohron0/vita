@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from PIL import Image
 
-from .render import render_goal, render_wallpaper
+from .render import SHAPES, render_goal, render_wallpaper
 
 ROOT = Path(__file__).resolve().parent.parent
 # VITA_DATA — переопределение каталога данных (dev/тесты не трогают боевую БД)
@@ -458,7 +458,7 @@ def create_goal(g: GoalIn, request: Request):
     start = _parse_start(g.start)
     color = g.color if _valid_color(g.color) else "#34c759"
     bg = g.bg if g.bg in ("black", "white", "navy") else "black"
-    shape = g.shape if g.shape in ("circle", "rounded", "square") else "circle"
+    shape = g.shape if g.shape in SHAPES else "circle"
     code = _gen_code()
     with db() as conn:
         conn.execute(

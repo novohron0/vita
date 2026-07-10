@@ -18,6 +18,7 @@ const SCENE_GRADS = {
   honeymoon: [['#4a2038', 0], ['#6b3050', .38], ['#1f1018', 1]],
 };
 const TITLES = { month: 'ТВОЙ МЕСЯЦ', year: 'ТВОЙ ГОД', life: 'ТВОЯ ЖИЗНЬ', goal: 'ДО ЦЕЛИ' };
+const SHAPES = ['circle', 'square', 'rounded', 'heart', 'star', 'diamond'];
 const BG_TITLES = { dembel: 'ДО ДЕМБЕЛЯ', ramadan: 'МЕСЯЦ РАМАДАН', honeymoon: 'МЕДОВЫЙ МЕСЯЦ' };
 const STAT_LABELS = {
   month: ['дней позади', 'впереди'],
@@ -56,7 +57,7 @@ if (DEMO) {
   const c = q.get('color');
   if (/^#[0-9a-fA-F]{6}$/.test(c || '')) state.color = c;
   if (BGS[q.get('bg')]) state.bg = q.get('bg');
-  if (['circle', 'square', 'rounded'].includes(q.get('shape'))) state.shape = q.get('shape');
+  if (SHAPES.includes(q.get('shape'))) state.shape = q.get('shape');
 }
 
 const $ = id => document.getElementById(id);
@@ -315,10 +316,41 @@ function footerText(total, done) {
 }
 
 function dotPath(c, x, y, d) {
+  const cx = x + d / 2, cy = y + d / 2;
   c.beginPath();
-  if (state.shape === 'square') c.rect(x, y, d, d);
-  else if (state.shape === 'rounded') c.roundRect(x, y, d, d, d * 0.3);
-  else c.arc(x + d / 2, y + d / 2, d / 2, 0, Math.PI * 2);
+  if (state.shape === 'square') {
+    c.rect(x, y, d, d);
+  } else if (state.shape === 'rounded') {
+    c.roundRect(x, y, d, d, d * 0.3);
+  } else if (state.shape === 'heart') {
+    for (let deg = 0; deg < 360; deg += 15) {
+      const t = deg * Math.PI / 180;
+      const hx = 16 * Math.sin(t) ** 3;
+      const hy = -(13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t));
+      const px = cx + hx * d * 0.032;
+      const py = cy + hy * d * 0.032 + d * 0.06;
+      deg ? c.lineTo(px, py) : c.moveTo(px, py);
+    }
+    c.closePath();
+  } else if (state.shape === 'star') {
+    const r = d * 0.48;
+    for (let i = 0; i < 10; i++) {
+      const a = -Math.PI / 2 + (i * Math.PI) / 5;
+      const rr = i % 2 ? r * 0.42 : r;
+      const px = cx + Math.cos(a) * rr, py = cy + Math.sin(a) * rr;
+      i ? c.lineTo(px, py) : c.moveTo(px, py);
+    }
+    c.closePath();
+  } else if (state.shape === 'diamond') {
+    const r = d * 0.5;
+    c.moveTo(cx, cy - r);
+    c.lineTo(cx + r, cy);
+    c.lineTo(cx, cy + r);
+    c.lineTo(cx - r, cy);
+    c.closePath();
+  } else {
+    c.arc(cx, cy, d / 2, 0, Math.PI * 2);
+  }
 }
 
 // точки: классика или «жидкое стекло» (блик, кромка, глубина)

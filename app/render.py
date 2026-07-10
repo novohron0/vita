@@ -35,6 +35,7 @@ SCENE_GRADS = {
     "honeymoon": (("#4a2038", 0.0), ("#6b3050", 0.38), ("#1f1018", 1.0)),
 }
 MODES = ("month", "year", "life", "goal")
+SHAPES = frozenset({"circle", "square", "rounded", "heart", "star", "diamond"})
 
 # первый существующий шрифт с кириллицей: сначала macOS, затем Linux (сервер)
 FONT_PATHS = [
@@ -98,6 +99,31 @@ def _paint_wallpaper_bg(cfg: dict, bg_key: str) -> Image.Image:
     return img
 
 
+def _shape_points(shape: str, w: int, h: int) -> list[tuple[float, float]] | None:
+    cx, cy = w / 2, h / 2
+    d = min(w, h)
+    if shape == "diamond":
+        r = d * 0.48
+        return [(cx, cy - r), (cx + r, cy), (cx, cy + r), (cx - r, cy)]
+    if shape == "star":
+        r = d * 0.48
+        pts = []
+        for i in range(10):
+            a = -math.pi / 2 + (i * math.pi) / 5
+            rr = r * 0.42 if i % 2 else r
+            pts.append((cx + math.cos(a) * rr, cy + math.sin(a) * rr))
+        return pts
+    if shape == "heart":
+        pts = []
+        for deg in range(0, 360, 15):
+            t = math.radians(deg)
+            hx = 16 * math.sin(t) ** 3
+            hy = -(13 * math.cos(t) - 5 * math.cos(2 * t) - 2 * math.cos(3 * t) - math.cos(4 * t))
+            pts.append((cx + hx * d * 0.032, cy + hy * d * 0.032 + d * 0.06))
+        return pts
+    return None
+
+
 def _glass_dot(img: Image.Image, box, color: str, shape: str, mode: str = "filled") -> None:
     """Точка «жидкое стекло» — блик, глубина, светлая кромка."""
     x0, y0, x1, y1 = int(box[0]), int(box[1]), int(box[2]), int(box[3])
@@ -111,7 +137,13 @@ def _glass_dot(img: Image.Image, box, color: str, shape: str, mode: str = "fille
     ib = (0, 0, w - 1, h - 1)
 
     def shape_draw(fill=None, outline=None, width=0):
-        if shape == "circle":
+        poly = _shape_points(shape, w, h)
+        if poly is not None:
+            if fill:
+                d.polygon(poly, fill=fill)
+            if outline:
+                d.polygon(poly, outline=outline, width=width)
+        elif shape == "circle":
             d.ellipse(ib, fill=fill, outline=outline, width=width)
         elif shape == "square":
             d.rectangle(ib, fill=fill, outline=outline, width=width)
@@ -141,9 +173,17 @@ def _solid_dot(img: Image.Image, box, color: str, shape: str, mode: str = "fille
     r, g, b = _rgb(color)
     rad = int(min(w, h) * 0.3) if shape == "rounded" else 0
     ib = (x0, y0, x1 - 1, y1 - 1)
+    lw, lh = w, h
 
     def shape_draw(fill=None, outline=None, width=0):
-        if shape == "circle":
+        poly = _shape_points(shape, lw, lh)
+        if poly is not None:
+            shifted = [(x0 + px, y0 + py) for px, py in poly]
+            if fill:
+                d.polygon(shifted, fill=fill)
+            if outline:
+                d.polygon(shifted, outline=outline, width=width)
+        elif shape == "circle":
             d.ellipse(ib, fill=fill, outline=outline, width=width)
         elif shape == "square":
             d.rectangle(ib, fill=fill, outline=outline, width=width)
