@@ -9,6 +9,9 @@ const DEFAULT_SETTINGS = {
   yt_blur: false,
   yt_endscreen: false,
   yt_notifications: false,
+  yt_search: false,
+  yt_livechat: false,
+  yt_home_subs: false,
 };
 
 const DEFAULT_SCHEDULE = { enabled: false, start: 9, end: 22 };
@@ -146,4 +149,20 @@ export async function verifyPin(pin) {
   const { hash } = await getPinState();
   if (!hash) return true;
   return (await hashPin(pin)) === hash;
+}
+
+export async function exportBundle() {
+  const data = await chrome.storage.sync.get(['settings', 'schedule', 'cooldownHours', 'activeSite']);
+  return JSON.stringify({ v: 1, exportedAt: new Date().toISOString(), ...data }, null, 2);
+}
+
+export async function importBundle(raw) {
+  const data = JSON.parse(raw);
+  if (!data || typeof data.settings !== 'object') throw new Error('bad');
+  const patch = { settings: data.settings };
+  if (data.schedule) patch.schedule = data.schedule;
+  if (data.cooldownHours != null) patch.cooldownHours = data.cooldownHours;
+  if (data.activeSite) patch.activeSite = data.activeSite;
+  await chrome.storage.sync.set(patch);
+  return getEffectiveSettings();
 }

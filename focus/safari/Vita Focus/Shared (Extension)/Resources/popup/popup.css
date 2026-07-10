@@ -5,9 +5,12 @@ body {
   font: 13px -apple-system, system-ui, sans-serif;
   padding: 12px;
 }
-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 6px; flex-wrap: wrap; }
 header b { font-size: 14px; }
-#score { font-size: 12px; color: #7fd4a3; font-weight: 700; }
+#schedBadge { font-size: 10px; padding: 3px 7px; border-radius: 99px; font-weight: 600; }
+.badge-off { background: #3a2a14; color: #ffb347; border: 1px solid #5a4018; }
+.badge-on { background: #0d2a18; color: #7fd4a3; border: 1px solid #1a4a2e; }
+#score { font-size: 12px; color: #7fd4a3; font-weight: 700; margin-left: auto; }
 #tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 10px; }
 .tab {
   border: 1px solid #2a2a2e; background: #161618; color: #8e8e93;
@@ -31,6 +34,9 @@ header b { font-size: 14px; }
 .row.on .sw::after { transform: translateX(18px); }
 footer { margin-top: 12px; text-align: center; }
 footer a { color: #7fd4a3; font-size: 11px; text-decoration: none; }
+.io-row { display: flex; gap: 6px; justify-content: center; margin-bottom: 8px; }
+.ghost-btn { border: 1px solid #2a2a2e; background: #161618; color: #c8c8cc; border-radius: 10px; padding: 6px 12px; font: inherit; font-size: 11px; cursor: pointer; }
+.ghost-btn:hover { background: #1e1e22; }
 .pin { margin-top: 10px; padding: 10px; border-radius: 12px; border: 1px solid #242428; background: #121214; }
 .pin-head { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 12px; }
 .pin-head span { color: #7fd4a3; }

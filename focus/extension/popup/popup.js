@@ -1,6 +1,7 @@
 import {
   getSettings, setSetting, getPinState, setPin, clearPin, verifyPin,
   getSchedule, setSchedule, getCooldownHours, setCooldownHours, getPendingInfo,
+  exportBundle, importBundle,
 } from '../shared/storage.js';
 
 const REGISTRY_URL = chrome.runtime.getURL('shared/registry.json');
@@ -20,11 +21,42 @@ async function init() {
   if (stored.activeSite && sites.some(s => s.id === stored.activeSite)) active = stored.activeSite;
   await refreshPinUi();
   await refreshScheduleUi();
+  await refreshSchedBadge();
   buildTabs();
   renderRows();
   updateScore();
   bindPin();
   bindSchedule();
+  bindIO();
+}
+
+function scheduleActive(sched) {
+  if (!sched.enabled) return null;
+  const h = new Date().getHours();
+  const { start, end } = sched;
+  let on;
+  if (start === end) on = true;
+  else if (start < end) on = h >= start && h < end;
+  else on = h >= start || h < end;
+  return on;
+}
+
+async function refreshSchedBadge() {
+  const sched = await getSchedule();
+  const badge = $('#schedBadge');
+  const st = scheduleActive(sched);
+  if (st === null) {
+    badge.hidden = true;
+    return;
+  }
+  badge.hidden = false;
+  if (st) {
+    badge.textContent = 'фокус';
+    badge.className = 'badge-on';
+  } else {
+    badge.textContent = 'пауза';
+    badge.className = 'badge-off';
+  }
 }
 
 function allToggles() {
@@ -115,13 +147,17 @@ function renderRows() {
       const hours = await getCooldownHours();
       if (!next && hours > 0 && on) {
         settings = await setSetting(t.id, false);
+        row.classList.toggle('on', !!settings[t.id]);
+        updateScore();
         await refreshScheduleUi();
+        await refreshSchedBadge();
         return;
       }
       settings = await setSetting(t.id, next);
       row.classList.toggle('on', !!settings[t.id]);
       updateScore();
       await refreshScheduleUi();
+      await refreshSchedBadge();
     });
     box.appendChild(row);
   });
@@ -168,6 +204,7 @@ function bindSchedule() {
     });
     await setCooldownHours($('#cooldownOn').checked ? 12 : 0);
     await refreshScheduleUi();
+    await refreshSchedBadge();
     settings = await getSettings();
     renderRows();
     updateScore();
@@ -176,6 +213,42 @@ function bindSchedule() {
   $('#schedStart').addEventListener('change', save);
   $('#schedEnd').addEventListener('change', save);
   $('#cooldownOn').addEventListener('change', save);
+}
+
+function bindIO() {
+  $('#exportBtn').addEventListener('click', async () => {
+    const json = await exportBundle();
+    try {
+      await navigator.clipboard.writeText(json);
+      const msg = $('#pinMsg');
+      msg.style.color = '#7fd4a3';
+      msg.textContent = 'Настройки скопированы';
+      msg.hidden = false;
+      setTimeout(() => { msg.hidden = true; }, 2000);
+    } catch {
+      prompt('Скопируй настройки:', json);
+    }
+  });
+  $('#importBtn').addEventListener('click', async () => {
+    const raw = prompt('Вставь JSON настроек Vita Focus:');
+    if (!raw) return;
+    try {
+      await importBundle(raw);
+      settings = await getSettings();
+      buildTabs();
+      renderRows();
+      updateScore();
+      await refreshScheduleUi();
+      await refreshSchedBadge();
+      const msg = $('#pinMsg');
+      msg.style.color = '#7fd4a3';
+      msg.textContent = 'Импорт OK';
+      msg.hidden = false;
+      setTimeout(() => { msg.hidden = true; }, 2000);
+    } catch {
+      pinMsg('Битый JSON');
+    }
+  });
 }
 
 init();

@@ -15,7 +15,10 @@
         { "id": "yt_thumbs", "label": "Только названия", "desc": "Скрыть превью в списках" },
         { "id": "yt_blur", "label": "Размыть превью", "desc": "Серый blur вместо картинок" },
         { "id": "yt_endscreen", "label": "Заставка в конце", "desc": "Карточки после видео" },
-        { "id": "yt_notifications", "label": "Уведомления", "desc": "Колокольчик сверху" }
+        { "id": "yt_notifications", "label": "Уведомления", "desc": "Колокольчик сверху" },
+        { "id": "yt_search", "label": "Подсказки поиска", "desc": "Выпадающий список" },
+        { "id": "yt_livechat", "label": "Live-чат", "desc": "Чат на стримах" },
+        { "id": "yt_home_subs", "label": "Главная → Подписки", "desc": "Редирект home на ленту подписок" }
       ]
     },
     {
@@ -72,6 +75,16 @@
         { "id": "li_feed", "label": "Лента", "desc": "Посты в feed" },
         { "id": "li_news", "label": "Новости", "desc": "Блок новостей" },
         { "id": "li_suggestions", "label": "Рекомендации", "desc": "Кого добавить и прочее" }
+      ]
+    {
+      "id": "gmail",
+      "name": "Gmail",
+      "glyph": "✉",
+      "hosts": ["mail.google.com"],
+      "toggles": [
+        { "id": "gm_promo", "label": "Вкладки Promotions", "desc": "Соцсети и реклама" },
+        { "id": "gm_forums", "label": "Forums", "desc": "Вкладка форумов" },
+        { "id": "gm_updates", "label": "Updates", "desc": "Уведомления сервисов" }
       ]
     }
   ]

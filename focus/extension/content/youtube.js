@@ -52,6 +52,17 @@ const RULES = {
     ytd-button-renderer#button[aria-label*="Notification"],
     ytd-button-renderer#button[aria-label*="уведомлен"]
   `,
+  yt_search: `
+    ytd-searchbox ytd-vertical-list,
+    ytd-searchbox #suggestions,
+    .ytSearchboxComponentSuggestionsContainer,
+    ytm-searchbox-suggestions
+  `,
+  yt_livechat: `
+    #chat,
+    ytd-live-chat-frame,
+    ytm-live-chat-renderer
+  `,
 };
 
 const DEFAULTS = {
@@ -64,6 +75,9 @@ const DEFAULTS = {
   yt_blur: false,
   yt_endscreen: false,
   yt_notifications: false,
+  yt_search: false,
+  yt_livechat: false,
+  yt_home_subs: false,
 };
 
 const THUMB_SEL = `
@@ -155,6 +169,14 @@ function blockShortsNav() {
   }
 }
 
+function redirectHomeToSubs() {
+  if (!settings.yt_home_subs) return;
+  const p = location.pathname;
+  if (p === '/' || p === '/feed' || p === '/feed/') {
+    location.replace('/feed/subscriptions');
+  }
+}
+
 function tameAutoplay() {
   if (!settings.yt_autoplay) return;
   document.querySelectorAll('.ytp-autonav-toggle-button[aria-checked="true"]').forEach(btn => btn.click());
@@ -165,6 +187,7 @@ function tameAutoplay() {
 function tick() {
   tickScheduled = false;
   blockShortsNav();
+  redirectHomeToSubs();
   applyCss();
   tameAutoplay();
 }
