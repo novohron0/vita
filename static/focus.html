@@ -219,31 +219,12 @@
 </main>
 
 <script>
-// ——— реестр (та же логика, что в расширении) ———
-const SITES = [
-  { id:'youtube', name:'YouTube', glyph:'▶', toggles:[
-    { id:'yt_shorts', label:'Shorts', desc:'Полки, вкладка и раздел' },
-    { id:'yt_recs', label:'Рекомендации на главной', desc:'Вся сетка видео' },
-    { id:'yt_comments', label:'Комментарии', desc:'Блок под видео' },
-    { id:'yt_related', label:'Похожие видео', desc:'Колонка справа' },
-    { id:'yt_autoplay', label:'Автовоспроизведение', desc:'Автоплей следующего' } ]},
-  { id:'instagram', name:'Instagram', glyph:'◎', toggles:[
-    { id:'ig_reels', label:'Reels', desc:'Вкладка и лента' },
-    { id:'ig_explore', label:'Интересное', desc:'Explore-лента' },
-    { id:'ig_stories', label:'Истории', desc:'Карусель сверху' } ]},
-  { id:'x', name:'X', glyph:'𝕏', toggles:[
-    { id:'x_foryou', label:'«Для вас»', desc:'Алгоритмическая лента' },
-    { id:'x_trends', label:'Тренды', desc:'«Что происходит»' },
-    { id:'x_follow', label:'Кого читать', desc:'Рекомендации' } ]},
-  { id:'reddit', name:'Reddit', glyph:'◔', toggles:[
-    { id:'rd_feed', label:'Домашняя лента', desc:'Бесконечный скролл' },
-    { id:'rd_popular', label:'Popular / All', desc:'Ссылки в меню' } ]},
-];
-
+// ——— реестр (тот же JSON, что в расширении) ———
 const $ = s => document.querySelector(s);
 const el = (t,c) => { const e=document.createElement(t); if(c) e.className=c; return e; };
+let SITES = [];
 let S = JSON.parse(localStorage.vfocus || '{}');
-let active = SITES.some(s=>s.id===S.active) ? S.active : 'youtube';
+let active = S.active || 'youtube';
 const settings = S.settings || {};
 
 const all = () => SITES.flatMap(s=>s.toggles);
@@ -252,6 +233,7 @@ const save = () => localStorage.vfocus = JSON.stringify({ settings, active });
 
 function buildTabs() {
   const tabs = $('#tabs');
+  tabs.innerHTML = '';
   SITES.forEach(s => {
     const b = el('button','tab'); b.dataset.id=s.id;
     b.innerHTML = `<span>${s.glyph}</span>${s.name}<span class="cnt">0</span>`;
@@ -273,7 +255,8 @@ function refreshTabs() {
 }
 function renderRows() {
   const s = SITES.find(x=>x.id===active);
-  const box = $('#rows'); box.innerHTML=''; let i=0;
+  const box = $('#rows'); box.innerHTML=''; if(!s) return;
+  let i=0;
   s.toggles.forEach(t => {
     const r = el('div','row'); r.style.animationDelay=(i++*0.04)+'s';
     if(settings[t.id]) r.classList.add('on');
@@ -301,8 +284,15 @@ function updateScore() {
   anim=requestAnimationFrame(tick);
 }
 
-buildTabs(); renderRows(); updateScore(); refreshTabs();
-requestAnimationFrame(()=>requestAnimationFrame(moveInd));
+async function initPanel() {
+  const r = await fetch('/static/focus-registry.json');
+  const data = await r.json();
+  SITES = data.sites;
+  if (!SITES.some(s => s.id === active)) active = SITES[0]?.id || 'youtube';
+  buildTabs(); renderRows(); updateScore(); refreshTabs();
+  requestAnimationFrame(()=>requestAnimationFrame(moveInd));
+}
+initPanel();
 window.addEventListener('resize', moveInd);
 
 // ——— лендинг: секции проявляются при скролле (один раз) ———

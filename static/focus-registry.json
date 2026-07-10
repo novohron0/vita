@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "sites": [
+    {
+      "id": "youtube",
+      "name": "YouTube",
+      "glyph": "▶",
+      "hosts": ["www.youtube.com", "m.youtube.com", "youtube.com"],
+      "toggles": [
+        { "id": "yt_shorts", "label": "Shorts", "desc": "Полки, вкладка и раздел" },
+        { "id": "yt_recs", "label": "Рекомендации на главной", "desc": "Вся сетка видео" },
+        { "id": "yt_comments", "label": "Комментарии", "desc": "Блок под видео" },
+        { "id": "yt_related", "label": "Похожие видео", "desc": "Колонка справа" },
+        { "id": "yt_autoplay", "label": "Автовоспроизведение", "desc": "Автоплей следующего" }
+      ]
+    },
+    {
+      "id": "instagram",
+      "name": "Instagram",
+      "glyph": "◎",
+      "hosts": ["www.instagram.com", "instagram.com"],
+      "toggles": [
+        { "id": "ig_reels", "label": "Reels", "desc": "Вкладка и лента" },
+        { "id": "ig_explore", "label": "Интересное", "desc": "Explore-лента" },
+        { "id": "ig_stories", "label": "Истории", "desc": "Карусель сверху" }
+      ]
+    },
+    {
+      "id": "x",
+      "name": "X",
+      "glyph": "𝕏",
+      "hosts": ["x.com", "twitter.com", "mobile.twitter.com"],
+      "toggles": [
+        { "id": "x_foryou", "label": "«Для вас»", "desc": "Алгоритмическая лента" },
+        { "id": "x_trends", "label": "Тренды", "desc": "«Что происходит»" },
+        { "id": "x_follow", "label": "Кого читать", "desc": "Рекомендации" }
+      ]
+    },
+    {
+      "id": "reddit",
+      "name": "Reddit",
+      "glyph": "◔",
+      "hosts": ["www.reddit.com", "old.reddit.com", "reddit.com"],
+      "toggles": [
+        { "id": "rd_feed", "label": "Домашняя лента", "desc": "Бесконечный скролл" },
+        { "id": "rd_popular", "label": "Popular / All", "desc": "Ссылки в меню" }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,61 @@
+{
+  "manifest_version": 3,
+  "name": "Vita Focus",
+  "description": "Убираем Shorts, ленты, рекомендации и комментарии. Остаётся только то, ради чего ты зашёл.",
+  "version": "0.1.0",
+  "icons": {
+    "48": "icons/icon48.png",
+    "96": "icons/icon96.png",
+    "128": "icons/icon128.png"
+  },
+  "permissions": ["storage"],
+  "host_permissions": [
+    "*://*.youtube.com/*",
+    "*://*.instagram.com/*",
+    "*://x.com/*",
+    "*://*.twitter.com/*",
+    "*://*.reddit.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Vita Focus",
+    "default_popup": "popup/popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*.youtube.com/*"],
+      "js": ["content/youtube.js"],
+      "css": ["content/youtube.css"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["*://*.instagram.com/*"],
+      "js": ["content/instagram.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["*://x.com/*", "*://*.twitter.com/*"],
+      "js": ["content/x.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["*://*.reddit.com/*"],
+      "js": ["content/reddit.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["shared/registry.json"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "browser_specific_settings": {
+    "safari": {
+      "strict_min_version": "16.4"
+    }
+  }
+}
