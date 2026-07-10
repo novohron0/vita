@@ -43,6 +43,10 @@ footer a { color: #7fd4a3; font-size: 11px; text-decoration: none; }
 .io-row { display: flex; gap: 6px; justify-content: center; margin-bottom: 8px; }
 .ghost-btn { border: 1px solid #2a2a2e; background: #161618; color: #c8c8cc; border-radius: 10px; padding: 6px 12px; font: inherit; font-size: 11px; cursor: pointer; }
 .ghost-btn:hover { background: #1e1e22; }
+.pin textarea { width: 100%; margin-top: 6px; padding: 8px 10px; border-radius: 10px;
+  border: 1px solid #2a2a2e; background: #0e0e10; color: #f2f2f2; font: inherit; font-size: 12px;
+  resize: vertical; min-height: 52px; box-sizing: border-box; }
+.pin textarea:focus { outline: none; border-color: #3a3a40; }
 .pin { margin-top: 10px; padding: 10px; border-radius: 12px; border: 1px solid #242428; background: #121214; }
 .pin-head { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 12px; }
 .pin-head span { color: #7fd4a3; }

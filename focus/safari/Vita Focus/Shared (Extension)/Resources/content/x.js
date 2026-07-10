@@ -1,14 +1,11 @@
 vfocusBoot({
   id: 'vita-focus-x',
-  defaults: { x_foryou: false, x_trends: false, x_follow: false, x_feed: false },
+  defaults: { x_feed: false, x_trends: false, x_follow: false },
   rules: {
     x_feed: `
       div[data-testid="primaryColumn"] section[role="region"],
-      div[data-testid="primaryColumn"] > div > div > section
-    `,
-    x_foryou: `
-      a[href="/home"][role="tab"],
-      nav[role="navigation"] a[href="/home"]
+      div[data-testid="primaryColumn"] > div > div > section,
+      main[role="main"] section[role="region"]
     `,
     x_trends: `
       div[data-testid="sidebarColumn"] section,
@@ -25,7 +22,8 @@ vfocusBoot({
     `,
   },
   beforeTick(s) {
-    if ((s.x_feed || s.x_foryou) && (location.pathname === '/home' || location.pathname === '/')) {
+    if (!s.x_feed) return;
+    if (location.pathname === '/home' || location.pathname === '/') {
       document.querySelectorAll('div[data-testid="primaryColumn"] section').forEach(el => {
         el.style.setProperty('display', 'none', 'important');
       });

@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "presets": [
     {
       "id": "work",
@@ -64,7 +64,11 @@
         { "id": "yt_notifications", "label": "Уведомления", "desc": "Колокольчик сверху" },
         { "id": "yt_search", "label": "Подсказки поиска", "desc": "Выпадающий список" },
         { "id": "yt_livechat", "label": "Live-чат", "desc": "Чат на стримах" },
-        { "id": "yt_home_subs", "label": "Главная → Подписки", "desc": "Редирект home на ленту подписок" }
+        { "id": "yt_home_subs", "label": "Главная → Подписки", "desc": "Редирект home на ленту подписок" },
+        { "id": "yt_shelf", "label": "Полки", "desc": "Горизонтальные карусели рекомендаций" },
+        { "id": "yt_chips", "label": "Чипсы тем", "desc": "Фильтры на главной" },
+        { "id": "yt_mix", "label": "Mix / радио", "desc": "Автоплейлисты и миксы" },
+        { "id": "yt_keywords", "label": "Фильтр слов", "desc": "Скрыть видео по списку в popup" }
       ]
     },
     {
@@ -144,6 +148,29 @@
         { "id": "wa_status", "label": "Статусы", "desc": "Панель статусов слева" },
         { "id": "wa_channels", "label": "Каналы", "desc": "Вкладка каналов" },
         { "id": "wa_stickers", "label": "Стикер-панель", "desc": "Магазин стикеров" }
+      ]
+    },
+    {
+      "id": "telegram",
+      "name": "Telegram",
+      "glyph": "✈",
+      "hosts": ["web.telegram.org"],
+      "toggles": [
+        { "id": "tg_stories", "label": "Истории", "desc": "Кружки сверху" },
+        { "id": "tg_suggest", "label": "Подсказки", "desc": "Рекомендации в поиске" },
+        { "id": "tg_archived", "label": "Архив", "desc": "Папка архива в списке" }
+      ]
+    },
+    {
+      "id": "tiktok",
+      "name": "TikTok",
+      "glyph": "♪",
+      "hosts": ["www.tiktok.com", "tiktok.com"],
+      "toggles": [
+        { "id": "tt_foryou", "label": "For You", "desc": "Редирект на «Подписки»" },
+        { "id": "tt_discover", "label": "Discover", "desc": "Вкладка обзора" },
+        { "id": "tt_live", "label": "Live", "desc": "Раздел трансляций" },
+        { "id": "tt_sidebar", "label": "Рекомендации", "desc": "Боковая колонка" }
       ]
     }
   ]

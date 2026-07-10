@@ -12,6 +12,11 @@ const DEFAULT_SETTINGS = {
   yt_search: false,
   yt_livechat: false,
   yt_home_subs: false,
+  yt_shelf: false,
+  yt_chips: false,
+  yt_mix: false,
+  yt_keywords: false,
+  yt_kw: '',
 };
 
 const DEFAULT_SCHEDULE = { enabled: false, start: 9, end: 22 };

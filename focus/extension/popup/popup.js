@@ -27,10 +27,12 @@ async function init() {
   buildPresets();
   buildTabs();
   renderRows();
+  updateKwBox();
   updateScore();
   bindPin();
   bindSchedule();
   bindIO();
+  bindKeywords();
 }
 
 function scheduleActive(sched) {
@@ -162,9 +164,26 @@ function buildTabs() {
       chrome.storage.sync.set({ activeSite: active });
       buildTabs();
       renderRows();
+      updateKwBox();
     });
     nav.appendChild(b);
   });
+}
+
+function updateKwBox() {
+  const box = $('#kwBox');
+  const show = active === 'youtube';
+  box.hidden = !show;
+  if (show) $('#kwIn').value = settings.yt_kw || '';
+}
+
+function bindKeywords() {
+  const ta = $('#kwIn');
+  const save = async () => {
+    settings = await setSettings({ yt_kw: ta.value });
+  };
+  ta.addEventListener('change', save);
+  ta.addEventListener('blur', save);
 }
 
 function renderRows() {
@@ -273,6 +292,7 @@ function bindIO() {
       settings = await getSettings();
       buildTabs();
       renderRows();
+      updateKwBox();
       updateScore();
       await refreshScheduleUi();
       await refreshSchedBadge();

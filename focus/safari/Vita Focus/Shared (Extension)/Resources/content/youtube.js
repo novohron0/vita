@@ -21,24 +21,56 @@ const RULES = {
     ytd-browse[page-subtype="home"] #contents ytd-rich-item-renderer,
     ytm-browse[page-subtype="home"] ytm-rich-item-renderer,
     ytm-browse[page-subtype="home"] .rich-grid-renderer-contents,
+    ytm-browse[page-subtype="home"] ytm-rich-grid-renderer,
+    ytm-browse[page-subtype="home"] ytm-video-with-context-renderer,
     ytd-browse[page-subtype="subscriptions"] ytd-shelf-renderer,
-    ytm-item-section-renderer[section-identifier="feed"] ytm-rich-item-renderer
+    ytd-browse[page-subtype="subscriptions"] ytd-rich-item-renderer[is-slim-media],
+    ytm-item-section-renderer[section-identifier="feed"] ytm-rich-item-renderer,
+    ytm-item-section-renderer[section-identifier="feed"] ytm-video-with-context-renderer
+  `,
+  yt_shelf: `
+    ytd-rich-shelf-renderer,
+    ytd-horizontal-card-list-renderer,
+    ytd-reel-shelf-renderer,
+    ytm-rich-shelf-renderer,
+    ytm-horizontal-card-list-renderer,
+    ytm-reel-shelf-renderer,
+    ytd-item-section-renderer[is-shelf]
+  `,
+  yt_chips: `
+    ytd-feed-filter-chip-bar-renderer,
+    ytd-chip-cloud-chip-renderer,
+    ytm-feed-filter-chip-bar-renderer,
+    ytm-chip-cloud-chip-renderer,
+    .ytChipCloudChipRendererHost
   `,
   yt_comments: `
     ytd-comments#comments,
     ytd-comments,
     #comments,
     ytd-item-section-renderer[target-id="comments-section"],
+    ytd-engagement-panel-section-list-renderer[target-id="engagement-panel-comments-section"],
+    #engagement-panel ytd-comments,
     ytm-comments-entry-point-header-renderer,
     ytm-comment-section-renderer,
-    #sections #comments
+    ytm-section-list-renderer[tab-id="COMMENTS"],
+    ytm-item-section-renderer[section-identifier="comments-entry-point"],
+    ytm-item-section-renderer[section-identifier="comment-sheet"],
+    #sections #comments,
+    #comment-dialog
   `,
   yt_related: `
     #secondary ytd-watch-next-secondary-results-renderer,
     ytd-watch-next-secondary-results-renderer,
     #related,
+    ytm-watch-next-secondary-results-renderer,
+    ytm-single-column-watch-next-results-renderer,
     ytm-item-section-renderer[section-identifier="related-items"],
-    .related-chips-slot-wrapper
+    ytm-watch #related,
+    ytm-watch ytm-item-section-renderer[section-identifier="related-items"],
+    .related-chips-slot-wrapper,
+    ytd-compact-radio-renderer,
+    ytm-compact-radio-renderer
   `,
   yt_endscreen: `
     .ytp-ce-element,
@@ -61,7 +93,14 @@ const RULES = {
   yt_livechat: `
     #chat,
     ytd-live-chat-frame,
-    ytm-live-chat-renderer
+    ytm-live-chat-renderer,
+    ytm-live-chat-header-renderer
+  `,
+  yt_mix: `
+    ytd-radio-renderer,
+    ytd-compact-radio-renderer,
+    ytm-mix-playlist-renderer,
+    ytd-playlist-panel-renderer[is-mix]
   `,
 };
 
@@ -78,6 +117,9 @@ const DEFAULTS = {
   yt_search: false,
   yt_livechat: false,
   yt_home_subs: false,
+  yt_shelf: false,
+  yt_chips: false,
+  yt_mix: false,
 };
 
 const THUMB_SEL = `
@@ -184,12 +226,31 @@ function tameAutoplay() {
   if (toggle?.getAttribute('aria-checked') === 'true') toggle.click();
 }
 
+function hideKeywordVideos() {
+  const raw = settings.yt_kw;
+  if (!settings.yt_keywords || !raw) return;
+  const words = String(raw).split(/[\n,;]+/).map(w => w.trim().toLowerCase()).filter(Boolean);
+  if (!words.length) return;
+  const titles = document.querySelectorAll(
+    '#video-title, ytd-video-renderer #video-title-link, ytm-video-with-context-renderer #video-title, .compact-media-item-headline'
+  );
+  titles.forEach(el => {
+    const text = (el.textContent || '').toLowerCase();
+    if (!words.some(w => text.includes(w))) return;
+    const row = el.closest(
+      'ytd-rich-item-renderer, ytd-video-renderer, ytd-compact-video-renderer, ytm-rich-item-renderer, ytm-compact-video-renderer, ytm-video-with-context-renderer'
+    );
+    if (row) row.style.setProperty('display', 'none', 'important');
+  });
+}
+
 function tick() {
   tickScheduled = false;
   blockShortsNav();
   redirectHomeToSubs();
   applyCss();
   tameAutoplay();
+  hideKeywordVideos();
 }
 
 function scheduleTick() {
