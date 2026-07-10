@@ -800,32 +800,6 @@ body::before {
   to   { transform: translate3d(4%, 3%, 0) scale(1.18); }
 }
 
-/* луна на тёмной теме — мягкое свечение в небе */
-body:not([data-theme="light"])::after {
-  content: "";
-  position: fixed;
-  top: clamp(52px, 12vh, 128px);
-  right: clamp(10px, 4.5vw, 44px);
-  width: clamp(46px, 12vw, 68px);
-  height: clamp(46px, 12vw, 68px);
-  border-radius: 50%;
-  pointer-events: none;
-  z-index: -1;
-  background: radial-gradient(circle at 32% 26%, #fffdf5 0%, #f5e6b8 40%, #c9a84a 100%);
-  box-shadow:
-    18px -5px 0 2px #050508,
-    0 0 30px rgba(245, 230, 184, 0.34),
-    0 0 64px rgba(245, 230, 184, 0.14);
-  opacity: 0.58;
-  animation: moonFloat 10s ease-in-out infinite alternate;
-}
-@keyframes moonFloat {
-  from { transform: translate3d(0, 0, 0) rotate(-10deg); opacity: 0.52; }
-  to   { transform: translate3d(-8px, 10px, 0) rotate(5deg); opacity: 0.66; }
-}
-body.demo::after,
-body.reel::after { display: none; }
-
 /* вход страницы */
 header { animation: fadeDown .55s cubic-bezier(.22,1,.36,1) both; }
 main   { animation: fadeUp .7s cubic-bezier(.22,1,.36,1) both; }
@@ -898,7 +872,7 @@ main   { animation: fadeUp .7s cubic-bezier(.22,1,.36,1) both; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001s !important; transition-duration: .08s !important; }
-  body::before, body::after, .phone { animation: none; }
+  body::before, .phone { animation: none; }
 }
 
 /* iOS: fixed background тормозит скролл */
