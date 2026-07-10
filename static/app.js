@@ -18,7 +18,7 @@ const SCENE_GRADS = {
   honeymoon: [['#4a2038', 0], ['#6b3050', .38], ['#1f1018', 1]],
 };
 const TITLES = { month: 'ТВОЙ МЕСЯЦ', year: 'ТВОЙ ГОД', life: 'ТВОЯ ЖИЗНЬ', goal: 'ДО ЦЕЛИ' };
-const SHAPES = ['circle', 'square', 'rounded', 'heart', 'star', 'diamond'];
+const SHAPES = ['circle', 'square', 'rounded', 'heart', 'star', 'diamond', 'hex'];
 const BG_TITLES = { dembel: 'ДО ДЕМБЕЛЯ', ramadan: 'МЕСЯЦ РАМАДАН', honeymoon: 'МЕДОВЫЙ МЕСЯЦ' };
 const STAT_LABELS = {
   month: ['дней позади', 'впереди'],
@@ -347,6 +347,14 @@ function dotPath(c, x, y, d) {
     c.lineTo(cx + r, cy);
     c.lineTo(cx, cy + r);
     c.lineTo(cx - r, cy);
+    c.closePath();
+  } else if (state.shape === 'hex') {
+    const r = d * 0.48;
+    for (let i = 0; i < 6; i++) {
+      const a = -Math.PI / 2 + (i * Math.PI) / 3;
+      const px = cx + Math.cos(a) * r, py = cy + Math.sin(a) * r;
+      i ? c.lineTo(px, py) : c.moveTo(px, py);
+    }
     c.closePath();
   } else {
     c.arc(cx, cy, d / 2, 0, Math.PI * 2);

@@ -673,6 +673,7 @@ header .logo { color: inherit; text-decoration: none; }
 .gt-cell[data-shape="heart"] .gt-dot { border-radius: 0; clip-path: polygon(50% 92%, 4% 38%, 4% 24%, 50% 34%, 96% 24%, 96% 38%); }
 .gt-cell[data-shape="star"] .gt-dot { border-radius: 0; clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); }
 .gt-cell[data-shape="diamond"] .gt-dot { border-radius: 0; clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%); }
+.gt-cell[data-shape="hex"] .gt-dot { border-radius: 0; clip-path: polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%); }
 
 /* при загрузке уже закрашенные дни всплывают каскадом (задержка через --d) */
 .gt-cell.gt-in .gt-dot { animation: gtIn .5s cubic-bezier(.34,1.56,.64,1) both; animation-delay: var(--d, 0ms); }

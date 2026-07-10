@@ -35,7 +35,7 @@ SCENE_GRADS = {
     "honeymoon": (("#4a2038", 0.0), ("#6b3050", 0.38), ("#1f1018", 1.0)),
 }
 MODES = ("month", "year", "life", "goal")
-SHAPES = frozenset({"circle", "square", "rounded", "heart", "star", "diamond"})
+SHAPES = frozenset({"circle", "square", "rounded", "heart", "star", "diamond", "hex"})
 
 # первый существующий шрифт с кириллицей: сначала macOS, затем Linux (сервер)
 FONT_PATHS = [
@@ -105,6 +105,13 @@ def _shape_points(shape: str, w: int, h: int) -> list[tuple[float, float]] | Non
     if shape == "diamond":
         r = d * 0.48
         return [(cx, cy - r), (cx + r, cy), (cx, cy + r), (cx - r, cy)]
+    if shape == "hex":
+        r = d * 0.48
+        return [
+            (cx + math.cos(-math.pi / 2 + i * math.pi / 3) * r,
+             cy + math.sin(-math.pi / 2 + i * math.pi / 3) * r)
+            for i in range(6)
+        ]
     if shape == "star":
         r = d * 0.48
         pts = []
