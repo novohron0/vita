@@ -21,6 +21,7 @@ const DEFAULT_SETTINGS = {
   yt_ch: '',
   yt_explore: false,
   yt_theater: false,
+  yt_watch_clean: false,
 };
 
 const DEFAULT_SCHEDULE = { enabled: false, start: 9, end: 22 };

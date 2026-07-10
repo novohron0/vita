@@ -33,6 +33,7 @@ async function init() {
   bindSchedule();
   bindIO();
   bindYtExtras();
+  bindSiteBulk();
 }
 
 function scheduleActive(sched) {
@@ -187,6 +188,37 @@ function bindYtExtras() {
   $('#kwIn').addEventListener('blur', saveKw);
   $('#chIn').addEventListener('change', saveCh);
   $('#chIn').addEventListener('blur', saveCh);
+}
+
+function bindSiteBulk() {
+  $('#siteAllOn').addEventListener('click', async () => {
+    const site = sites.find(s => s.id === active);
+    if (!site) return;
+    const patch = Object.fromEntries(site.toggles.map(t => [t.id, true]));
+    settings = await setSettings(patch);
+    renderRows();
+    updateScore();
+    await refreshSchedBadge();
+  });
+  $('#siteAllOff').addEventListener('click', async () => {
+    const site = sites.find(s => s.id === active);
+    if (!site) return;
+    const onIds = site.toggles.filter(t => settings[t.id]).map(t => t.id);
+    if (onIds.length && pinEnabled) {
+      const pin = prompt('Введи PIN для выключения');
+      if (!pin || !(await verifyPin(pin))) {
+        pinMsg('Неверный PIN');
+        return;
+      }
+      pinMsg('', false);
+    }
+    const patch = Object.fromEntries(site.toggles.map(t => [t.id, false]));
+    settings = await setSettings(patch);
+    renderRows();
+    updateScore();
+    await refreshScheduleUi();
+    await refreshSchedBadge();
+  });
 }
 
 function renderRows() {

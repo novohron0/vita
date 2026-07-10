@@ -111,6 +111,16 @@ const RULES = {
     ytd-browse[page-subtype="trending"] #contents,
     ytm-browse[page-subtype="trending"] #contents
   `,
+  yt_watch_clean: `
+    ytd-watch-flexy #secondary,
+    ytd-watch-flexy #related,
+    ytd-watch-flexy ytd-watch-metadata ~ ytd-item-section-renderer,
+    ytm-watch ytm-item-section-renderer,
+    ytm-watch-next-secondary-results-renderer,
+    ytm-single-column-watch-next-results-renderer,
+    ytm-watch #related,
+    #below ytm-item-section-renderer
+  `,
 };
 
 const DEFAULTS = {
@@ -135,6 +145,7 @@ const DEFAULTS = {
   yt_ch: '',
   yt_explore: false,
   yt_theater: false,
+  yt_watch_clean: false,
 };
 
 const THUMB_SEL = `

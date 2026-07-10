@@ -1,5 +1,5 @@
 {
-  "version": 5,
+  "version": 6,
   "presets": [
     {
       "id": "work",
@@ -95,7 +95,8 @@
         { "id": "yt_keywords", "label": "Фильтр слов", "desc": "Скрыть видео по списку в popup" },
         { "id": "yt_channels", "label": "Блок каналов", "desc": "Скрыть видео по авторам" },
         { "id": "yt_explore", "label": "Тренды / Explore", "desc": "Скрыть раздел и редирект" },
-        { "id": "yt_theater", "label": "Кинотеатр", "desc": "Включать theater mode на watch" }
+        { "id": "yt_theater", "label": "Кинотеатр", "desc": "Включать theater mode на watch" },
+        { "id": "yt_watch_clean", "label": "Только плеер", "desc": "Скрыть всё под видео на watch" }
       ]
     },
     {
@@ -232,6 +233,41 @@
         { "id": "vk_clips", "label": "Клипы", "desc": "Shorts VK" },
         { "id": "vk_stories", "label": "Истории", "desc": "Кружки сверху" },
         { "id": "vk_recommend", "label": "Рекомендации", "desc": "Блоки «вам может понравиться»" }
+      ]
+    },
+    {
+      "id": "discord",
+      "name": "Discord",
+      "glyph": "◆",
+      "hosts": ["discord.com", "www.discord.com"],
+      "toggles": [
+        { "id": "dc_activity", "label": "Активность", "desc": "Лента друзей" },
+        { "id": "dc_discover", "label": "Обзор", "desc": "Поиск серверов" },
+        { "id": "dc_nitro", "label": "Магазин", "desc": "Nitro и промо" },
+        { "id": "dc_stickers", "label": "Стикеры", "desc": "Панель стикеров" }
+      ]
+    },
+    {
+      "id": "twitch",
+      "name": "Twitch",
+      "glyph": "⬢",
+      "hosts": ["www.twitch.tv", "twitch.tv", "m.twitch.tv"],
+      "toggles": [
+        { "id": "tw_rec", "label": "Рекомендации", "desc": "Карусель на главной" },
+        { "id": "tw_clips", "label": "Клипы", "desc": "Раздел Clips" },
+        { "id": "tw_sidebar", "label": "Сайдбар", "desc": "Рекомендованные каналы" },
+        { "id": "tw_browse", "label": "Browse", "desc": "Каталог и редирект" }
+      ]
+    },
+    {
+      "id": "medium",
+      "name": "Medium",
+      "glyph": "M",
+      "hosts": ["medium.com", "www.medium.com"],
+      "toggles": [
+        { "id": "md_feed", "label": "Лента", "desc": "Посты на главной" },
+        { "id": "md_rec", "label": "Рекомендации", "desc": "Боковая колонка" },
+        { "id": "md_meter", "label": "Paywall", "desc": "Блоки member-only" }
       ]
     }
   ]
