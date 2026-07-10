@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Vita Focus",
   "description": "Убираем Shorts, ленты, рекомендации и комментарии. Остаётся только то, ради чего ты зашёл.",
-  "version": "0.2.0",
+  "version": "0.1.1",
   "icons": {
     "48": "icons/icon48.png",
     "96": "icons/icon96.png",

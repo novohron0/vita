@@ -63,7 +63,9 @@ xcrun safari-web-extension-converter . \
 - [x] Instagram / X / Reddit content scripts (базовые селекторы)
 - [x] Popup-панель
 - [x] PIN перед выключением (popup)
-- [ ] Расписание блокировки
+- [x] Расписание блокировки (часы)
+- [x] Задержка 12ч перед выключением тумблера
+- [ ] Face ID
 - [ ] App Store / TestFlight
 
 ## Бета-вейтлист
