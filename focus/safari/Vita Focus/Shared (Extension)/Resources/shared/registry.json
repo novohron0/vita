@@ -163,7 +163,7 @@
       "hosts": ["www.youtube.com", "m.youtube.com", "youtube.com"],
       "toggles": [
         { "id": "yt_shorts", "label": "Shorts", "desc": "Полки, вкладка и раздел", "group": "main" },
-        { "id": "yt_recs", "label": "Рекомендации", "desc": "Сетка на home и подписках", "group": "main" },
+        { "id": "yt_recs", "label": "Рекомендации", "desc": "Home + полки; лента подписок остаётся", "group": "main" },
         { "id": "yt_comments", "label": "Комментарии", "desc": "Блок под видео", "group": "main" },
         { "id": "yt_related", "label": "Похожие видео", "desc": "Колонка справа", "group": "main" },
         { "id": "yt_autoplay", "label": "Автовоспроизведение", "desc": "Автоплей следующего", "group": "main" },
@@ -178,7 +178,7 @@
         { "id": "yt_notifications", "label": "Уведомления", "desc": "Колокольчик сверху", "group": "feed" },
         { "id": "yt_search", "label": "Подсказки поиска", "desc": "Выпадающий список", "group": "feed" },
         { "id": "yt_mix", "label": "Mix / радио", "desc": "Автоплейлисты", "group": "feed" },
-        { "id": "yt_thumbs", "label": "Только названия", "desc": "Скрыть превью", "group": "visual" },
+        { "id": "yt_thumbs", "label": "Только названия", "desc": "Превью скрыты, текст на всю ширину", "group": "visual" },
         { "id": "yt_blur", "label": "Размыть превью", "desc": "Серый blur", "group": "visual" },
         { "id": "yt_theater", "label": "Кинотеатр", "desc": "Theater mode", "group": "visual" },
         { "id": "yt_keywords", "label": "Фильтр слов", "desc": "Скрыть по списку", "group": "filter" },

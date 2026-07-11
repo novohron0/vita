@@ -25,9 +25,12 @@ const RULES = {
     ytm-browse[page-subtype="home"] .rich-grid-renderer-contents,
     ytm-browse[page-subtype="home"] ytm-rich-grid-renderer,
     ytm-browse[page-subtype="home"] ytm-video-with-context-renderer,
+    ytm-browse[page-subtype="home"] ytm-rich-section-renderer,
+    ytm-browse[page-subtype="home"] ytm-item-section-renderer[is-shelf],
     ytd-browse[page-subtype="subscriptions"] ytd-shelf-renderer,
     ytd-browse[page-subtype="subscriptions"] ytd-rich-item-renderer[is-slim-media],
     ytm-browse[page-subtype="subscriptions"] ytm-rich-shelf-renderer,
+    ytm-browse[page-subtype="subscriptions"] ytm-rich-section-renderer,
     ytm-browse[page-subtype="subscriptions"] ytm-item-section-renderer[is-shelf],
     ytm-browse[page-subtype="home"] ytm-message-renderer,
     ytm-browse[page-subtype="home"] yt-alert-renderer,
@@ -43,6 +46,7 @@ const RULES = {
     ytd-horizontal-card-list-renderer,
     ytd-reel-shelf-renderer,
     ytm-rich-shelf-renderer,
+    ytm-rich-section-renderer,
     ytm-horizontal-card-list-renderer,
     ytm-reel-shelf-renderer,
     ytd-item-section-renderer[is-shelf]
@@ -100,7 +104,11 @@ const RULES = {
   yt_notifications: `
     ytd-notification-topbar-button-renderer,
     ytd-button-renderer#button[aria-label*="Notification"],
-    ytd-button-renderer#button[aria-label*="уведомлен"]
+    ytd-button-renderer#button[aria-label*="уведомлен"],
+    ytm-notification-topbar-button-renderer,
+    ytm-button-renderer[aria-label*="Notification"],
+    ytm-button-renderer[aria-label*="уведомлен"],
+    ytm-topbar-menu-button-renderer[aria-label*="Notification"]
   `,
   yt_search: `
     ytd-searchbox ytd-vertical-list,
@@ -176,6 +184,33 @@ const DEFAULTS = {
   yt_watch_clean: false,
   yt_upnext: false,
 };
+
+const IS_MOBILE_YT = /(^|\.)m\.youtube\.com$/i.test(location.hostname);
+
+const ROW_SEL = `
+  ytm-video-with-context-renderer,
+  ytm-compact-video-renderer,
+  ytm-rich-item-renderer,
+  ytd-rich-item-renderer,
+  ytd-video-renderer,
+  ytd-compact-video-renderer,
+  ytd-grid-video-renderer
+`.trim().split(/\s*,\s*/).join(', ');
+
+const THUMB_HIDE_SEL = `
+  ytm-thumbnail-cover,
+  ytm-media-item-thumbnail-renderer,
+  ytm-thumbnail-view-model,
+  ytm-compact-thumbnail,
+  ytm-item-thumbnail-renderer,
+  ytm-thumbnail-overlay-thumbnail-view-model,
+  ytd-thumbnail,
+  a.media-item-thumbnail,
+  .media-item-thumbnail-container,
+  .compact-media-item-image,
+  .ytm-thumbnail-cover,
+  .ytCoreImageHost
+`.trim().split(/\s*,\s*/).join(', ');
 
 const THUMB_SEL = `
   ytd-browse ytd-thumbnail,
@@ -295,7 +330,7 @@ const BLUR_CSS = `
   }
 `;
 
-const EMPTY_TEXT_RE = /new videos right to you|new videos from your subscriptions|subscribe to channels|try searching to get started|start watching videos|подпишитесь|новые видео|нет новых|начните смотреть/i;
+const EMPTY_TEXT_RE = /new videos right to you|new videos from your subscriptions|subscribe to channels|try searching to get started|start watching videos|get started|подпишитесь|новые видео|нет новых|начните смотреть|на каналы/i;
 
 const FEED_EMPTY_CSS = `
   ytm-browse[page-subtype="home"] ytm-message-renderer,
@@ -316,6 +351,9 @@ const FEED_EMPTY_CSS = `
   ytm-attention-grabber-view-model,
   ytm-zero-state-renderer,
   ytm-info-panel-content-renderer,
+  ytm-empty-state-renderer,
+  ytm-browse .empty-state,
+  ytm-browse [class*="empty-state"],
   [aria-label*="New videos right to you"],
   [aria-label*="новые видео"]
   {
@@ -330,6 +368,48 @@ const FEED_EMPTY_CSS = `
     opacity: 0 !important;
     pointer-events: none !important;
   }
+  ytm-browse[page-subtype="home"] #contents:empty,
+  ytm-browse[page-subtype="subscriptions"] #contents:empty {
+    min-height: 0 !important;
+  }
+`;
+
+const TEXT_ONLY_MOBILE_CSS = `
+  ytm-browse ${ROW_SEL} .media-item,
+  ytm-browse ${ROW_SEL} .compact-media-item {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 6px !important;
+  }
+  ytm-browse ${ROW_SEL} .media-item-thumbnail-container,
+  ytm-browse ${ROW_SEL} a.media-item-thumbnail,
+  ytm-browse ${ROW_SEL} .compact-media-item-image,
+  ytm-browse ${ROW_SEL} ytm-thumbnail-cover,
+  ytm-browse ${ROW_SEL} ytm-media-item-thumbnail-renderer {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+  ytm-browse ${ROW_SEL} .media-item-metadata,
+  ytm-browse ${ROW_SEL} .compact-media-item-metadata {
+    width: 100% !important;
+    padding-left: 0 !important;
+    margin-left: 0 !important;
+  }
+  ytm-browse ${ROW_SEL} #video-title,
+  ytm-browse ${ROW_SEL} .compact-media-item-headline {
+    font-size: 15px !important;
+    line-height: 1.35 !important;
+    -webkit-line-clamp: unset !important;
+    max-height: none !important;
+  }
 `;
 
 const EMPTY_COMPONENT_SEL = `
@@ -340,7 +420,8 @@ const EMPTY_COMPONENT_SEL = `
   ytm-statement-banner-renderer,
   ytm-attention-grabber-view-model,
   ytm-zero-state-renderer,
-  ytm-info-panel-content-renderer
+  ytm-info-panel-content-renderer,
+  ytm-empty-state-renderer
 `.trim().split(/\s*,\s*/).join(', ');
 
 const EMPTY_CONTAINER_SEL = `
@@ -356,6 +437,19 @@ const EMPTY_CONTAINER_SEL = `
 let settings = { ...DEFAULTS };
 let styleEl = null;
 let tickTimer = null;
+let heavyTimer = null;
+
+function isOnFeedPage() {
+  const path = location.pathname;
+  return path === '/' || path === '/feed' || path === '/feed/'
+    || path.includes('/feed/subscriptions');
+}
+
+function getBrowseRoots() {
+  return document.querySelectorAll(
+    'ytm-browse[page-subtype="home"], ytm-browse[page-subtype="subscriptions"], ytd-browse[page-subtype="home"], ytd-browse[page-subtype="subscriptions"]'
+  );
+}
 
 function applyCss() {
   if (!styleEl) {
@@ -372,10 +466,13 @@ function applyCss() {
   if (settings.yt_endscreen) {
     blocks.push(`${RULES.yt_endscreen.trim().split(/\s*,\s*/).join(', ')} { display: none !important; visibility: hidden !important; pointer-events: none !important; }`);
   }
-  if (settings.yt_thumbs) blocks.push(THUMB_CSS);
+  if (settings.yt_thumbs) {
+    blocks.push(THUMB_CSS);
+    if (IS_MOBILE_YT) blocks.push(TEXT_ONLY_MOBILE_CSS);
+  }
   if (settings.yt_blur && !settings.yt_thumbs) blocks.push(BLUR_CSS);
   if (settings.yt_recs) blocks.push(FEED_EMPTY_CSS);
-  if (document.querySelector('ytm-browse, ytm-app, ytm-mobile-topbar-renderer')) {
+  if (IS_MOBILE_YT || document.querySelector('ytm-browse, ytm-app, ytm-mobile-topbar-renderer')) {
     blocks.push(MOBILE_FEED_CSS);
   }
   styleEl.textContent = blocks.join('\n');
@@ -458,19 +555,33 @@ function hideChannelVideos() {
 function hideListThumbnails() {
   if (!settings.yt_thumbs) return;
   if (/\/watch/.test(location.pathname)) return;
-  document.querySelectorAll(`
-    ytm-thumbnail-cover,
-    ytm-media-item-thumbnail-renderer,
-    ytm-thumbnail-view-model,
-    ytm-compact-thumbnail,
-    ytd-thumbnail,
-    a.media-item-thumbnail,
-    .media-item-thumbnail-container,
-    .compact-media-item-image
-  `.trim().split(/\s*,\s*/).join(', ')).forEach(el => {
-    if (el.closest('ytm-player, #player, .html5-video-player, ytd-player')) return;
-    el.style.setProperty('display', 'none', 'important');
+
+  const roots = getBrowseRoots();
+  const scope = roots.length ? roots : [document];
+  scope.forEach(root => {
+    queryDeep(root, THUMB_HIDE_SEL).forEach(el => {
+      if (el.closest('ytm-player, #player, .html5-video-player, ytd-player, ytm-player-controls')) return;
+      hideThumbEl(el);
+    });
+    root.querySelectorAll(ROW_SEL).forEach(row => {
+      if (row.closest('ytm-player, ytd-player, #player')) return;
+      queryDeep(row, THUMB_HIDE_SEL).forEach(hideThumbEl);
+    });
   });
+}
+
+function hideThumbEl(el) {
+  if (!el || el.dataset?.vitaThumbHidden) return;
+  el.dataset.vitaThumbHidden = '1';
+  el.style.setProperty('display', 'none', 'important');
+  el.style.setProperty('width', '0', 'important');
+  el.style.setProperty('height', '0', 'important');
+  el.style.setProperty('min-height', '0', 'important');
+  el.style.setProperty('margin', '0', 'important');
+  el.style.setProperty('padding', '0', 'important');
+  el.style.setProperty('overflow', 'hidden', 'important');
+  el.style.setProperty('opacity', '0', 'important');
+  el.style.setProperty('pointer-events', 'none', 'important');
 }
 
 function hideEl(el) {
@@ -506,10 +617,14 @@ function findEmptyStateContainer(el) {
 
 function queryDeep(root, selector) {
   const out = [];
+  const seen = new Set();
   const walk = node => {
-    if (!node) return;
+    if (!node || seen.has(node)) return;
+    seen.add(node);
     if (node.querySelectorAll) {
-      node.querySelectorAll(selector).forEach(el => out.push(el));
+      try {
+        node.querySelectorAll(selector).forEach(el => out.push(el));
+      } catch { /* invalid in some roots */ }
       node.querySelectorAll('*').forEach(el => {
         if (el.shadowRoot) walk(el.shadowRoot);
       });
@@ -519,25 +634,38 @@ function queryDeep(root, selector) {
   return out;
 }
 
+function collapseEmptyFeed() {
+  getBrowseRoots().forEach(browse => {
+    const contents = browse.querySelector('#contents');
+    if (!contents) return;
+    contents.querySelectorAll(':scope > *').forEach(child => {
+      if (hasFeedVideo(child)) return;
+      const text = (child.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 280);
+      if (EMPTY_TEXT_RE.test(text)) hideEl(child);
+    });
+  });
+}
+
 function hideFeedEmptyStates() {
-  if (!settings.yt_recs) return;
-  const path = location.pathname;
-  const onFeed = path === '/' || path === '/feed' || path === '/feed/'
-    || path.includes('/feed/subscriptions');
-  if (!onFeed) return;
+  if (!settings.yt_recs || !isOnFeedPage()) return;
 
-  queryDeep(document, EMPTY_COMPONENT_SEL).forEach(hideEl);
+  const roots = getBrowseRoots();
+  const scope = roots.length ? roots : [document];
 
-  document.querySelectorAll('[aria-label]').forEach(el => {
-    const label = el.getAttribute('aria-label') || '';
-    if (/new videos right to you|новые видео/i.test(label)) hideEl(findEmptyStateContainer(el));
+  scope.forEach(root => {
+    queryDeep(root, EMPTY_COMPONENT_SEL).forEach(hideEl);
+    root.querySelectorAll('[aria-label]').forEach(el => {
+      const label = el.getAttribute('aria-label') || '';
+      if (/new videos right to you|новые видео/i.test(label)) hideEl(findEmptyStateContainer(el));
+    });
+    root.querySelectorAll(EMPTY_CONTAINER_SEL).forEach(sec => {
+      if (hasFeedVideo(sec)) return;
+      const text = (sec.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 280);
+      if (EMPTY_TEXT_RE.test(text)) hideEl(sec);
+    });
   });
 
-  document.querySelectorAll(EMPTY_CONTAINER_SEL).forEach(sec => {
-    if (hasFeedVideo(sec)) return;
-    const text = (sec.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 280);
-    if (EMPTY_TEXT_RE.test(text)) hideEl(sec);
-  });
+  collapseEmptyFeed();
 
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   let node;
@@ -546,12 +674,12 @@ function hideFeedEmptyStates() {
     if (!raw || raw.length > 220) continue;
     if (!EMPTY_TEXT_RE.test(raw)) continue;
     const parent = node.parentElement;
-    if (!parent) continue;
+    if (!parent || !parent.closest('ytm-browse, ytd-browse')) continue;
     hideEl(findEmptyStateContainer(parent));
   }
 }
 
-function tick() {
+function tickFast() {
   blockShortsNav();
   blockExploreNav();
   redirectHomeToSubs();
@@ -560,16 +688,33 @@ function tick() {
   tryTheaterMode();
   hideKeywordVideos();
   hideChannelVideos();
+}
+
+function tickHeavy() {
   hideListThumbnails();
   hideFeedEmptyStates();
+}
+
+function tick() {
+  tickFast();
+  tickHeavy();
 }
 
 function scheduleTick() {
   if (tickTimer) return;
   tickTimer = setTimeout(() => {
     tickTimer = null;
-    tick();
+    tickFast();
+    scheduleHeavy();
   }, 48);
+}
+
+function scheduleHeavy() {
+  if (heavyTimer) return;
+  heavyTimer = setTimeout(() => {
+    heavyTimer = null;
+    tickHeavy();
+  }, 120);
 }
 
 let settingsLoaded = false;
@@ -594,8 +739,10 @@ chrome.runtime.onMessage.addListener(msg => {
 
 const obs = new MutationObserver(mutations => {
   if (!settingsLoaded) return;
-  if (!anyActive() && !mutations.some(m => m.addedNodes.length)) return;
+  const added = mutations.some(m => m.addedNodes.length);
+  if (!anyActive() && !added) return;
   scheduleTick();
+  if (added && (settings.yt_recs || settings.yt_thumbs)) scheduleHeavy();
 });
 function watch() {
   tick();
