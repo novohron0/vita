@@ -28,7 +28,15 @@ const RULES = {
     ytd-browse[page-subtype="subscriptions"] ytd-shelf-renderer,
     ytd-browse[page-subtype="subscriptions"] ytd-rich-item-renderer[is-slim-media],
     ytm-browse[page-subtype="subscriptions"] ytm-rich-shelf-renderer,
-    ytm-browse[page-subtype="subscriptions"] ytm-item-section-renderer[is-shelf]
+    ytm-browse[page-subtype="subscriptions"] ytm-item-section-renderer[is-shelf],
+    ytm-browse[page-subtype="home"] ytm-message-renderer,
+    ytm-browse[page-subtype="home"] yt-alert-renderer,
+    ytd-browse[page-subtype="home"] ytd-message-renderer,
+    ytd-browse[page-subtype="home"] yt-alert-renderer,
+    ytm-browse[page-subtype="subscriptions"] ytm-message-renderer,
+    ytm-browse[page-subtype="subscriptions"] yt-alert-renderer,
+    ytd-browse[page-subtype="subscriptions"] ytd-message-renderer,
+    ytd-browse[page-subtype="subscriptions"] yt-alert-renderer
   `,
   yt_shelf: `
     ytd-rich-shelf-renderer,
@@ -325,12 +333,26 @@ function hideChannelVideos() {
   );
 }
 
-function dedupeEmptyStates() {
+function hideFeedEmptyStates() {
   if (!settings.yt_recs) return;
   const path = location.pathname;
-  if (!path.includes('/feed/subscriptions') && path !== '/feed/subscriptions') return;
-  document.querySelectorAll('ytm-message-renderer, yt-alert-renderer').forEach((el, i) => {
-    if (i > 0) el.style.setProperty('display', 'none', 'important');
+  const onFeed = path === '/' || path === '/feed' || path === '/feed/'
+    || path.includes('/feed/subscriptions');
+  if (!onFeed) return;
+
+  document.querySelectorAll(
+    'ytm-message-renderer, yt-alert-renderer, ytd-message-renderer, ytd-alert-renderer'
+  ).forEach(el => {
+    el.style.setProperty('display', 'none', 'important');
+  });
+
+  document.querySelectorAll(
+    'ytm-item-section-renderer, ytd-item-section-renderer, ytm-section-list-renderer, ytd-section-list-renderer'
+  ).forEach(sec => {
+    const text = (sec.textContent || '').slice(0, 240);
+    if (/new videos right to you|subscribe to get the latest|подпишитесь|новые видео/i.test(text)) {
+      sec.style.setProperty('display', 'none', 'important');
+    }
   });
 }
 
@@ -343,7 +365,7 @@ function tick() {
   tryTheaterMode();
   hideKeywordVideos();
   hideChannelVideos();
-  dedupeEmptyStates();
+  hideFeedEmptyStates();
 }
 
 function scheduleTick() {
