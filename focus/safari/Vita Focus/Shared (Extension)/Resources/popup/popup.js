@@ -21,12 +21,73 @@ let settings = {};
 let pinEnabled = false;
 let tabUrl = '';
 let pinResolve = null;
+let statusTimer = null;
+let registryCache = null;
+
+function applyTheme(mode) {
+  const root = document.documentElement;
+  if (mode === 'system') root.removeAttribute('data-theme');
+  else root.setAttribute('data-theme', mode);
+  [...$('#themeRow').children].forEach(b => {
+    b.classList.toggle('on', b.dataset.theme === mode);
+  });
+}
+
+async function loadTheme() {
+  const { uiTheme } = await chrome.storage.sync.get('uiTheme');
+  applyTheme(uiTheme || 'system');
+}
+
+async function saveTheme(mode) {
+  await chrome.storage.sync.set({ uiTheme: mode });
+  applyTheme(mode);
+}
+
+function setStatus(text, kind = 'idle') {
+  const pill = $('#statusPill');
+  pill.textContent = text;
+  pill.classList.remove('on', 'busy');
+  if (kind === 'on') pill.classList.add('on');
+  if (kind === 'busy') pill.classList.add('busy');
+  clearTimeout(statusTimer);
+  if (kind === 'on') {
+    statusTimer = setTimeout(() => setStatus('Готово · изменения на странице', 'idle'), 2200);
+  }
+}
+
+async function pushApply() {
+  try {
+    await chrome.runtime.sendMessage({ type: 'vfocus:broadcast' });
+    setStatus('Применено на странице ✓', 'on');
+  } catch {
+    setStatus('Сохранено', 'on');
+  }
+}
+
+async function loadRegistry() {
+  if (registryCache) return registryCache;
+  try {
+    const cached = await chrome.storage.local.get('registryCache');
+    if (cached.registryCache) {
+      registryCache = cached.registryCache;
+      fetch(REGISTRY_URL).then(r => r.json()).then(data => {
+        registryCache = data;
+        chrome.storage.local.set({ registryCache: data }).catch(() => {});
+      }).catch(() => {});
+      return registryCache;
+    }
+  } catch { /* ignore */ }
+  const r = await fetch(REGISTRY_URL);
+  registryCache = await r.json();
+  chrome.storage.local.set({ registryCache }).catch(() => {});
+  return registryCache;
+}
 
 async function init() {
   $('#ver').textContent = 'v' + chrome.runtime.getManifest().version;
+  loadTheme();
 
-  const r = await fetch(REGISTRY_URL);
-  const data = await r.json();
+  const data = await loadRegistry();
   sites = data.sites;
   uiMeta = data.ui || {};
   presets = (data.presets || []).filter(p =>
@@ -34,17 +95,19 @@ async function init() {
   );
   ({ featured, rest: restSites } = featuredSites(sites, uiMeta));
 
-  settings = await getSettings();
-  await loadTabContext();
+  const [settingsData, , , , , activeSiteStored] = await Promise.all([
+    getSettings(),
+    loadTabContext(),
+    refreshPinUi(),
+    refreshScheduleUi(),
+    refreshSchedBadge(),
+    chrome.storage.sync.get('activeSite'),
+  ]);
+  settings = settingsData;
 
-  const stored = await chrome.storage.sync.get('activeSite');
-  if (!tabUrl && stored.activeSite && sites.some(s => s.id === stored.activeSite)) {
-    active = stored.activeSite;
+  if (!tabUrl && activeSiteStored.activeSite && sites.some(s => s.id === activeSiteStored.activeSite)) {
+    active = activeSiteStored.activeSite;
   }
-
-  await refreshPinUi();
-  await refreshScheduleUi();
-  await refreshSchedBadge();
 
   buildTabs();
   buildSiteList();
@@ -53,6 +116,7 @@ async function init() {
   renderRows();
   bindAll();
   requestAnimationFrame(() => moveTabIndicator($('#tabs'), active));
+  setStatus(tabUrl ? 'На этой странице · переключайте блоки' : 'Готово', 'idle');
 }
 
 async function loadTabContext() {
@@ -246,6 +310,7 @@ async function applyPreset(preset) {
     const pin = await askPin('Пароль для смены профиля');
     if (!pin || !(await verifyPin(pin))) return;
   }
+  setStatus('Сохраняю…', 'busy');
   const patch = Object.fromEntries(ids.map(id => [id, false]));
   Object.assign(patch, preset.settings);
   settings = await setSettings(patch);
@@ -254,6 +319,7 @@ async function applyPreset(preset) {
   renderRows();
   await refreshScheduleUi();
   await refreshSchedBadge();
+  await pushApply();
 }
 
 async function refreshPinUi() {
@@ -310,6 +376,12 @@ function bindAll() {
   $('#siteSheet .overlay-bg').addEventListener('click', closeSheet);
   $('#siteSearch').addEventListener('input', e => filterSiteList(e.target.value));
 
+  $('#themeRow').addEventListener('click', e => {
+    const btn = e.target.closest('.theme-btn');
+    if (!btn) return;
+    saveTheme(btn.dataset.theme);
+  });
+
   $('#rows').addEventListener('click', async e => {
     if (e.target.matches('input[data-filter]')) return;
     const row = e.target.closest('.row');
@@ -318,9 +390,26 @@ function bindAll() {
     const on = !!settings[id];
     const next = !on;
     if (!(await needPinToDisable(on, next))) return;
-    await toggleId(id, next);
-    row.classList.toggle('on', !!settings[id]);
+
+    const prev = settings[id];
+    settings[id] = next;
+    row.classList.toggle('on', next);
+    row.classList.remove('flash');
+    void row.offsetWidth;
+    row.classList.add('flash');
     refreshSiteHead();
+    setStatus('Сохраняю…', 'busy');
+
+    try {
+      await toggleId(id, next);
+      row.classList.toggle('on', !!settings[id]);
+      await pushApply();
+    } catch {
+      settings[id] = prev;
+      row.classList.toggle('on', !!prev);
+      refreshSiteHead();
+      setStatus('Ошибка сохранения', 'idle');
+    }
     await refreshScheduleUi();
     await refreshSchedBadge();
   });

@@ -229,7 +229,7 @@ const BLUR_CSS = `
 
 let settings = { ...DEFAULTS };
 let styleEl = null;
-let tickScheduled = false;
+let tickTimer = null;
 
 function applyCss() {
   if (!styleEl) {
@@ -335,7 +335,6 @@ function dedupeEmptyStates() {
 }
 
 function tick() {
-  tickScheduled = false;
   blockShortsNav();
   blockExploreNav();
   redirectHomeToSubs();
@@ -348,9 +347,11 @@ function tick() {
 }
 
 function scheduleTick() {
-  if (tickScheduled) return;
-  tickScheduled = true;
-  requestAnimationFrame(tick);
+  if (tickTimer) return;
+  tickTimer = setTimeout(() => {
+    tickTimer = null;
+    tick();
+  }, 32);
 }
 
 async function loadSettings() {
