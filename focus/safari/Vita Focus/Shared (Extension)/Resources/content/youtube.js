@@ -14,6 +14,9 @@ const RULES = {
     [overlay-style="SHORTS"],
     .ytd-shorts,
     ytm-pivot-bar-renderer [tab-id="SHORTS"],
+    ytm-pivot-bar-item-renderer[tab-id="SHORTS"],
+    ytm-pivot-bar-item-renderer[tab-selection="SHORTS"],
+    ytm-mobile-topbar-renderer .shorts-tab,
     [aria-label="Shorts"]
   `,
   yt_recs: `
@@ -52,11 +55,16 @@ const RULES = {
     #engagement-panel ytd-comments,
     ytm-comments-entry-point-header-renderer,
     ytm-comment-section-renderer,
+    ytm-comments-entry-point-teaser-renderer,
+    ytm-engagement-panel-section-list-renderer,
     ytm-section-list-renderer[tab-id="COMMENTS"],
     ytm-item-section-renderer[section-identifier="comments-entry-point"],
     ytm-item-section-renderer[section-identifier="comment-sheet"],
+    ytm-item-section-renderer[section-identifier="comments-section"],
     #sections #comments,
-    #comment-dialog
+    #comment-dialog,
+    #comment-teaser,
+    .comment-teaser
   `,
   yt_related: `
     #secondary ytd-watch-next-secondary-results-renderer,
@@ -65,8 +73,11 @@ const RULES = {
     ytm-watch-next-secondary-results-renderer,
     ytm-single-column-watch-next-results-renderer,
     ytm-item-section-renderer[section-identifier="related-items"],
+    ytm-item-section-renderer[section-identifier="watch-next"],
+    ytm-watch ytm-compact-video-renderer,
     ytm-watch #related,
     ytm-watch ytm-item-section-renderer[section-identifier="related-items"],
+    ytm-watch ytm-item-section-renderer[section-identifier="watch-next"],
     .related-chips-slot-wrapper,
     ytd-compact-radio-renderer,
     ytm-compact-radio-renderer
@@ -114,10 +125,13 @@ const RULES = {
     ytd-watch-flexy #secondary,
     ytd-watch-flexy #related,
     ytd-watch-flexy ytd-watch-metadata ~ ytd-item-section-renderer,
-    ytm-watch ytm-item-section-renderer,
-    ytm-watch-next-secondary-results-renderer,
+    ytm-watch ytm-watch-next-secondary-results-renderer,
     ytm-single-column-watch-next-results-renderer,
     ytm-watch #related,
+    ytm-watch ytm-item-section-renderer[section-identifier="related-items"],
+    ytm-watch ytm-item-section-renderer[section-identifier="comments-section"],
+    ytm-watch ytm-item-section-renderer[section-identifier="comment-sheet"],
+    ytm-watch ytm-engagement-panel-section-list-renderer,
     #below ytm-item-section-renderer
   `,
   yt_upnext: `
@@ -311,6 +325,15 @@ function hideChannelVideos() {
   );
 }
 
+function dedupeEmptyStates() {
+  if (!settings.yt_recs) return;
+  const path = location.pathname;
+  if (!path.includes('/feed/subscriptions') && path !== '/feed/subscriptions') return;
+  document.querySelectorAll('ytm-message-renderer, yt-alert-renderer').forEach((el, i) => {
+    if (i > 0) el.style.setProperty('display', 'none', 'important');
+  });
+}
+
 function tick() {
   tickScheduled = false;
   blockShortsNav();
@@ -321,6 +344,7 @@ function tick() {
   tryTheaterMode();
   hideKeywordVideos();
   hideChannelVideos();
+  dedupeEmptyStates();
 }
 
 function scheduleTick() {

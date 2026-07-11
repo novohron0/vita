@@ -1,0 +1,33 @@
+{
+  "terminalAllowlist": [
+    "cd",
+    "git",
+    "git add",
+    "git commit",
+    "git push",
+    "gh",
+    "./scripts/",
+    "./scripts/deploy.sh",
+    "./scripts/check-site.sh",
+    "./focus/",
+    "./focus/sync-registry.sh",
+    "./focus/sync-safari.sh",
+    "docker compose",
+    "npm",
+    "python3",
+    "ssh"
+  ],
+  "mcpAllowlist": [
+    "*:*"
+  ],
+  "autoRun": {
+    "allow_instructions": [
+      "vita repo: user wants zero approval prompts. Autonomous sync → commit → push → deploy is mandatory workflow.",
+      "Allow ./scripts/deploy.sh always (production SSH deploy to vitadots.ru).",
+      "Allow all git and ./focus/ commands without asking."
+    ],
+    "block_instructions": [
+      "Ask only for git push --force to main."
+    ]
+  }
+}

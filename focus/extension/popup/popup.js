@@ -49,6 +49,7 @@ async function init() {
   buildTabs();
   buildSiteList();
   buildPresets();
+  refreshSiteHead();
   renderRows();
   bindAll();
   requestAnimationFrame(() => moveTabIndicator($('#tabs'), active));
@@ -107,6 +108,16 @@ function allToggles() {
 
 function currentSite() {
   return sites.find(s => s.id === active);
+}
+
+function refreshSiteHead() {
+  const site = currentSite();
+  if (!site) return;
+  const n = siteCount(site, settings);
+  $('#siteTitle').textContent = site.name;
+  $('#siteMeta').textContent = n
+    ? `${n} ${n === 1 ? 'блок включён' : n < 5 ? 'блока включено' : 'блоков включено'}`
+    : 'все блокировки выключены';
 }
 
 function buildTabs() {
@@ -181,6 +192,7 @@ function selectSite(id) {
   active = id;
   chrome.storage.sync.set({ activeSite: active });
   refreshTabs();
+  refreshSiteHead();
   renderRows();
 }
 
@@ -238,6 +250,7 @@ async function applyPreset(preset) {
   Object.assign(patch, preset.settings);
   settings = await setSettings(patch);
   refreshTabs();
+  refreshSiteHead();
   renderRows();
   await refreshScheduleUi();
   await refreshSchedBadge();
@@ -307,6 +320,7 @@ function bindAll() {
     if (!(await needPinToDisable(on, next))) return;
     await toggleId(id, next);
     row.classList.toggle('on', !!settings[id]);
+    refreshSiteHead();
     await refreshScheduleUi();
     await refreshSchedBadge();
   });

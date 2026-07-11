@@ -65,6 +65,13 @@ body {
 .tab.on { color: var(--text); border-bottom-color: var(--accent); }
 .tab.more { min-width: 48px; font-size: 18px; font-weight: 300; }
 
+.site-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px 6px;
+}
+.site-title { font-size: 22px; font-weight: 700; letter-spacing: -0.4px; }
+.site-meta { font-size: 13px; color: var(--sub); margin-top: 2px; }
+
 .list { padding: 0 0 8px; }
 .group-card {
   margin: 12px 16px 0; background: var(--group); border-radius: 12px; overflow: hidden;
