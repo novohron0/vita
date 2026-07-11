@@ -295,6 +295,64 @@ const BLUR_CSS = `
   }
 `;
 
+const EMPTY_TEXT_RE = /new videos right to you|new videos from your subscriptions|subscribe to channels|try searching to get started|start watching videos|подпишитесь|новые видео|нет новых|начните смотреть/i;
+
+const FEED_EMPTY_CSS = `
+  ytm-browse[page-subtype="home"] ytm-message-renderer,
+  ytm-browse[page-subtype="subscriptions"] ytm-message-renderer,
+  ytm-browse[page-subtype="home"] yt-alert-renderer,
+  ytm-browse[page-subtype="subscriptions"] yt-alert-renderer,
+  ytd-browse[page-subtype="home"] ytd-message-renderer,
+  ytd-browse[page-subtype="subscriptions"] ytd-message-renderer,
+  ytd-browse[page-subtype="home"] yt-alert-renderer,
+  ytd-browse[page-subtype="subscriptions"] yt-alert-renderer,
+  ytm-browse ytm-item-section-renderer:has(ytm-message-renderer),
+  ytm-browse ytm-item-section-renderer:has(yt-alert-renderer),
+  ytm-browse ytm-rich-item-renderer:has(ytm-message-renderer),
+  ytm-browse ytm-section-list-renderer:has(ytm-message-renderer),
+  ytd-browse ytd-item-section-renderer:has(ytd-message-renderer),
+  ytd-browse ytd-item-section-renderer:has(yt-alert-renderer),
+  ytm-statement-banner-renderer,
+  ytm-attention-grabber-view-model,
+  ytm-zero-state-renderer,
+  ytm-info-panel-content-renderer,
+  [aria-label*="New videos right to you"],
+  [aria-label*="новые видео"]
+  {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    max-height: 0 !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+`;
+
+const EMPTY_COMPONENT_SEL = `
+  ytm-message-renderer,
+  yt-alert-renderer,
+  ytd-message-renderer,
+  ytd-alert-renderer,
+  ytm-statement-banner-renderer,
+  ytm-attention-grabber-view-model,
+  ytm-zero-state-renderer,
+  ytm-info-panel-content-renderer
+`.trim().split(/\s*,\s*/).join(', ');
+
+const EMPTY_CONTAINER_SEL = `
+  ytm-item-section-renderer,
+  ytd-item-section-renderer,
+  ytm-section-list-renderer,
+  ytd-section-list-renderer,
+  ytm-rich-item-renderer,
+  ytm-rich-grid-renderer > *,
+  ytd-rich-item-renderer
+`.trim().split(/\s*,\s*/).join(', ');
+
 let settings = { ...DEFAULTS };
 let styleEl = null;
 let tickTimer = null;
@@ -316,6 +374,7 @@ function applyCss() {
   }
   if (settings.yt_thumbs) blocks.push(THUMB_CSS);
   if (settings.yt_blur && !settings.yt_thumbs) blocks.push(BLUR_CSS);
+  if (settings.yt_recs) blocks.push(FEED_EMPTY_CSS);
   if (document.querySelector('ytm-browse, ytm-app, ytm-mobile-topbar-renderer')) {
     blocks.push(MOBILE_FEED_CSS);
   }
@@ -414,6 +473,52 @@ function hideListThumbnails() {
   });
 }
 
+function hideEl(el) {
+  if (!el || el.dataset?.vitaEmptyHidden) return;
+  el.dataset.vitaEmptyHidden = '1';
+  el.style.setProperty('display', 'none', 'important');
+  el.style.setProperty('visibility', 'hidden', 'important');
+  el.style.setProperty('height', '0', 'important');
+  el.style.setProperty('overflow', 'hidden', 'important');
+  el.style.setProperty('margin', '0', 'important');
+  el.style.setProperty('padding', '0', 'important');
+}
+
+function hasFeedVideo(el) {
+  return !!el.querySelector(
+    'ytm-video-with-context-renderer, ytm-compact-video-renderer, ytd-rich-item-renderer, ytd-video-renderer, ytd-grid-video-renderer'
+  );
+}
+
+function findEmptyStateContainer(el) {
+  let node = el;
+  let best = null;
+  for (let i = 0; i < 14 && node; i++) {
+    const tag = (node.tagName || '').toLowerCase();
+    if (/^(ytm-browse|ytd-browse|body|html)$/.test(tag)) break;
+    if (/^(ytm-item-section-renderer|ytd-item-section-renderer|ytm-section-list-renderer|ytd-section-list-renderer|ytm-rich-item-renderer|ytd-rich-item-renderer|ytm-message-renderer|yt-alert-renderer|ytd-message-renderer|ytd-alert-renderer|ytm-statement-banner-renderer|ytm-attention-grabber-view-model|ytm-zero-state-renderer)$/.test(tag)) {
+      best = node;
+    }
+    node = node.parentElement;
+  }
+  return best || el;
+}
+
+function queryDeep(root, selector) {
+  const out = [];
+  const walk = node => {
+    if (!node) return;
+    if (node.querySelectorAll) {
+      node.querySelectorAll(selector).forEach(el => out.push(el));
+      node.querySelectorAll('*').forEach(el => {
+        if (el.shadowRoot) walk(el.shadowRoot);
+      });
+    }
+  };
+  walk(root);
+  return out;
+}
+
 function hideFeedEmptyStates() {
   if (!settings.yt_recs) return;
   const path = location.pathname;
@@ -421,20 +526,29 @@ function hideFeedEmptyStates() {
     || path.includes('/feed/subscriptions');
   if (!onFeed) return;
 
-  document.querySelectorAll(
-    'ytm-message-renderer, yt-alert-renderer, ytd-message-renderer, ytd-alert-renderer'
-  ).forEach(el => {
-    el.style.setProperty('display', 'none', 'important');
+  queryDeep(document, EMPTY_COMPONENT_SEL).forEach(hideEl);
+
+  document.querySelectorAll('[aria-label]').forEach(el => {
+    const label = el.getAttribute('aria-label') || '';
+    if (/new videos right to you|новые видео/i.test(label)) hideEl(findEmptyStateContainer(el));
   });
 
-  document.querySelectorAll(
-    'ytm-item-section-renderer, ytd-item-section-renderer, ytm-section-list-renderer, ytd-section-list-renderer'
-  ).forEach(sec => {
-    const text = (sec.textContent || '').slice(0, 240);
-    if (/new videos right to you|subscribe to get the latest|подпишитесь|новые видео/i.test(text)) {
-      sec.style.setProperty('display', 'none', 'important');
-    }
+  document.querySelectorAll(EMPTY_CONTAINER_SEL).forEach(sec => {
+    if (hasFeedVideo(sec)) return;
+    const text = (sec.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 280);
+    if (EMPTY_TEXT_RE.test(text)) hideEl(sec);
   });
+
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  let node;
+  while ((node = walker.nextNode())) {
+    const raw = (node.textContent || '').replace(/\s+/g, ' ').trim();
+    if (!raw || raw.length > 220) continue;
+    if (!EMPTY_TEXT_RE.test(raw)) continue;
+    const parent = node.parentElement;
+    if (!parent) continue;
+    hideEl(findEmptyStateContainer(parent));
+  }
 }
 
 function tick() {
