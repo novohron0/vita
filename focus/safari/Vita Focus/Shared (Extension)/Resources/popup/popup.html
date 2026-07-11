@@ -12,31 +12,42 @@
       <button type="button" id="openSettings" class="icon-btn" title="Настройки">⚙</button>
     </header>
 
-    <button type="button" id="sitePick" class="site-pick">
-      <span id="siteGlyph" class="site-glyph">▶</span>
-      <span class="site-pick-text">
+    <div class="panel-head">
+      <div class="score"><b id="scoreAct">0</b><b><i>／<span id="scoreAll">0</span></i></b><span>блоков</span></div>
+      <span id="pageCtx" class="ctx" hidden></span>
+    </div>
+
+    <nav class="tabs" id="tabs"><span class="tab-ind" id="tabInd"></span></nav>
+    <button type="button" id="moreSites" class="more-sites">Ещё сайты ›</button>
+
+    <div class="site-bar">
+      <div class="site-bar-txt">
         <span id="siteName">YouTube</span>
         <span id="siteCnt" class="muted">0 из 0</span>
-      </span>
-      <span class="chev">›</span>
-    </button>
+      </div>
+      <div class="site-bar-actions">
+        <button type="button" id="siteAllOn" class="link-btn">Вкл</button>
+        <button type="button" id="siteAllOff" class="link-btn">Выкл</button>
+      </div>
+    </div>
+
+    <label class="master" id="masterRow">
+      <span class="master-txt"><b>Фокус на сайте</b><span id="masterHint">основные блокировки</span></span>
+      <input type="checkbox" id="masterSw" class="master-sw">
+    </label>
 
     <div id="rows" class="rows"></div>
 
-    <details id="ytExtras" class="extras" hidden>
-      <summary>Фильтры слов и каналов</summary>
-      <input id="kwIn" type="text" placeholder="Слова: mrbeast, обзор…" spellcheck="false">
-      <input id="chIn" type="text" placeholder="Каналы: имя автора…" spellcheck="false">
-    </details>
+    <div id="filterBox" class="filter-box" hidden>
+      <input id="kwIn" type="text" placeholder="Слова через запятую…" spellcheck="false">
+      <input id="chIn" type="text" placeholder="Каналы через запятую…" spellcheck="false">
+    </div>
   </div>
 
-  <div id="siteSheet" class="sheet-wrap" hidden>
-    <div class="sheet-backdrop"></div>
+  <div id="siteSheet" class="overlay" hidden>
+    <div class="overlay-bg"></div>
     <div class="sheet">
-      <div class="sheet-head">
-        <span>Сайты</span>
-        <button type="button" id="closeSheet" class="icon-btn sm">✕</button>
-      </div>
+      <div class="sheet-head"><span>Все сайты</span><button type="button" id="closeSheet" class="icon-btn sm">✕</button></div>
       <input id="siteSearch" type="search" placeholder="Поиск…" spellcheck="false" autocomplete="off">
       <div id="siteList" class="site-list"></div>
     </div>
@@ -83,6 +94,18 @@
     </section>
 
     <footer class="foot"><a href="https://vitadots.ru/focus" target="_blank" rel="noopener">vitadots.ru/focus</a></footer>
+  </div>
+
+  <div id="pinSheet" class="overlay" hidden>
+    <div class="overlay-bg"></div>
+    <div class="sheet pin-sheet">
+      <div class="sheet-head"><span id="pinTitle">PIN</span></div>
+      <input id="pinPrompt" type="password" inputmode="numeric" maxlength="8" autocomplete="off" placeholder="••••">
+      <div class="btn-row">
+        <button type="button" id="pinCancel" class="ghost">Отмена</button>
+        <button type="button" id="pinOk">OK</button>
+      </div>
+    </div>
   </div>
 
   <script type="module" src="popup.js"></script>

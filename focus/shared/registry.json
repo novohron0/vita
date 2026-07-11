@@ -1,5 +1,16 @@
 {
-  "version": 9,
+  "version": 10,
+  "ui": {
+    "featuredSiteIds": ["youtube", "instagram", "x", "reddit", "tiktok", "vk", "telegram", "facebook"],
+    "settingsPresetIds": ["work", "youtube", "social", "ru", "shop", "streams", "off"],
+    "groupLabels": {
+      "main": null,
+      "watch": "Страница видео",
+      "feed": "Лента и навигация",
+      "visual": "Видео",
+      "filter": "Фильтры"
+    }
+  },
   "presets": [
     {
       "id": "work",
@@ -129,27 +140,27 @@
       "glyph": "▶",
       "hosts": ["www.youtube.com", "m.youtube.com", "youtube.com"],
       "toggles": [
-        { "id": "yt_shorts", "label": "Shorts", "desc": "Полки, вкладка и раздел" },
-        { "id": "yt_recs", "label": "Рекомендации на главной", "desc": "Сетка на home и подписках" },
-        { "id": "yt_comments", "label": "Комментарии", "desc": "Блок под видео" },
-        { "id": "yt_related", "label": "Похожие видео", "desc": "Колонка справа" },
-        { "id": "yt_autoplay", "label": "Автовоспроизведение", "desc": "Автоплей следующего" },
-        { "id": "yt_thumbs", "label": "Только названия", "desc": "Скрыть превью в списках" },
-        { "id": "yt_blur", "label": "Размыть превью", "desc": "Серый blur вместо картинок" },
-        { "id": "yt_endscreen", "label": "Заставка в конце", "desc": "Карточки после видео" },
-        { "id": "yt_notifications", "label": "Уведомления", "desc": "Колокольчик сверху" },
-        { "id": "yt_search", "label": "Подсказки поиска", "desc": "Выпадающий список" },
-        { "id": "yt_livechat", "label": "Live-чат", "desc": "Чат на стримах" },
-        { "id": "yt_home_subs", "label": "Главная → Подписки", "desc": "Редирект home на ленту подписок" },
-        { "id": "yt_shelf", "label": "Полки", "desc": "Горизонтальные карусели рекомендаций" },
-        { "id": "yt_chips", "label": "Чипсы тем", "desc": "Фильтры на главной" },
-        { "id": "yt_mix", "label": "Mix / радио", "desc": "Автоплейлисты и миксы" },
-        { "id": "yt_keywords", "label": "Фильтр слов", "desc": "Скрыть видео по списку в popup" },
-        { "id": "yt_channels", "label": "Блок каналов", "desc": "Скрыть видео по авторам" },
-        { "id": "yt_explore", "label": "Тренды / Explore", "desc": "Скрыть раздел и редирект" },
-        { "id": "yt_theater", "label": "Кинотеатр", "desc": "Включать theater mode на watch" },
-        { "id": "yt_watch_clean", "label": "Только плеер", "desc": "Скрыть всё под видео на watch" },
-        { "id": "yt_upnext", "label": "Up next", "desc": "Оверлей «следующее видео»" }
+        { "id": "yt_shorts", "label": "Shorts", "desc": "Полки, вкладка и раздел", "group": "main" },
+        { "id": "yt_recs", "label": "Рекомендации", "desc": "Сетка на home и подписках", "group": "main" },
+        { "id": "yt_comments", "label": "Комментарии", "desc": "Блок под видео", "group": "main" },
+        { "id": "yt_related", "label": "Похожие видео", "desc": "Колонка справа", "group": "main" },
+        { "id": "yt_autoplay", "label": "Автовоспроизведение", "desc": "Автоплей следующего", "group": "main" },
+        { "id": "yt_watch_clean", "label": "Только плеер", "desc": "Скрыть всё под видео", "group": "main" },
+        { "id": "yt_endscreen", "label": "Заставка в конце", "desc": "Карточки после видео", "group": "watch" },
+        { "id": "yt_upnext", "label": "Up next", "desc": "Оверлей «следующее видео»", "group": "watch" },
+        { "id": "yt_livechat", "label": "Live-чат", "desc": "Чат на стримах", "group": "watch" },
+        { "id": "yt_home_subs", "label": "Главная → Подписки", "desc": "Редирект home", "group": "feed" },
+        { "id": "yt_shelf", "label": "Полки", "desc": "Карусели рекомендаций", "group": "feed" },
+        { "id": "yt_chips", "label": "Чипсы тем", "desc": "Фильтры на главной", "group": "feed" },
+        { "id": "yt_explore", "label": "Тренды", "desc": "Explore и редирект", "group": "feed" },
+        { "id": "yt_notifications", "label": "Уведомления", "desc": "Колокольчик сверху", "group": "feed" },
+        { "id": "yt_search", "label": "Подсказки поиска", "desc": "Выпадающий список", "group": "feed" },
+        { "id": "yt_mix", "label": "Mix / радио", "desc": "Автоплейлисты", "group": "feed" },
+        { "id": "yt_thumbs", "label": "Только названия", "desc": "Скрыть превью", "group": "visual" },
+        { "id": "yt_blur", "label": "Размыть превью", "desc": "Серый blur", "group": "visual" },
+        { "id": "yt_theater", "label": "Кинотеатр", "desc": "Theater mode", "group": "visual" },
+        { "id": "yt_keywords", "label": "Фильтр слов", "desc": "Скрыть по списку", "group": "filter" },
+        { "id": "yt_channels", "label": "Блок каналов", "desc": "Скрыть по авторам", "group": "filter" }
       ]
     },
     {

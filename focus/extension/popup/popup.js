@@ -3,66 +3,69 @@ import {
   getSchedule, setSchedule, getCooldownHours, setCooldownHours, getPendingInfo,
   exportBundle, importBundle,
 } from '../shared/storage.js';
+import {
+  siteFromUrl, pageContext, featuredSites, siteCount, totalActive,
+  groupToggles, masterState, makeRow, moveTabIndicator,
+} from './ui.js';
 
 const REGISTRY_URL = chrome.runtime.getURL('shared/registry.json');
-const YT_MAIN = new Set([
-  'yt_shorts', 'yt_recs', 'yt_comments', 'yt_related', 'yt_autoplay',
-  'yt_thumbs', 'yt_blur', 'yt_endscreen', 'yt_home_subs', 'yt_watch_clean',
-]);
 const $ = s => document.querySelector(s);
 
+let registry = {};
 let sites = [];
 let presets = [];
+let uiMeta = {};
+let featured = [];
+let restSites = [];
 let active = 'youtube';
 let settings = {};
 let pinEnabled = false;
-
-function hostMatch(host, pattern) {
-  const h = host.replace(/^www\./, '');
-  const p = pattern.replace(/^www\./, '');
-  return h === p || h.endsWith('.' + p);
-}
-
-async function detectSiteFromTab() {
-  try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.url?.startsWith('http')) return null;
-    const host = new URL(tab.url).hostname;
-    return sites.find(s => (s.hosts || []).some(h => hostMatch(host, h)))?.id || null;
-  } catch {
-    return null;
-  }
-}
+let tabUrl = '';
+let pinResolve = null;
 
 async function init() {
   $('#ver').textContent = chrome.runtime.getManifest().version;
 
   const r = await fetch(REGISTRY_URL);
-  const data = await r.json();
-  sites = data.sites;
-  presets = (data.presets || []).filter(p => ['work', 'youtube', 'social', 'off'].includes(p.id));
-  settings = await getSettings();
+  registry = await r.json();
+  sites = registry.sites;
+  uiMeta = registry.ui || {};
+  presets = (registry.presets || []).filter(p =>
+    (uiMeta.settingsPresetIds || ['work', 'youtube', 'social', 'off']).includes(p.id)
+  );
+  ({ featured, rest: restSites } = featuredSites(sites, uiMeta));
 
-  const fromTab = await detectSiteFromTab();
+  settings = await getSettings();
+  await loadTabContext();
+
   const stored = await chrome.storage.sync.get('activeSite');
-  if (fromTab) active = fromTab;
-  else if (stored.activeSite && sites.some(s => s.id === stored.activeSite)) active = stored.activeSite;
+  if (!tabUrl && stored.activeSite && sites.some(s => s.id === stored.activeSite)) {
+    active = stored.activeSite;
+  }
 
   await refreshPinUi();
   await refreshScheduleUi();
   await refreshSchedBadge();
-  buildPresets();
+
+  buildTabs();
   buildSiteList();
-  updateSiteHeader();
+  buildPresets();
+  refreshHeader();
   renderRows();
-  updateYtExtras();
-  bindRows();
-  bindYtExtras();
-  bindPin();
-  bindSchedule();
-  bindIO();
-  bindNav();
-  bindSitePicker();
+  updateFilterBox();
+  bindAll();
+  requestAnimationFrame(() => moveTabIndicator($('#tabs'), active));
+}
+
+async function loadTabContext() {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    tabUrl = tab?.url || '';
+    const hit = siteFromUrl(tabUrl, sites);
+    if (hit) active = hit.id;
+  } catch {
+    tabUrl = '';
+  }
 }
 
 function showMain() {
@@ -75,27 +78,120 @@ function showSettings() {
   $('#viewSettings').hidden = false;
 }
 
-function bindNav() {
-  $('#openSettings').addEventListener('click', showSettings);
-  $('#closeSettings').addEventListener('click', showMain);
+function askPin(title = 'PIN') {
+  return new Promise(resolve => {
+    pinResolve = resolve;
+    $('#pinTitle').textContent = title;
+    $('#pinPrompt').value = '';
+    $('#pinSheet').hidden = false;
+    setTimeout(() => $('#pinPrompt').focus(), 50);
+  });
 }
 
-function openSheet() {
-  $('#siteSheet').hidden = false;
-  $('#siteSearch').value = '';
-  filterSiteList('');
-  $('#siteSearch').focus();
+function closePinSheet(value) {
+  $('#pinSheet').hidden = true;
+  if (pinResolve) {
+    pinResolve(value);
+    pinResolve = null;
+  }
 }
 
-function closeSheet() {
-  $('#siteSheet').hidden = true;
+async function needPinToDisable(wasOn, next) {
+  if (!wasOn || next) return true;
+  if (!pinEnabled) return true;
+  const pin = await askPin('PIN, чтобы выключить');
+  if (!pin || !(await verifyPin(pin))) return false;
+  return true;
 }
 
-function bindSitePicker() {
-  $('#sitePick').addEventListener('click', openSheet);
-  $('#closeSheet').addEventListener('click', closeSheet);
-  $('.sheet-backdrop').addEventListener('click', closeSheet);
-  $('#siteSearch').addEventListener('input', e => filterSiteList(e.target.value));
+async function needPinForBulk(offCount) {
+  if (!offCount || !pinEnabled) return true;
+  const pin = await askPin('PIN для выключения');
+  if (!pin || !(await verifyPin(pin))) return false;
+  return true;
+}
+
+function allToggles() {
+  return sites.flatMap(s => s.toggles);
+}
+
+function currentSite() {
+  return sites.find(s => s.id === active);
+}
+
+function mainToggles(site) {
+  const main = groupToggles(site, uiMeta.groupLabels || {}).find(g => g.id === 'main');
+  return main?.toggles || site.toggles;
+}
+
+function refreshHeader() {
+  const site = currentSite();
+  if (!site) return;
+
+  const act = totalActive(sites, settings);
+  const all = allToggles().length;
+  $('#scoreAct').textContent = act;
+  $('#scoreAll').textContent = all;
+  $('#siteName').textContent = site.name;
+  $('#siteCnt').textContent = `${siteCount(site, settings)} из ${site.toggles.length} включено`;
+
+  const ctx = pageContext(tabUrl, site.id);
+  const ctxEl = $('#pageCtx');
+  if (ctx) {
+    ctxEl.textContent = ctx;
+    ctxEl.hidden = false;
+  } else {
+    ctxEl.hidden = true;
+  }
+
+  refreshMaster();
+  refreshTabs();
+}
+
+function refreshMaster() {
+  const site = currentSite();
+  if (!site) return;
+  const main = mainToggles(site);
+  const on = main.filter(t => settings[t.id]).length;
+  const sw = $('#masterSw');
+  const row = $('#masterRow');
+  sw.checked = on === main.length && main.length > 0;
+  row.classList.toggle('partial', on > 0 && on < main.length);
+  $('#masterHint').textContent = on === main.length
+    ? 'все основные блокировки'
+    : on ? `${on} из ${main.length} основных` : 'основные блокировки выкл';
+}
+
+function buildTabs() {
+  const nav = $('#tabs');
+  nav.querySelectorAll('.tab').forEach(n => n.remove());
+
+  featured.forEach(s => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'tab';
+    b.dataset.id = s.id;
+    const n = siteCount(s, settings);
+    b.innerHTML = `<span class="g">${s.glyph}</span><span>${s.name}</span><span class="cnt">${n}</span>`;
+    if (s.id === active) b.classList.add('on');
+    if (n > 0) b.classList.add('has');
+    b.addEventListener('click', () => selectSite(s.id));
+    nav.insertBefore(b, $('#tabInd'));
+  });
+
+  $('#moreSites').hidden = restSites.length === 0;
+}
+
+function refreshTabs() {
+  featured.forEach(s => {
+    const b = $(`.tab[data-id="${s.id}"]`);
+    if (!b) return;
+    const n = siteCount(s, settings);
+    b.querySelector('.cnt').textContent = n;
+    b.classList.toggle('has', n > 0);
+    b.classList.toggle('on', s.id === active);
+  });
+  requestAnimationFrame(() => moveTabIndicator($('#tabs'), active));
 }
 
 function buildSiteList() {
@@ -106,7 +202,7 @@ function buildSiteList() {
     b.type = 'button';
     b.className = 'site-item' + (s.id === active ? ' on' : '');
     b.dataset.id = s.id;
-    b.innerHTML = `<span class="g">${s.glyph}</span><span class="n">${s.name}</span><span class="c">${siteCount(s)}/${s.toggles.length}</span>`;
+    b.innerHTML = `<span class="g">${s.glyph}</span><span class="n">${s.name}</span><span class="c">${siteCount(s, settings)}/${s.toggles.length}</span>`;
     b.addEventListener('click', () => {
       selectSite(s.id);
       closeSheet();
@@ -123,31 +219,127 @@ function filterSiteList(q) {
   });
 }
 
-function scheduleActive(sched) {
-  if (!sched.enabled) return null;
-  const h = new Date().getHours();
-  const { start, end } = sched;
-  if (start === end) return true;
-  if (start < end) return h >= start && h < end;
-  return h >= start || h < end;
+function openSheet() {
+  $('#siteSheet').hidden = false;
+  $('#siteSearch').value = '';
+  filterSiteList('');
 }
 
-async function refreshSchedBadge() {
-  const sched = await getSchedule();
-  const badge = $('#schedBadge');
-  const st = scheduleActive(sched);
-  if (st === null) { badge.hidden = true; return; }
-  badge.hidden = false;
-  badge.textContent = st ? 'сейчас: фокус' : 'сейчас: пауза';
-  badge.className = 'pill ' + (st ? 'on' : 'off');
+function closeSheet() {
+  $('#siteSheet').hidden = true;
 }
 
-function allToggles() {
-  return sites.flatMap(s => s.toggles);
+function selectSite(id) {
+  active = id;
+  chrome.storage.sync.set({ activeSite: active });
+  refreshHeader();
+  renderRows();
+  updateFilterBox();
 }
 
-function siteCount(s) {
-  return s.toggles.filter(t => settings[t.id]).length;
+function renderRows() {
+  const site = currentSite();
+  const box = $('#rows');
+  box.innerHTML = '';
+  if (!site) return;
+
+  groupToggles(site, uiMeta.groupLabels || {}).forEach(({ label, toggles }) => {
+    const wrap = document.createElement('section');
+    wrap.className = 'group';
+    if (label) {
+      const h = document.createElement('div');
+      h.className = 'group-h';
+      h.textContent = label;
+      wrap.appendChild(h);
+    }
+    toggles.forEach(t => wrap.appendChild(makeRow(t, !!settings[t.id])));
+    box.appendChild(wrap);
+  });
+}
+
+function updateFilterBox() {
+  const box = $('#filterBox');
+  const show = active === 'youtube';
+  box.hidden = !show;
+  if (show) {
+    $('#kwIn').value = settings.yt_kw || '';
+    $('#chIn').value = settings.yt_ch || '';
+  }
+}
+
+async function toggleId(id, on) {
+  const hours = await getCooldownHours();
+  if (!on && hours > 0 && settings[id]) {
+    settings = await setSetting(id, false);
+  } else {
+    settings = await setSetting(id, on);
+  }
+}
+
+async function setSiteBulk(on) {
+  const site = currentSite();
+  if (!site) return;
+  if (!on) {
+    const offCount = site.toggles.filter(t => settings[t.id]).length;
+    if (!(await needPinForBulk(offCount))) return;
+  }
+  const patch = Object.fromEntries(site.toggles.map(t => [t.id, on]));
+  settings = await setSettings(patch);
+  refreshHeader();
+  renderRows();
+  buildSiteList();
+  await refreshScheduleUi();
+  await refreshSchedBadge();
+}
+
+async function toggleMaster(on) {
+  const site = currentSite();
+  if (!site) return;
+  const main = mainToggles(site);
+  if (!on) {
+    const offCount = main.filter(t => settings[t.id]).length;
+    if (!(await needPinForBulk(offCount))) {
+      refreshMaster();
+      return;
+    }
+  }
+  const patch = Object.fromEntries(main.map(t => [t.id, on]));
+  settings = await setSettings(patch);
+  refreshHeader();
+  renderRows();
+  buildSiteList();
+  await refreshScheduleUi();
+  await refreshSchedBadge();
+}
+
+function buildPresets() {
+  const nav = $('#presets');
+  nav.innerHTML = '';
+  presets.forEach(p => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'preset';
+    b.textContent = `${p.glyph || ''} ${p.name}`.trim();
+    b.addEventListener('click', () => applyPreset(p));
+    nav.appendChild(b);
+  });
+}
+
+async function applyPreset(preset) {
+  const ids = allToggles().map(t => t.id);
+  const turningOff = ids.filter(id => settings[id] && !(preset.settings[id]));
+  if (turningOff.length && pinEnabled) {
+    const pin = await askPin('PIN для смены профиля');
+    if (!pin || !(await verifyPin(pin))) return;
+  }
+  const patch = Object.fromEntries(ids.map(id => [id, false]));
+  Object.assign(patch, preset.settings);
+  settings = await setSettings(patch);
+  refreshHeader();
+  renderRows();
+  buildSiteList();
+  await refreshScheduleUi();
+  await refreshSchedBadge();
 }
 
 async function refreshPinUi() {
@@ -178,146 +370,47 @@ async function refreshScheduleUi() {
   msg.hidden = false;
 }
 
-function pinMsg(text, show = true) {
+async function refreshSchedBadge() {
+  const sched = await getSchedule();
+  const badge = $('#schedBadge');
+  if (!sched.enabled) { badge.hidden = true; return; }
+  const h = new Date().getHours();
+  const { start, end } = sched;
+  let on = start === end || (start < end ? h >= start && h < end : h >= start || h < end);
+  badge.hidden = false;
+  badge.textContent = on ? 'сейчас: фокус' : 'сейчас: пауза';
+  badge.className = 'pill ' + (on ? 'on' : 'off');
+}
+
+function pinMsg(text, show = true, ok = false) {
   const n = $('#pinMsg');
   n.textContent = text;
   n.hidden = !show;
+  n.className = ok ? 'msg ok' : 'msg err';
 }
 
-async function needPinToDisable(wasOn, next) {
-  if (!wasOn || next) return true;
-  if (!pinEnabled) return true;
-  const pin = prompt('PIN, чтобы выключить');
-  if (!pin || !(await verifyPin(pin))) return false;
-  return true;
-}
+function bindAll() {
+  $('#openSettings').addEventListener('click', showSettings);
+  $('#closeSettings').addEventListener('click', showMain);
+  $('#moreSites').addEventListener('click', openSheet);
+  $('#closeSheet').addEventListener('click', closeSheet);
+  $('#siteSheet .overlay-bg').addEventListener('click', closeSheet);
+  $('#siteSearch').addEventListener('input', e => filterSiteList(e.target.value));
 
-function buildPresets() {
-  const nav = $('#presets');
-  nav.innerHTML = '';
-  presets.forEach(p => {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'preset';
-    b.textContent = `${p.glyph || ''} ${p.name}`.trim();
-    b.addEventListener('click', () => applyPreset(p));
-    nav.appendChild(b);
+  $('#siteAllOn').addEventListener('click', () => setSiteBulk(true));
+  $('#siteAllOff').addEventListener('click', () => setSiteBulk(false));
+
+  $('#masterRow').addEventListener('click', e => {
+    if (e.target.id === 'masterSw') return;
+    const sw = $('#masterSw');
+    sw.checked = !sw.checked;
+    toggleMaster(sw.checked);
   });
-}
-
-async function applyPreset(preset) {
-  const ids = allToggles().map(t => t.id);
-  const turningOff = ids.filter(id => settings[id] && !(preset.settings[id]));
-  if (turningOff.length && pinEnabled) {
-    const pin = prompt('PIN для смены профиля');
-    if (!pin || !(await verifyPin(pin))) return;
-  }
-  const patch = Object.fromEntries(ids.map(id => [id, false]));
-  Object.assign(patch, preset.settings);
-  settings = await setSettings(patch);
-  updateSiteHeader();
-  renderRows();
-  buildSiteList();
-  await refreshScheduleUi();
-  await refreshSchedBadge();
-}
-
-function updateSiteHeader() {
-  const site = sites.find(s => s.id === active);
-  if (!site) return;
-  $('#siteGlyph').textContent = site.glyph;
-  $('#siteName').textContent = site.name;
-  $('#siteCnt').textContent = `${siteCount(site)} из ${site.toggles.length} включено`;
-}
-
-function selectSite(id) {
-  active = id;
-  chrome.storage.sync.set({ activeSite: active });
-  updateSiteHeader();
-  renderRows();
-  updateYtExtras();
-  [...$('#siteList').children].forEach(el => {
-    el.classList.toggle('on', el.dataset.id === active);
-    const s = sites.find(x => x.id === el.dataset.id);
-    if (s) el.querySelector('.c').textContent = `${siteCount(s)}/${s.toggles.length}`;
+  $('#masterSw').addEventListener('change', e => {
+    e.stopPropagation();
+    toggleMaster(e.target.checked);
   });
-}
 
-function updateYtExtras() {
-  const box = $('#ytExtras');
-  const show = active === 'youtube';
-  box.hidden = !show;
-  if (show) {
-    $('#kwIn').value = settings.yt_kw || '';
-    $('#chIn').value = settings.yt_ch || '';
-  }
-}
-
-function bindYtExtras() {
-  const save = async () => {
-    settings = await setSettings({ yt_kw: $('#kwIn').value, yt_ch: $('#chIn').value });
-  };
-  $('#kwIn').addEventListener('change', save);
-  $('#kwIn').addEventListener('blur', save);
-  $('#chIn').addEventListener('change', save);
-  $('#chIn').addEventListener('blur', save);
-}
-
-function makeRow(t) {
-  const on = !!settings[t.id];
-  const row = document.createElement('div');
-  row.className = 'row' + (on ? ' on' : '');
-  row.dataset.id = t.id;
-  row.innerHTML = `<b>${t.label}</b><div class="sw"></div>`;
-  row.title = t.desc || '';
-  return row;
-}
-
-function makeGroup(title, toggles) {
-  if (!toggles.length) return null;
-  const wrap = document.createElement('section');
-  wrap.className = 'group';
-  if (title) {
-    const h = document.createElement('div');
-    h.className = 'group-h';
-    h.textContent = title;
-    wrap.appendChild(h);
-  }
-  const card = document.createElement('div');
-  card.className = 'card';
-  toggles.forEach(t => card.appendChild(makeRow(t)));
-  wrap.appendChild(card);
-  return wrap;
-}
-
-function renderRows() {
-  const site = sites.find(s => s.id === active);
-  const box = $('#rows');
-  box.innerHTML = '';
-  if (!site) return;
-
-  if (site.id === 'youtube') {
-    const main = site.toggles.filter(t => YT_MAIN.has(t.id));
-    const extra = site.toggles.filter(t => !YT_MAIN.has(t.id));
-    box.appendChild(makeGroup(null, main));
-    const more = makeGroup('Ещё', extra);
-    if (more) box.appendChild(more);
-  } else {
-    box.appendChild(makeGroup(null, site.toggles));
-  }
-
-  $('#siteCnt').textContent = `${siteCount(site)} из ${site.toggles.length} включено`;
-  refreshSiteListCounts();
-}
-
-function refreshSiteListCounts() {
-  [...$('#siteList').children].forEach(el => {
-    const s = sites.find(x => x.id === el.dataset.id);
-    if (s) el.querySelector('.c').textContent = `${siteCount(s)}/${s.toggles.length}`;
-  });
-}
-
-function bindRows() {
   $('#rows').addEventListener('click', async e => {
     const row = e.target.closest('.row');
     if (!row) return;
@@ -325,26 +418,25 @@ function bindRows() {
     const on = !!settings[id];
     const next = !on;
     if (!(await needPinToDisable(on, next))) return;
-    const hours = await getCooldownHours();
-    if (!next && hours > 0 && on) {
-      settings = await setSetting(id, false);
-    } else {
-      settings = await setSetting(id, next);
-    }
+    await toggleId(id, next);
     row.classList.toggle('on', !!settings[id]);
-    const site = sites.find(s => s.id === active);
-    if (site) $('#siteCnt').textContent = `${siteCount(site)} из ${site.toggles.length} включено`;
-    refreshSiteListCounts();
+    refreshHeader();
+    buildSiteList();
     await refreshScheduleUi();
     await refreshSchedBadge();
   });
-}
 
-function bindPin() {
+  const saveFilters = async () => {
+    settings = await setSettings({ yt_kw: $('#kwIn').value, yt_ch: $('#chIn').value });
+  };
+  $('#kwIn').addEventListener('change', saveFilters);
+  $('#kwIn').addEventListener('blur', saveFilters);
+  $('#chIn').addEventListener('change', saveFilters);
+  $('#chIn').addEventListener('blur', saveFilters);
+
   $('#pinSave').addEventListener('click', async () => {
-    const pin = $('#pinIn').value.trim();
     try {
-      await setPin(pin);
+      await setPin($('#pinIn').value.trim());
       $('#pinIn').value = '';
       await refreshPinUi();
       pinMsg('', false);
@@ -353,7 +445,7 @@ function bindPin() {
     }
   });
   $('#pinOff').addEventListener('click', async () => {
-    const pin = $('#pinIn').value.trim() || prompt('Текущий PIN');
+    const pin = $('#pinIn').value.trim() || await askPin('Текущий PIN');
     if (!pin) return;
     try {
       await clearPin(pin);
@@ -364,10 +456,8 @@ function bindPin() {
       pinMsg('Неверный PIN');
     }
   });
-}
 
-function bindSchedule() {
-  const save = async () => {
+  const saveSched = async () => {
     await setSchedule({
       enabled: $('#schedOn').checked,
       start: Number($('#schedStart').value) || 9,
@@ -378,20 +468,18 @@ function bindSchedule() {
     await refreshSchedBadge();
     settings = await getSettings();
     renderRows();
+    refreshHeader();
   };
-  $('#schedOn').addEventListener('change', save);
-  $('#schedStart').addEventListener('change', save);
-  $('#schedEnd').addEventListener('change', save);
-  $('#cooldownOn').addEventListener('change', save);
-}
+  $('#schedOn').addEventListener('change', saveSched);
+  $('#schedStart').addEventListener('change', saveSched);
+  $('#schedEnd').addEventListener('change', saveSched);
+  $('#cooldownOn').addEventListener('change', saveSched);
 
-function bindIO() {
   $('#exportBtn').addEventListener('click', async () => {
     const json = await exportBundle();
     try {
       await navigator.clipboard.writeText(json);
-      pinMsg('Скопировано', true);
-      $('#pinMsg').className = 'msg ok';
+      pinMsg('Скопировано', true, true);
       setTimeout(() => pinMsg('', false), 2000);
     } catch {
       prompt('Скопируй:', json);
@@ -403,19 +491,24 @@ function bindIO() {
     try {
       await importBundle(raw);
       settings = await getSettings();
-      updateSiteHeader();
+      refreshHeader();
       renderRows();
       buildSiteList();
-      updateYtExtras();
+      updateFilterBox();
       await refreshScheduleUi();
       await refreshSchedBadge();
-      pinMsg('Импорт OK', true);
-      $('#pinMsg').className = 'msg ok';
+      pinMsg('Импорт OK', true, true);
       setTimeout(() => pinMsg('', false), 2000);
     } catch {
       pinMsg('Битый JSON');
-      $('#pinMsg').className = 'msg err';
     }
+  });
+
+  $('#pinCancel').addEventListener('click', () => closePinSheet(null));
+  $('#pinSheet .overlay-bg').addEventListener('click', () => closePinSheet(null));
+  $('#pinOk').addEventListener('click', () => closePinSheet($('#pinPrompt').value.trim()));
+  $('#pinPrompt').addEventListener('keydown', e => {
+    if (e.key === 'Enter') closePinSheet($('#pinPrompt').value.trim());
   });
 }
 
