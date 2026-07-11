@@ -6,53 +6,70 @@
 <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <header>
-    <b>⠿ vita focus</b>
-    <span id="schedBadge" class="badge-off" hidden></span>
-    <span id="score">0</span>
-  </header>
-  <nav id="presets"></nav>
-  <nav id="tabs"></nav>
-  <input id="toggleFilter" type="search" placeholder="Поиск тумблера…" spellcheck="false" autocomplete="off">
-  <div class="io-row" id="siteBulk">
-    <span id="siteScore" class="site-score"></span>
-    <button type="button" id="siteAllOn" class="ghost-btn">Вкл всё</button>
-    <button type="button" id="siteAllOff" class="ghost-btn">Выкл всё</button>
+  <div id="viewMain">
+    <header class="top">
+      <div class="brand">⠿ Vita Focus</div>
+      <button type="button" id="openSettings" class="icon-btn" title="Настройки">⚙</button>
+    </header>
+
+    <nav id="tabs" class="tabs"></nav>
+    <div class="site-title">
+      <span id="siteName">YouTube</span>
+      <span id="siteCnt" class="muted">0/0</span>
+    </div>
+
+    <div id="rows" class="rows"></div>
+
+    <details id="ytExtras" class="extras" hidden>
+      <summary>Фильтры слов и каналов</summary>
+      <input id="kwIn" type="text" placeholder="Слова: mrbeast, обзор…" spellcheck="false">
+      <input id="chIn" type="text" placeholder="Каналы: имя автора…" spellcheck="false">
+    </details>
   </div>
-  <div id="rows"></div>
-  <section id="ytExtras" class="pin" hidden>
-    <div class="pin-head"><b>Списки YouTube</b><span>слова и каналы</span></div>
-    <label class="yt-lbl">Слова</label>
-    <textarea id="kwIn" rows="2" placeholder="mrbeast, обзор..." spellcheck="false"></textarea>
-    <label class="yt-lbl">Каналы</label>
-    <textarea id="chIn" rows="2" placeholder="PewDiePie, Влад А4..." spellcheck="false"></textarea>
-  </section>
-  <section id="schedBox" class="pin">
-    <div class="pin-head"><b>Расписание</b><span id="schedState">выкл</span></div>
-    <label class="sched-row"><input type="checkbox" id="schedOn"> Блоки только в эти часы</label>
-    <div class="sched-times">
-      <label>с <input type="number" id="schedStart" min="0" max="23" value="9"></label>
-      <label>до <input type="number" id="schedEnd" min="0" max="23" value="22"></label>
-    </div>
-    <label class="sched-row"><input type="checkbox" id="cooldownOn"> Задержка 12ч перед выключением</label>
-    <p id="pendingMsg" class="pin-msg" hidden></p>
-  </section>
-  <section id="pinBox" class="pin">
-    <div class="pin-head"><b>Защита PIN</b><span id="pinState">выкл</span></div>
-    <input id="pinIn" type="password" inputmode="numeric" maxlength="8" placeholder="4–8 цифр" autocomplete="off">
-    <div class="pin-actions">
-      <button type="button" id="pinSave">Установить</button>
-      <button type="button" id="pinOff" class="ghost">Снять</button>
-    </div>
-    <p id="pinMsg" class="pin-msg" hidden></p>
-  </section>
-  <footer>
-    <div class="io-row">
-      <button type="button" id="exportBtn" class="ghost-btn">Экспорт</button>
-      <button type="button" id="importBtn" class="ghost-btn">Импорт</button>
-    </div>
-    <a href="https://vitadots.ru/focus" target="_blank" rel="noopener">vitadots.ru/focus</a>
-  </footer>
+
+  <div id="viewSettings" hidden>
+    <header class="top">
+      <button type="button" id="closeSettings" class="back-btn">← Назад</button>
+      <span class="brand sm">Настройки</span>
+    </header>
+
+    <section class="block">
+      <div class="block-h">Профили</div>
+      <nav id="presets" class="presets"></nav>
+    </section>
+
+    <section class="block">
+      <div class="block-h">Расписание <span id="schedState" class="muted">выкл</span></div>
+      <label class="chk"><input type="checkbox" id="schedOn"> Блоки только в рабочие часы</label>
+      <div class="sched-times">
+        <label>с <input type="number" id="schedStart" min="0" max="23" value="9"></label>
+        <label>до <input type="number" id="schedEnd" min="0" max="23" value="22"></label>
+      </div>
+      <label class="chk"><input type="checkbox" id="cooldownOn"> Задержка 12ч перед выключением</label>
+      <p id="pendingMsg" class="msg ok" hidden></p>
+      <span id="schedBadge" class="pill" hidden></span>
+    </section>
+
+    <section class="block">
+      <div class="block-h">PIN <span id="pinState" class="muted">выкл</span></div>
+      <input id="pinIn" type="password" inputmode="numeric" maxlength="8" placeholder="4–8 цифр" autocomplete="off">
+      <div class="btn-row">
+        <button type="button" id="pinSave">Установить</button>
+        <button type="button" id="pinOff" class="ghost">Снять</button>
+      </div>
+      <p id="pinMsg" class="msg err" hidden></p>
+    </section>
+
+    <section class="block">
+      <div class="btn-row">
+        <button type="button" id="exportBtn" class="ghost wide">Экспорт</button>
+        <button type="button" id="importBtn" class="ghost wide">Импорт</button>
+      </div>
+    </section>
+
+    <footer class="foot"><a href="https://vitadots.ru/focus" target="_blank" rel="noopener">vitadots.ru/focus</a></footer>
+  </div>
+
   <script type="module" src="popup.js"></script>
 </body>
 </html>

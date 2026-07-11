@@ -5,8 +5,8 @@ import {
 } from '../shared/storage.js';
 
 const REGISTRY_URL = chrome.runtime.getURL('shared/registry.json');
-
 const $ = s => document.querySelector(s);
+
 let sites = [];
 let presets = [];
 let active = 'youtube';
@@ -17,59 +17,66 @@ async function init() {
   const r = await fetch(REGISTRY_URL);
   const data = await r.json();
   sites = data.sites;
-  presets = data.presets || [];
+  presets = (data.presets || []).filter(p => ['work', 'youtube', 'social', 'off'].includes(p.id));
   settings = await getSettings();
   const stored = await chrome.storage.sync.get('activeSite');
   if (stored.activeSite && sites.some(s => s.id === stored.activeSite)) active = stored.activeSite;
+
   await refreshPinUi();
   await refreshScheduleUi();
   await refreshSchedBadge();
-  buildPresets();
   buildTabs();
+  buildPresets();
   renderRows();
   updateYtExtras();
-  updateScore();
+  bindRows();
+  bindYtExtras();
   bindPin();
   bindSchedule();
   bindIO();
-  bindYtExtras();
-  bindSiteBulk();
-  bindToggleFilter();
-  const ver = chrome.runtime.getManifest().version;
-  $('header b').textContent = `⠿ vita focus · ${ver}`;
+  bindNav();
+}
+
+function showMain() {
+  $('#viewMain').hidden = false;
+  $('#viewSettings').hidden = true;
+}
+
+function showSettings() {
+  $('#viewMain').hidden = true;
+  $('#viewSettings').hidden = false;
+}
+
+function bindNav() {
+  $('#openSettings').addEventListener('click', showSettings);
+  $('#closeSettings').addEventListener('click', showMain);
 }
 
 function scheduleActive(sched) {
   if (!sched.enabled) return null;
   const h = new Date().getHours();
   const { start, end } = sched;
-  let on;
-  if (start === end) on = true;
-  else if (start < end) on = h >= start && h < end;
-  else on = h >= start || h < end;
-  return on;
+  if (start === end) return true;
+  if (start < end) return h >= start && h < end;
+  return h >= start || h < end;
 }
 
 async function refreshSchedBadge() {
   const sched = await getSchedule();
   const badge = $('#schedBadge');
   const st = scheduleActive(sched);
-  if (st === null) {
-    badge.hidden = true;
-    return;
-  }
+  if (st === null) { badge.hidden = true; return; }
   badge.hidden = false;
-  if (st) {
-    badge.textContent = 'фокус';
-    badge.className = 'badge-on';
-  } else {
-    badge.textContent = 'пауза';
-    badge.className = 'badge-off';
-  }
+  badge.textContent = st ? 'сейчас: фокус' : 'сейчас: пауза';
+  badge.className = 'pill ' + (st ? 'on' : 'off');
 }
 
 function allToggles() {
   return sites.flatMap(s => s.toggles);
+}
+
+function siteCount(s) {
+  return s.toggles.filter(t => settings[t.id]).length;
 }
 
 async function refreshPinUi() {
@@ -90,17 +97,13 @@ async function refreshScheduleUi() {
   const pending = await getPendingInfo();
   const keys = Object.keys(pending);
   const msg = $('#pendingMsg');
-  if (!keys.length) {
-    msg.hidden = true;
-    return;
-  }
+  if (!keys.length) { msg.hidden = true; return; }
   const labels = keys.map(id => {
     const t = allToggles().find(x => x.id === id);
     const h = Math.ceil((pending[id] - Date.now()) / 3600000);
     return `${t?.label || id} (~${h}ч)`;
   });
-  msg.textContent = `Отключится: ${labels.join(', ')}`;
-  msg.style.color = '#7fd4a3';
+  msg.textContent = `Снимется: ${labels.join(', ')}`;
   msg.hidden = false;
 }
 
@@ -113,13 +116,8 @@ function pinMsg(text, show = true) {
 async function needPinToDisable(wasOn, next) {
   if (!wasOn || next) return true;
   if (!pinEnabled) return true;
-  const pin = prompt('Введи PIN, чтобы выключить блок');
-  if (!pin) return false;
-  if (!(await verifyPin(pin))) {
-    pinMsg('Неверный PIN');
-    return false;
-  }
-  pinMsg('', false);
+  const pin = prompt('PIN, чтобы выключить');
+  if (!pin || !(await verifyPin(pin))) return false;
   return true;
 }
 
@@ -140,18 +138,14 @@ async function applyPreset(preset) {
   const ids = allToggles().map(t => t.id);
   const turningOff = ids.filter(id => settings[id] && !(preset.settings[id]));
   if (turningOff.length && pinEnabled) {
-    const pin = prompt('Введи PIN для смены профиля');
-    if (!pin || !(await verifyPin(pin))) {
-      pinMsg('Неверный PIN');
-      return;
-    }
-    pinMsg('', false);
+    const pin = prompt('PIN для смены профиля');
+    if (!pin || !(await verifyPin(pin))) return;
   }
   const patch = Object.fromEntries(ids.map(id => [id, false]));
   Object.assign(patch, preset.settings);
   settings = await setSettings(patch);
+  buildTabs();
   renderRows();
-  updateScore();
   await refreshScheduleUi();
   await refreshSchedBadge();
 }
@@ -161,18 +155,29 @@ function buildTabs() {
   nav.innerHTML = '';
   sites.forEach(s => {
     const b = document.createElement('button');
+    b.type = 'button';
     b.className = 'tab' + (s.id === active ? ' on' : '');
-    b.textContent = `${s.glyph} ${s.name}`;
-    b.addEventListener('click', () => {
-      active = s.id;
-      chrome.storage.sync.set({ activeSite: active });
-      $('#toggleFilter').value = '';
-      buildTabs();
-      renderRows();
-      updateYtExtras();
-    });
+    b.title = s.name;
+    b.textContent = s.glyph;
+    if (siteCount(s) > 0) b.classList.add('has');
+    b.addEventListener('click', () => selectSite(s.id));
     nav.appendChild(b);
   });
+  const site = sites.find(s => s.id === active);
+  if (site) {
+    $('#siteName').textContent = site.name;
+    $('#siteCnt').textContent = `${siteCount(site)}/${site.toggles.length}`;
+  }
+}
+
+function selectSite(id) {
+  active = id;
+  chrome.storage.sync.set({ activeSite: active });
+  buildTabs();
+  renderRows();
+  updateYtExtras();
+  const el = $(`.tab.on`);
+  el?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
 }
 
 function updateYtExtras() {
@@ -186,56 +191,13 @@ function updateYtExtras() {
 }
 
 function bindYtExtras() {
-  const saveKw = async () => { settings = await setSettings({ yt_kw: $('#kwIn').value }); };
-  const saveCh = async () => { settings = await setSettings({ yt_ch: $('#chIn').value }); };
-  $('#kwIn').addEventListener('change', saveKw);
-  $('#kwIn').addEventListener('blur', saveKw);
-  $('#chIn').addEventListener('change', saveCh);
-  $('#chIn').addEventListener('blur', saveCh);
-}
-
-function updateSiteScore() {
-  const site = sites.find(s => s.id === active);
-  if (!site) return;
-  const act = site.toggles.filter(t => settings[t.id]).length;
-  $('#siteScore').textContent = `${site.glyph} ${act}/${site.toggles.length}`;
-}
-
-function bindSiteBulk() {
-  $('#siteAllOn').addEventListener('click', async () => {
-    const site = sites.find(s => s.id === active);
-    if (!site) return;
-    const patch = Object.fromEntries(site.toggles.map(t => [t.id, true]));
-    settings = await setSettings(patch);
-    renderRows();
-    updateScore();
-    updateSiteScore();
-    await refreshSchedBadge();
-  });
-  $('#siteAllOff').addEventListener('click', async () => {
-    const site = sites.find(s => s.id === active);
-    if (!site) return;
-    const onIds = site.toggles.filter(t => settings[t.id]).map(t => t.id);
-    if (onIds.length && pinEnabled) {
-      const pin = prompt('Введи PIN для выключения');
-      if (!pin || !(await verifyPin(pin))) {
-        pinMsg('Неверный PIN');
-        return;
-      }
-      pinMsg('', false);
-    }
-    const patch = Object.fromEntries(site.toggles.map(t => [t.id, false]));
-    settings = await setSettings(patch);
-    renderRows();
-    updateScore();
-    updateSiteScore();
-    await refreshScheduleUi();
-    await refreshSchedBadge();
-  });
-}
-
-function bindToggleFilter() {
-  $('#toggleFilter').addEventListener('input', renderRows);
+  const save = async () => {
+    settings = await setSettings({ yt_kw: $('#kwIn').value, yt_ch: $('#chIn').value });
+  };
+  $('#kwIn').addEventListener('change', save);
+  $('#kwIn').addEventListener('blur', save);
+  $('#chIn').addEventListener('change', save);
+  $('#chIn').addEventListener('blur', save);
 }
 
 function renderRows() {
@@ -243,40 +205,48 @@ function renderRows() {
   const box = $('#rows');
   box.innerHTML = '';
   if (!site) return;
-  const q = ($('#toggleFilter')?.value || '').trim().toLowerCase();
   site.toggles.forEach(t => {
-    if (q && !`${t.label} ${t.desc}`.toLowerCase().includes(q)) return;
     const on = !!settings[t.id];
     const row = document.createElement('div');
     row.className = 'row' + (on ? ' on' : '');
-    row.innerHTML = `<div><b>${t.label}</b><span>${t.desc}</span></div><div class="sw"></div>`;
-    row.addEventListener('click', async () => {
-      const next = !settings[t.id];
-      if (!(await needPinToDisable(on, next))) return;
-      const hours = await getCooldownHours();
-      if (!next && hours > 0 && on) {
-        settings = await setSetting(t.id, false);
-        row.classList.toggle('on', !!settings[t.id]);
-        updateScore();
-        await refreshScheduleUi();
-        await refreshSchedBadge();
-        return;
-      }
-      settings = await setSetting(t.id, next);
-      row.classList.toggle('on', !!settings[t.id]);
-      updateScore();
-      await refreshScheduleUi();
-      await refreshSchedBadge();
-    });
+    row.dataset.id = t.id;
+    row.innerHTML = `<b>${t.label}</b><div class="sw"></div>`;
+    row.title = t.desc;
     box.appendChild(row);
   });
-  updateSiteScore();
+  $('#siteCnt').textContent = `${siteCount(site)}/${site.toggles.length}`;
+  refreshTabDots();
 }
 
-function updateScore() {
-  const total = allToggles().length;
-  const act = allToggles().filter(t => settings[t.id]).length;
-  $('#score').textContent = `${act} / ${total}`;
+function refreshTabDots() {
+  sites.forEach(s => {
+    const btn = [...$('#tabs').children].find(b => b.title === s.name);
+    if (!btn) return;
+    btn.classList.toggle('has', siteCount(s) > 0);
+  });
+}
+
+function bindRows() {
+  $('#rows').addEventListener('click', async e => {
+    const row = e.target.closest('.row');
+    if (!row) return;
+    const id = row.dataset.id;
+    const on = !!settings[id];
+    const next = !on;
+    if (!(await needPinToDisable(on, next))) return;
+    const hours = await getCooldownHours();
+    if (!next && hours > 0 && on) {
+      settings = await setSetting(id, false);
+    } else {
+      settings = await setSetting(id, next);
+    }
+    row.classList.toggle('on', !!settings[id]);
+    refreshTabDots();
+    const site = sites.find(s => s.id === active);
+    if (site) $('#siteCnt').textContent = `${siteCount(site)}/${site.toggles.length}`;
+    await refreshScheduleUi();
+    await refreshSchedBadge();
+  });
 }
 
 function bindPin() {
@@ -286,19 +256,19 @@ function bindPin() {
       await setPin(pin);
       $('#pinIn').value = '';
       await refreshPinUi();
-      pinMsg('PIN установлен', false);
+      pinMsg('', false);
     } catch {
       pinMsg('Минимум 4 символа');
     }
   });
   $('#pinOff').addEventListener('click', async () => {
-    const pin = $('#pinIn').value.trim() || prompt('Текущий PIN для снятия защиты');
+    const pin = $('#pinIn').value.trim() || prompt('Текущий PIN');
     if (!pin) return;
     try {
       await clearPin(pin);
       $('#pinIn').value = '';
       await refreshPinUi();
-      pinMsg('Защита снята', false);
+      pinMsg('', false);
     } catch {
       pinMsg('Неверный PIN');
     }
@@ -317,7 +287,6 @@ function bindSchedule() {
     await refreshSchedBadge();
     settings = await getSettings();
     renderRows();
-    updateScore();
   };
   $('#schedOn').addEventListener('change', save);
   $('#schedStart').addEventListener('change', save);
@@ -330,17 +299,15 @@ function bindIO() {
     const json = await exportBundle();
     try {
       await navigator.clipboard.writeText(json);
-      const msg = $('#pinMsg');
-      msg.style.color = '#7fd4a3';
-      msg.textContent = 'Настройки скопированы';
-      msg.hidden = false;
-      setTimeout(() => { msg.hidden = true; }, 2000);
+      pinMsg('Скопировано', true);
+      $('#pinMsg').className = 'msg ok';
+      setTimeout(() => pinMsg('', false), 2000);
     } catch {
-      prompt('Скопируй настройки:', json);
+      prompt('Скопируй:', json);
     }
   });
   $('#importBtn').addEventListener('click', async () => {
-    const raw = prompt('Вставь JSON настроек Vita Focus:');
+    const raw = prompt('JSON настроек:');
     if (!raw) return;
     try {
       await importBundle(raw);
@@ -348,16 +315,14 @@ function bindIO() {
       buildTabs();
       renderRows();
       updateYtExtras();
-      updateScore();
       await refreshScheduleUi();
       await refreshSchedBadge();
-      const msg = $('#pinMsg');
-      msg.style.color = '#7fd4a3';
-      msg.textContent = 'Импорт OK';
-      msg.hidden = false;
-      setTimeout(() => { msg.hidden = true; }, 2000);
+      pinMsg('Импорт OK', true);
+      $('#pinMsg').className = 'msg ok';
+      setTimeout(() => pinMsg('', false), 2000);
     } catch {
       pinMsg('Битый JSON');
+      $('#pinMsg').className = 'msg err';
     }
   });
 }
