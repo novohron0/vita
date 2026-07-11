@@ -5,6 +5,7 @@ FOCUS="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$FOCUS/.." && pwd)"
 
 "$FOCUS/sync-registry.sh"
+"$FOCUS/sync-icons.sh"
 
 SAFARI_RES="$REPO/focus/safari/Vita Focus/Shared (Extension)/Resources"
 if [ -d "$SAFARI_RES" ]; then

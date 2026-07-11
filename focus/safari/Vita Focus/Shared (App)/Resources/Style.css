@@ -6,51 +6,85 @@
 }
 
 :root {
-    color-scheme: light dark;
-    --bg: #000;
-    --text: #f4f4f7;
-    --sub: #8e8e93;
+    color-scheme: dark;
+    --glass-blur: 28px;
+    --glass-saturate: 1.65;
+    --glass-bg: rgba(14, 14, 18, 0.52);
+    --glass-bg-soft: rgba(255, 255, 255, 0.055);
+    --glass-border: rgba(255, 255, 255, 0.13);
+    --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.16), inset 0 -1px 0 rgba(0, 0, 0, 0.14);
+    --glass-shadow: 0 14px 48px rgba(0, 0, 0, 0.38);
+    --glass-shine: linear-gradient(148deg, rgba(255,255,255,.12) 0%, rgba(255,255,255,.02) 42%, rgba(255,255,255,0) 58%);
+    --body-base: #000;
+    --body-grad-a: rgba(0, 0, 0, 0.55);
+    --body-grad-b: rgba(0, 0, 0, 0.78);
+    --aurora-1: rgba(205, 208, 216, 0.11);
+    --aurora-2: rgba(150, 160, 185, 0.09);
+    --text: #f2f2f2;
+    --text-muted: #8e8e93;
     --accent: #34c759;
-    --card: rgba(255,255,255,0.06);
-    --border: rgba(255,255,255,0.12);
-    --ring: inset 0 0 0 1px rgba(255,255,255,0.1);
-    --elev-card: 0 1px 0 rgba(255,255,255,0.05);
-    --elev-btn: 0 8px 28px rgba(52,199,89,.22), inset 0 1px 0 rgba(255,255,255,.18);
-    --elev-tip: 0 12px 36px rgba(0,0,0,.35);
+    --accent-soft: #7fd4a3;
+    --primary-bg: rgba(255, 255, 255, 0.92);
+    --primary-text: #000;
+    --primary-inset: inset 0 1px 0 #fff;
+    --primary-glow: 0 8px 28px rgba(255, 255, 255, 0.1);
 }
 
-html { height: 100%; background: var(--bg); }
+html { height: 100%; background: var(--body-base); }
 
 body {
     margin: 0;
     min-height: 100%;
     padding: max(24px, env(safe-area-inset-top)) 20px max(28px, env(safe-area-inset-bottom));
-    background: var(--bg);
+    background: linear-gradient(var(--body-grad-a), var(--body-grad-b)), var(--body-base);
     color: var(--text);
     font: -apple-system-body;
     display: flex;
     align-items: center;
     justify-content: center;
+    position: relative;
+}
+
+body::before {
+    content: ""; position: fixed; inset: -25%; z-index: 0; pointer-events: none;
+    background:
+        radial-gradient(36% 30% at 20% 16%, var(--aurora-1), transparent 70%),
+        radial-gradient(32% 28% at 82% 80%, var(--aurora-2), transparent 70%);
+    filter: blur(34px);
 }
 
 .shell {
+    position: relative; z-index: 1;
     width: 100%;
     max-width: 360px;
     text-align: center;
 }
 
-.logo { border-radius: 22px; margin-bottom: 12px; box-shadow: 0 10px 32px rgba(0,0,0,.45); }
-
-h1 {
-    margin: 0 0 8px;
-    font-size: 28px;
-    font-weight: 700;
-    letter-spacing: -0.4px;
+.glass-head {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    margin-bottom: 18px; padding: 12px 14px;
+    border-radius: 16px;
+    background: var(--glass-bg);
+    background-image: var(--glass-shine);
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-inset), var(--glass-shadow);
 }
+
+.app-icon {
+    width: 32px; height: 32px; border-radius: 8px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+
+.brand {
+    font-size: 20px; font-weight: 700; letter-spacing: 0.3px;
+}
+.brand span { color: var(--text-muted); font-weight: 600; margin-left: 4px; }
 
 .lead {
     margin: 0 0 20px;
-    color: var(--sub);
+    color: var(--text-muted);
     font-size: 15px;
     line-height: 1.45;
 }
@@ -66,14 +100,17 @@ h1 {
 }
 
 .steps li {
-    background: var(--card);
-    border: 1px solid var(--border);
+    background: var(--glass-bg);
+    background-image: var(--glass-shine);
+    backdrop-filter: blur(18px) saturate(var(--glass-saturate));
+    -webkit-backdrop-filter: blur(18px) saturate(var(--glass-saturate));
+    border: 1px solid var(--glass-border);
     border-radius: 14px;
     padding: 12px 14px;
     font-size: 14px;
     line-height: 1.4;
     color: #d1d1d6;
-    box-shadow: var(--elev-card);
+    box-shadow: var(--glass-inset), var(--glass-shadow);
 }
 
 .steps b { color: var(--accent); font-weight: 700; }
@@ -82,40 +119,45 @@ button {
     display: block;
     width: 100%;
     border: 0;
-    border-radius: 14px;
-    padding: 14px 16px;
+    border-radius: 16px;
+    padding: 15px 16px;
     font: inherit;
     font-size: 16px;
     font-weight: 600;
     cursor: pointer;
     margin-bottom: 10px;
+    transition: transform .15s;
 }
+button:active { transform: scale(0.98); }
 
 button.primary {
-    background: var(--accent);
-    color: #fff;
-    box-shadow: var(--elev-btn);
+    background: var(--primary-bg);
+    color: var(--primary-text);
+    box-shadow: var(--primary-inset), var(--primary-glow);
 }
 
-button.ghost {
-    background: var(--card);
+button.secondary {
+    background: var(--glass-bg-soft);
     color: var(--text);
-    border: 1px solid var(--border);
-    box-shadow: var(--ring);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-inset);
 }
 
 .tip {
     margin-top: 18px;
     padding: 14px;
-    border-radius: 14px;
-    background: var(--card);
-    border: 1px solid var(--border);
+    border-radius: 16px;
     text-align: left;
-    box-shadow: var(--elev-tip);
+    background: var(--glass-bg);
+    background-image: var(--glass-shine);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-inset), var(--glass-shadow);
 }
 
 .tip b { display: block; font-size: 14px; margin-bottom: 6px; }
-.tip p { margin: 0; font-size: 13px; line-height: 1.45; color: var(--sub); }
+.tip p { margin: 0; font-size: 13px; line-height: 1.45; color: var(--text-muted); }
 
 body:not(.platform-mac, .platform-ios) :is(.platform-mac, .platform-ios) { display: none; }
 body.platform-ios .platform-mac { display: none; }
