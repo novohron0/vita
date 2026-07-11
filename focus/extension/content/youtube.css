@@ -1,1 +1,46 @@
-/* Основная логика — injected style из youtube.js (зависит от настроек). */
+/* Vita Focus — прячем «New videos right to you» сразу на document_start. */
+ytm-message-renderer,
+ytm-empty-state-renderer,
+ytm-zero-state-renderer,
+ytm-statement-banner-renderer,
+ytm-attention-grabber-view-model,
+ytm-info-panel-content-renderer,
+yt-alert-renderer,
+ytm-feed-nudge-renderer,
+ytd-feed-nudge-renderer,
+ytm-background-promo-renderer,
+ytd-background-promo-renderer,
+yt-empty-state-view-model,
+ytm-empty-state-view-model,
+ytm-browse .empty-state,
+ytm-browse [class*="empty-state"],
+ytm-browse [class*="feed-nudge"],
+[aria-label*="New videos right to you"],
+[aria-label*="новые видео"] {
+  display: none !important;
+  visibility: hidden !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  max-height: 0 !important;
+  overflow: hidden !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+ytm-browse #contents > ytm-rich-section-renderer:not(:has(ytm-video-with-context-renderer, ytm-compact-video-renderer, yt-lockup-view-model)),
+ytm-browse #contents > ytm-item-section-renderer:not(:has(ytm-video-with-context-renderer, ytm-compact-video-renderer, yt-lockup-view-model)),
+ytm-browse #contents > ytm-section-list-renderer:not(:has(ytm-video-with-context-renderer, ytm-compact-video-renderer, yt-lockup-view-model)),
+ytm-browse[page-subtype="subscriptions"] #contents > *:not(:has(ytm-video-with-context-renderer, ytm-compact-video-renderer, yt-lockup-view-model, a[href^="/watch"])):not(ytm-continuation-item-renderer):not([class*="continuation"]) {
+  display: none !important;
+  visibility: hidden !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  max-height: 0 !important;
+  overflow: hidden !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}

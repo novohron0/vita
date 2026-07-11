@@ -77,8 +77,13 @@ async function load() {
   apply();
 }
 
-chrome.runtime.onMessage.addListener(msg => {
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg?.type === 'vfocus:settings' || msg?.type === 'vfocus:dark') load();
+  if (msg?.type === 'vfocus:ping') {
+    let version = 'dev';
+    try { version = chrome.runtime.getManifest().version; } catch { /* noop */ }
+    sendResponse({ ok: true, version, site: 'any' });
+  }
 });
 
 if (document.readyState === 'loading') {

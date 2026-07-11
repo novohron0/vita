@@ -9,7 +9,6 @@
 /* Begin PBXBuildFile section */
 		4F807A703000D9E30043AC81 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F807A6F3000D9E30043AC81 /* AppDelegate.swift */; };
 		4F807A723000D9E30043AC81 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F807A713000D9E30043AC81 /* SceneDelegate.swift */; };
-		4F807AE9000D9E30043AC81 /* FocusDeepLinks+App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F807AEA000D9E30043AC81 /* FocusDeepLinks+App.swift */; };
 		4F807A753000D9E30043AC81 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 4F807A733000D9E30043AC81 /* LaunchScreen.storyboard */; };
 		4F807A783000D9E30043AC81 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 4F807A763000D9E30043AC81 /* Main.storyboard */; };
 		4F807A813000D9E30043AC81 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F807A803000D9E30043AC81 /* AppDelegate.swift */; };
@@ -42,13 +41,12 @@
 		4F807AC83000D9E30043AC81 /* shared in Resources */ = {isa = PBXBuildFile; fileRef = 4F807ABC3000D9E30043AC81 /* shared */; };
 		4F807AC93000D9E30043AC81 /* icons in Resources */ = {isa = PBXBuildFile; fileRef = 4F807ABD3000D9E30043AC81 /* icons */; };
 		4F807ACA3000D9E30043AC81 /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = 4F807ABE3000D9E30043AC81 /* manifest.json */; };
-
-		4F807AD3000D9E30043AC81 /* Vita Focus Widget.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 4F807AD2000D9E30043AC81 /* Vita Focus Widget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		4F807AE5000D9E30043AC81 /* FocusShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F807ADD000D9E30043AC81 /* FocusShared.swift */; };
 		4F807AE6000D9E30043AC81 /* FocusShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F807ADD000D9E30043AC81 /* FocusShared.swift */; };
 		4F807AE7000D9E30043AC81 /* FocusShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F807ADD000D9E30043AC81 /* FocusShared.swift */; };
 		4F807AE8000D9E30043AC81 /* VitaFocusWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F807ADE000D9E30043AC81 /* VitaFocusWidgets.swift */; };
-	/* End PBXBuildFile section */
+		4F807AE9000D9E30043AC81 /* FocusDeepLinks+App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F807AEA000D9E30043AC81 /* FocusDeepLinks+App.swift */; };
+/* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
 		4F807A8C3000D9E30043AC81 /* PBXContainerItemProxy */ = {
@@ -65,15 +63,7 @@
 			remoteGlobalIDString = 4F807A933000D9E30043AC81;
 			remoteInfo = "Vita Focus Extension (macOS)";
 		};
-
-		4F807AD4000D9E30043AC81 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 4F807A593000D9E10043AC81 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 4F807AD1000D9E30043AC81;
-			remoteInfo = "Vita Focus Widget (iOS)";
-		};
-	/* End PBXContainerItemProxy section */
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
 		4F807AAD3000D9E30043AC81 /* Embed Foundation Extensions */ = {
@@ -98,19 +88,7 @@
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-
-		4F807AD6000D9E30043AC81 /* Embed App Extensions */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 13;
-			files = (
-				4F807AD3000D9E30043AC81 /* Vita Focus Widget.appex in Embed App Extensions */,
-			);
-			name = "Embed App Extensions";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-	/* End PBXCopyFilesBuildPhase section */
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		4F807A603000D9E20043AC81 /* Base */ = {isa = PBXFileReference; lastKnownFileType = text.html; name = Base; path = Base.lproj/Main.html; sourceTree = "<group>"; };
@@ -123,7 +101,6 @@
 		4F807A6C3000D9E30043AC81 /* Vita Focus.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Vita Focus.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		4F807A6F3000D9E30043AC81 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		4F807A713000D9E30043AC81 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
-		4F807AEA000D9E30043AC81 /* FocusDeepLinks+App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FocusDeepLinks+App.swift"; sourceTree = "<group>"; };
 		4F807A743000D9E30043AC81 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		4F807A773000D9E30043AC81 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
 		4F807A793000D9E30043AC81 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -141,15 +118,15 @@
 		4F807ABC3000D9E30043AC81 /* shared */ = {isa = PBXFileReference; lastKnownFileType = folder; name = shared; path = Resources/shared; sourceTree = "<group>"; };
 		4F807ABD3000D9E30043AC81 /* icons */ = {isa = PBXFileReference; lastKnownFileType = folder; name = icons; path = Resources/icons; sourceTree = "<group>"; };
 		4F807ABE3000D9E30043AC81 /* manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = manifest.json; path = Resources/manifest.json; sourceTree = "<group>"; };
-
+		4F807AD2000D9E30043AC81 /* Vita Focus Widget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "Vita Focus Widget.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
 		4F807ADD000D9E30043AC81 /* FocusShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusShared.swift; sourceTree = "<group>"; };
 		4F807ADE000D9E30043AC81 /* VitaFocusWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VitaFocusWidgets.swift; sourceTree = "<group>"; };
 		4F807ADF000D9E30043AC81 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		4F807AE0000D9E30043AC81 /* VitaFocusWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = VitaFocusWidget.entitlements; sourceTree = "<group>"; };
 		4F807AE1000D9E30043AC81 /* VitaFocus.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = VitaFocus.entitlements; sourceTree = "<group>"; };
 		4F807AE2000D9E30043AC81 /* VitaFocusExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = VitaFocusExtension.entitlements; sourceTree = "<group>"; };
-		4F807AD2000D9E30043AC81 /* Vita Focus Widget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "Vita Focus Widget.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
-	/* End PBXFileReference section */
+		4F807AEA000D9E30043AC81 /* FocusDeepLinks+App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FocusDeepLinks+App.swift"; sourceTree = "<group>"; };
+/* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		4F807A693000D9E30043AC81 /* Frameworks */ = {
@@ -180,7 +157,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-
 		4F807AD8000D9E30043AC81 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -188,7 +164,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-	/* End PBXFrameworksBuildPhase section */
+/* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		4F807A583000D9E10043AC81 = {
@@ -303,7 +279,6 @@
 			path = "Shared (Extension)";
 			sourceTree = SOURCE_ROOT;
 		};
-
 		4F807AE3000D9E30043AC81 /* Shared */ = {
 			isa = PBXGroup;
 			children = (
@@ -322,7 +297,7 @@
 			path = "iOS (Widget)";
 			sourceTree = "<group>";
 		};
-	/* End PBXGroup section */
+/* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
 		4F807A6B3000D9E30043AC81 /* Vita Focus (iOS) */ = {
@@ -333,13 +308,11 @@
 				4F807A693000D9E30043AC81 /* Frameworks */,
 				4F807A6A3000D9E30043AC81 /* Resources */,
 				4F807AAD3000D9E30043AC81 /* Embed Foundation Extensions */,
-				4F807AD6000D9E30043AC81 /* Embed App Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 				4F807A8D3000D9E30043AC81 /* PBXTargetDependency */,
-				4F807AD5000D9E30043AC81 /* PBXTargetDependency */,
 			);
 			name = "Vita Focus (iOS)";
 			packageProductDependencies = (
@@ -407,7 +380,6 @@
 			productReference = 4F807A943000D9E30043AC81 /* Vita Focus Extension.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
-
 		4F807AD1000D9E30043AC81 /* Vita Focus Widget (iOS) */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 4F807ADA000D9E30043AC81 /* Build configuration list for PBXNativeTarget "Vita Focus Widget (iOS)" */;
@@ -425,7 +397,7 @@
 			productReference = 4F807AD2000D9E30043AC81 /* Vita Focus Widget.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
-	/* End PBXNativeTarget section */
+/* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
 		4F807A593000D9E10043AC81 /* Project object */ = {
@@ -529,7 +501,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-
 		4F807AD9000D9E30043AC81 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -537,7 +508,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-	/* End PBXResourcesBuildPhase section */
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		4F807A683000D9E30043AC81 /* Sources */ = {
@@ -570,20 +541,20 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		4F807A903000D9E30043AC81 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4F807AA73000D9E30043AC81 /* SafariWebExtensionHandler.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		4F807AD7000D9E30043AC81 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 				4F807AE8000D9E30043AC81 /* VitaFocusWidgets.swift in Sources */,
 				4F807AE7000D9E30043AC81 /* FocusShared.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		4F807A903000D9E30043AC81 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				4F807AA73000D9E30043AC81 /* SafariWebExtensionHandler.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -600,13 +571,7 @@
 			target = 4F807A933000D9E30043AC81 /* Vita Focus Extension (macOS) */;
 			targetProxy = 4F807A963000D9E30043AC81 /* PBXContainerItemProxy */;
 		};
-
-		4F807AD5000D9E30043AC81 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 4F807AD1000D9E30043AC81 /* Vita Focus Widget (iOS) */;
-			targetProxy = 4F807AD4000D9E30043AC81 /* PBXContainerItemProxy */;
-		};
-	/* End PBXTargetDependency section */
+/* End PBXTargetDependency section */
 
 /* Begin PBXVariantGroup section */
 		4F807A5F3000D9E20043AC81 /* Main.html */ = {
@@ -765,7 +730,6 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 655542C66J;
 				GENERATE_INFOPLIST_FILE = YES;
-				CODE_SIGN_ENTITLEMENTS = "iOS (Extension)/VitaFocusExtension.entitlements";
 				INFOPLIST_FILE = "iOS (Extension)/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Vita Focus Extension";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -800,7 +764,6 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 655542C66J;
 				GENERATE_INFOPLIST_FILE = YES;
-				CODE_SIGN_ENTITLEMENTS = "iOS (Extension)/VitaFocusExtension.entitlements";
 				INFOPLIST_FILE = "iOS (Extension)/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Vita Focus Extension";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -839,7 +802,6 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 655542C66J;
 				GENERATE_INFOPLIST_FILE = YES;
-				CODE_SIGN_ENTITLEMENTS = "iOS (App)/VitaFocus.entitlements";
 				INFOPLIST_FILE = "iOS (App)/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Vita Focus";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -861,7 +823,6 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = ru.vitadots.focus;
 				PRODUCT_NAME = "Vita Focus";
-				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -883,7 +844,6 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 655542C66J;
 				GENERATE_INFOPLIST_FILE = YES;
-				CODE_SIGN_ENTITLEMENTS = "iOS (App)/VitaFocus.entitlements";
 				INFOPLIST_FILE = "iOS (App)/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Vita Focus";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -905,7 +865,6 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = ru.vitadots.focus;
 				PRODUCT_NAME = "Vita Focus";
-				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -1070,11 +1029,10 @@
 			};
 			name = Release;
 		};
-
 		4F807ADB000D9E30043AC81 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = "iOS (Widget)/VitaFocusWidget.entitlements";
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 655542C66J;
@@ -1102,7 +1060,7 @@
 		4F807ADC000D9E30043AC81 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = "iOS (Widget)/VitaFocusWidget.entitlements";
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 655542C66J;
@@ -1128,7 +1086,7 @@
 			};
 			name = Release;
 		};
-	/* End XCBuildConfiguration section */
+/* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
 		4F807A5C3000D9E10043AC81 /* Build configuration list for PBXProject "Vita Focus" */ = {
@@ -1176,7 +1134,6 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-
 		4F807ADA000D9E30043AC81 /* Build configuration list for PBXNativeTarget "Vita Focus Widget (iOS)" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -1186,7 +1143,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-	/* End XCConfigurationList section */
+/* End XCConfigurationList section */
 	};
 	rootObject = 4F807A593000D9E10043AC81 /* Project object */;
 }

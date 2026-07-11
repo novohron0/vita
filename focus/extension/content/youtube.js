@@ -1,4 +1,82 @@
 /* Vita Focus — YouTube (desktop + mobile web). Селекторы с запасом. */
+const VITA_VERSION = (() => {
+  try { return chrome.runtime.getManifest().version; } catch { return 'dev'; }
+})();
+
+(function markAlive() {
+  // Диагностика: data-vita-focus на <html> + строка в консоли.
+  const mark = () => {
+    if (document.documentElement) document.documentElement.dataset.vitaFocus = VITA_VERSION;
+  };
+  mark();
+  document.addEventListener('DOMContentLoaded', mark, { once: true });
+  try { console.info(`[Vita Focus] youtube.js v${VITA_VERSION} — ${location.href}`); } catch { /* noop */ }
+})();
+
+(function killSubsSpamEarly() {
+  const PARACHUTE = /new videos right to you|новые видео/i;
+  const onSubs = () => /\/feed\/subscriptions/i.test(location.pathname)
+    || !!document.querySelector('ytm-browse[page-subtype="subscriptions"], ytm-pivot-bar-item-renderer[tab-selection="SUBSCRIPTIONS"]');
+
+  const VIDEO_SEL = 'ytm-video-with-context-renderer, ytm-compact-video-renderer, ytm-media-item-renderer, ytd-video-renderer, ytd-grid-video-renderer, yt-lockup-view-model, ytm-shorts-lockup-view-model';
+  const hasVideoIn = el => !!(el && (
+    (el.matches && el.matches(VIDEO_SEL))
+    || (el.querySelector && el.querySelector(`${VIDEO_SEL}, a[href^="/watch"], a[href*="/watch?"]`))
+  ));
+
+  const hideNode = el => {
+    if (!el || el.dataset?.vitaEarlyHidden) return;
+    el.dataset.vitaEarlyHidden = '1';
+    el.style.setProperty('display', 'none', 'important');
+    el.style.setProperty('height', '0', 'important');
+    el.style.setProperty('overflow', 'hidden', 'important');
+    el.style.setProperty('margin', '0', 'important');
+    el.style.setProperty('padding', '0', 'important');
+    el.style.setProperty('opacity', '0', 'important');
+  };
+
+  const sweep = () => {
+    if (!onSubs()) return;
+    document.querySelectorAll(
+      'ytm-message-renderer, ytm-empty-state-renderer, ytm-zero-state-renderer, ytm-attention-grabber-view-model, ytm-statement-banner-renderer, ytm-info-panel-content-renderer, yt-alert-renderer, ytm-feed-nudge-renderer, ytd-feed-nudge-renderer, ytm-background-promo-renderer, ytd-background-promo-renderer, yt-empty-state-view-model, ytm-empty-state-view-model'
+    ).forEach(hideNode);
+    // Структурно: на ленте подписок ребёнок без единого видео — пустое состояние
+    // или промо, каким бы тегом YouTube его ни нарисовал.
+    document.querySelectorAll('ytm-browse #contents > *, ytd-browse[page-subtype="subscriptions"] #contents > *').forEach(child => {
+      const tag = (child.tagName || '').toLowerCase();
+      if (/continuation|chip|header|spinner|ghost/.test(tag)) return;
+      if (hasVideoIn(child)) return;
+      const text = (child.textContent || '').replace(/\s+/g, ' ').trim();
+      if (PARACHUTE.test(text) || text.length < 220) hideNode(child);
+    });
+    const walker = document.createTreeWalker(document.documentElement, NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walker.nextNode())) {
+      const raw = (node.textContent || '').replace(/\s+/g, ' ').trim();
+      if (!PARACHUTE.test(raw)) continue;
+      // Поднимаемся до самого верхнего предка без видео — это и есть карточка-парашют.
+      let box = node.parentElement;
+      let candidate = null;
+      for (let i = 0; i < 20 && box; i++) {
+        const tag = (box.tagName || '').toLowerCase();
+        if (/^(ytm-browse|ytd-browse|body|html|main)$/.test(tag) || box.id === 'contents') break;
+        if (hasVideoIn(box)) break;
+        candidate = box;
+        box = box.parentElement;
+      }
+      if (candidate) hideNode(candidate);
+    }
+  };
+
+  const boot = () => {
+    sweep();
+    new MutationObserver(sweep).observe(document.documentElement, { childList: true, subtree: true });
+    setInterval(sweep, 400);
+  };
+  if (document.documentElement) boot();
+  else document.addEventListener('DOMContentLoaded', boot, { once: true });
+})();
+
 const RULES = {
   yt_shorts: `
     ytd-reel-shelf-renderer,
@@ -193,7 +271,19 @@ const DEFAULTS = {
   yt_upnext: false,
 };
 
-const IS_MOBILE_YT = /(^|\.)m\.youtube\.com$/i.test(location.hostname);
+const IS_MOBILE_HOST = /(^|\.)m\.youtube\.com$/i.test(location.hostname);
+
+function isMobileYt() {
+  if (IS_MOBILE_HOST) return true;
+  return !!document.querySelector('ytm-app, ytm-mobile-topbar-renderer, ytm-browse, ytm-pivot-bar-renderer');
+}
+
+function isSubsPage() {
+  if (/\/feed\/subscriptions/i.test(location.pathname)) return true;
+  return !!document.querySelector(
+    'ytm-pivot-bar-item-renderer[tab-selection="SUBSCRIPTIONS"], ytm-pivot-bar-renderer [tab-id="SUBSCRIPTIONS"][aria-selected="true"], ytm-browse[page-subtype="subscriptions"]'
+  );
+}
 
 const ROW_SEL = `
   ytm-video-with-context-renderer,
@@ -209,15 +299,35 @@ const THUMB_HIDE_SEL = `
   ytm-thumbnail-cover,
   ytm-media-item-thumbnail-renderer,
   ytm-thumbnail-view-model,
+  ytm-thumbnail-view-model-v2,
   ytm-compact-thumbnail,
   ytm-item-thumbnail-renderer,
   ytm-thumbnail-overlay-thumbnail-view-model,
+  yt-thumbnail-view-model,
+  yt-thumbnail-view-model-v2,
   ytd-thumbnail,
   a.media-item-thumbnail,
   .media-item-thumbnail-container,
   .compact-media-item-image,
   .ytm-thumbnail-cover,
-  .ytCoreImageHost
+  yt-image,
+  yt-img-shadow,
+  img.ytCoreImageHost
+`.trim().split(/\s*,\s*/).join(', ');
+
+const THUMB_BLUR_SEL = `
+  a.media-item-thumbnail,
+  .media-item-thumbnail-container,
+  .compact-media-item-image,
+  ytm-thumbnail-cover,
+  ytm-media-item-thumbnail-renderer,
+  ytm-thumbnail-view-model,
+  ytm-thumbnail-view-model-v2,
+  ytm-compact-thumbnail,
+  ytm-item-thumbnail-renderer,
+  ytd-thumbnail,
+  yt-thumbnail-view-model,
+  yt-thumbnail-view-model-v2
 `.trim().split(/\s*,\s*/).join(', ');
 
 const THUMB_SEL = `
@@ -330,13 +440,27 @@ const THUMB_CSS = `
   }
 `;
 
-const BLUR_CSS = `
-  ${THUMB_SEL.trim().split(/\s*,\s*/).join(', ')} img,
-  ${THUMB_SEL.trim().split(/\s*,\s*/).join(', ')} yt-image-shadow {
-    filter: grayscale(1) blur(10px) !important;
-    opacity: 0.35 !important;
+function scopedSel(scope, sel) {
+  return sel.trim().split(/\s*,\s*/).map(s => `${scope} ${s}`).join(', ');
+}
+
+function blurCssBlock() {
+  const scopes = ['ytm-browse', 'ytd-browse', 'ytm-search', 'ytd-search'];
+  const targets = scopes.map(s => scopedSel(s, THUMB_BLUR_SEL)).join(',\n');
+  const imgs = scopes.map(s => scopedSel(s, `${THUMB_BLUR_SEL}, img.ytCoreImageHost`)).join(',\n');
+  return `
+  ${targets} {
+    filter: grayscale(1) blur(12px) !important;
+    opacity: 0.4 !important;
+    transform: scale(1.02) !important;
   }
-`;
+  ${imgs} img,
+  ${imgs} yt-image {
+    filter: grayscale(1) blur(12px) !important;
+    opacity: 0.4 !important;
+  }
+  `;
+}
 
 const EMPTY_TEXT_RE = /new videos right to you|new videos from your subscriptions|subscribe to channels|try searching to get started|start watching videos|get started|подпишитесь|новые видео|нет новых|начните смотреть|на каналы/i;
 
@@ -360,6 +484,12 @@ const FEED_EMPTY_CSS = `
   ytm-zero-state-renderer,
   ytm-info-panel-content-renderer,
   ytm-empty-state-renderer,
+  ytm-feed-nudge-renderer,
+  ytd-feed-nudge-renderer,
+  ytm-background-promo-renderer,
+  ytd-background-promo-renderer,
+  yt-empty-state-view-model,
+  ytm-empty-state-view-model,
   ytm-browse .empty-state,
   ytm-browse [class*="empty-state"],
   [aria-label*="New videos right to you"],
@@ -394,7 +524,11 @@ const TEXT_ONLY_MOBILE_CSS = `
   ytm-browse ${ROW_SEL} a.media-item-thumbnail,
   ytm-browse ${ROW_SEL} .compact-media-item-image,
   ytm-browse ${ROW_SEL} ytm-thumbnail-cover,
-  ytm-browse ${ROW_SEL} ytm-media-item-thumbnail-renderer {
+  ytm-browse ${ROW_SEL} ytm-media-item-thumbnail-renderer,
+  ytm-browse ${ROW_SEL} ytm-thumbnail-view-model,
+  ytm-browse ${ROW_SEL} ytm-thumbnail-view-model-v2,
+  ytm-browse ${ROW_SEL} yt-image,
+  ytm-browse ${ROW_SEL} img.ytCoreImageHost {
     display: none !important;
     width: 0 !important;
     height: 0 !important;
@@ -429,7 +563,13 @@ const EMPTY_COMPONENT_SEL = `
   ytm-attention-grabber-view-model,
   ytm-zero-state-renderer,
   ytm-info-panel-content-renderer,
-  ytm-empty-state-renderer
+  ytm-empty-state-renderer,
+  ytm-feed-nudge-renderer,
+  ytd-feed-nudge-renderer,
+  ytm-background-promo-renderer,
+  ytd-background-promo-renderer,
+  yt-empty-state-view-model,
+  ytm-empty-state-view-model
 `.trim().split(/\s*,\s*/).join(', ');
 
 const EMPTY_CONTAINER_SEL = `
@@ -447,16 +587,26 @@ let styleEl = null;
 let tickTimer = null;
 let heavyTimer = null;
 
+function feedText(el) {
+  return (el?.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 320);
+}
+
+function isEmptyFeedSection(el) {
+  if (!el || hasFeedVideo(el)) return false;
+  return EMPTY_TEXT_RE.test(feedText(el));
+}
+
 function isOnFeedPage() {
   const path = location.pathname;
-  return path === '/' || path === '/feed' || path === '/feed/'
-    || path.includes('/feed/subscriptions');
+  return path === '/' || path === '/feed' || path === '/feed/' || isSubsPage();
 }
 
 function getBrowseRoots() {
-  return document.querySelectorAll(
+  const exact = document.querySelectorAll(
     'ytm-browse[page-subtype="home"], ytm-browse[page-subtype="subscriptions"], ytd-browse[page-subtype="home"], ytd-browse[page-subtype="subscriptions"]'
   );
+  if (exact.length) return exact;
+  return document.querySelectorAll('ytm-browse, ytd-browse');
 }
 
 function applyCss() {
@@ -476,13 +626,12 @@ function applyCss() {
   }
   if (settings.yt_thumbs) {
     blocks.push(THUMB_CSS);
-    if (IS_MOBILE_YT) blocks.push(TEXT_ONLY_MOBILE_CSS);
+    if (isMobileYt()) blocks.push(TEXT_ONLY_MOBILE_CSS);
   }
-  if (settings.yt_blur && !settings.yt_thumbs) blocks.push(BLUR_CSS);
-  if (settings.yt_recs) blocks.push(FEED_EMPTY_CSS);
-  if (IS_MOBILE_YT || document.querySelector('ytm-browse, ytm-app, ytm-mobile-topbar-renderer')) {
-    blocks.push(MOBILE_FEED_CSS);
-  }
+  if (settings.yt_blur && !settings.yt_thumbs) blocks.push(blurCssBlock());
+  if (settings.yt_recs || isSubsPage()) blocks.push(FEED_EMPTY_CSS);
+  const mobileFeed = isMobileYt() || document.querySelector('ytm-browse, ytm-app, ytm-mobile-topbar-renderer');
+  if (mobileFeed && !settings.yt_thumbs) blocks.push(MOBILE_FEED_CSS);
   styleEl.textContent = blocks.join('\n');
 }
 
@@ -586,15 +735,40 @@ function hideRelatedOnWatch() {
   });
 }
 
+function inPlayer(el) {
+  return !!el?.closest?.('ytm-player, #player, .html5-video-player, ytd-player, ytm-player-controls, .html5-video-container, #movie_player');
+}
+
+function clearThumbOverrides(root) {
+  queryDeep(root, '[data-vita-thumb-hidden], [data-vita-blur]').forEach(el => {
+    delete el.dataset.vitaThumbHidden;
+    delete el.dataset.vitaBlur;
+    el.style.removeProperty('display');
+    el.style.removeProperty('width');
+    el.style.removeProperty('height');
+    el.style.removeProperty('min-height');
+    el.style.removeProperty('margin');
+    el.style.removeProperty('padding');
+    el.style.removeProperty('overflow');
+    el.style.removeProperty('opacity');
+    el.style.removeProperty('pointer-events');
+    el.style.removeProperty('filter');
+    el.style.removeProperty('transform');
+  });
+}
+
 function applyBlurThumbnails() {
   if (!settings.yt_blur || settings.yt_thumbs) return;
   const roots = getBrowseRoots().length ? [...getBrowseRoots()] : [document];
   if (/\/watch/.test(location.pathname)) roots.push(document);
   roots.forEach(root => {
-    queryDeep(root, `${THUMB_HIDE_SEL}, img.ytCoreImageHost`).forEach(el => {
-      if (el.closest('ytm-player, #player, .html5-video-player, ytd-player, ytm-player-controls, .html5-video-container')) return;
-      el.style.setProperty('filter', 'grayscale(1) blur(10px)', 'important');
-      el.style.setProperty('opacity', '0.35', 'important');
+    queryDeep(root, `${THUMB_BLUR_SEL}, img.ytCoreImageHost`).forEach(el => {
+      if (inPlayer(el)) return;
+      if (el.dataset?.vitaBlur) return;
+      el.dataset.vitaBlur = '1';
+      el.style.setProperty('filter', 'grayscale(1) blur(12px)', 'important');
+      el.style.setProperty('opacity', '0.4', 'important');
+      el.style.setProperty('transform', 'scale(1.02)', 'important');
     });
   });
 }
@@ -607,12 +781,13 @@ function hideListThumbnails() {
   const scope = roots.length ? roots : [document];
   scope.forEach(root => {
     queryDeep(root, THUMB_HIDE_SEL).forEach(el => {
-      if (el.closest('ytm-player, #player, .html5-video-player, ytd-player, ytm-player-controls')) return;
+      if (inPlayer(el)) return;
       hideThumbEl(el);
     });
     root.querySelectorAll(ROW_SEL).forEach(row => {
-      if (row.closest('ytm-player, ytd-player, #player')) return;
+      if (inPlayer(row)) return;
       queryDeep(row, THUMB_HIDE_SEL).forEach(hideThumbEl);
+      row.querySelectorAll('a.media-item-thumbnail, .media-item-thumbnail-container, .compact-media-item-image').forEach(hideThumbEl);
     });
   });
 }
@@ -654,7 +829,7 @@ function findEmptyStateContainer(el) {
   for (let i = 0; i < 14 && node; i++) {
     const tag = (node.tagName || '').toLowerCase();
     if (/^(ytm-browse|ytd-browse|body|html)$/.test(tag)) break;
-    if (/^(ytm-item-section-renderer|ytd-item-section-renderer|ytm-section-list-renderer|ytd-section-list-renderer|ytm-rich-item-renderer|ytd-rich-item-renderer|ytm-message-renderer|yt-alert-renderer|ytd-message-renderer|ytd-alert-renderer|ytm-statement-banner-renderer|ytm-attention-grabber-view-model|ytm-zero-state-renderer)$/.test(tag)) {
+    if (/^(ytm-item-section-renderer|ytd-item-section-renderer|ytm-section-list-renderer|ytd-section-list-renderer|ytm-rich-item-renderer|ytd-rich-item-renderer|ytm-message-renderer|yt-alert-renderer|ytd-message-renderer|ytd-alert-renderer|ytm-statement-banner-renderer|ytm-attention-grabber-view-model|ytm-zero-state-renderer|ytm-rich-section-renderer|ytd-rich-section-renderer|ytm-feed-nudge-renderer|ytd-feed-nudge-renderer|ytm-background-promo-renderer|ytd-background-promo-renderer)$/.test(tag)) {
       best = node;
     }
     node = node.parentElement;
@@ -686,15 +861,59 @@ function collapseEmptyFeed() {
     const contents = browse.querySelector('#contents');
     if (!contents) return;
     contents.querySelectorAll(':scope > *').forEach(child => {
-      if (hasFeedVideo(child)) return;
-      const text = (child.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 280);
-      if (EMPTY_TEXT_RE.test(text)) hideEl(child);
+      if (isEmptyFeedSection(child)) hideEl(child);
+    });
+    queryDeep(contents, 'ytm-rich-section-renderer, ytm-item-section-renderer, ytm-section-list-renderer').forEach(sec => {
+      if (isEmptyFeedSection(sec)) hideEl(sec);
     });
   });
 }
 
+function hideDuplicateEmptyHeadings() {
+  getBrowseRoots().forEach(browse => {
+    queryDeep(browse, 'h1, h2, h3, h4, .title, [role="heading"]').forEach(el => {
+      const t = (el.textContent || '').replace(/\s+/g, ' ').trim();
+      if (!/^new videos right to you$/i.test(t)) return;
+      hideEl(findEmptyStateContainer(el));
+    });
+    const walker = document.createTreeWalker(browse, NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walker.nextNode())) {
+      const raw = (node.textContent || '').replace(/\s+/g, ' ').trim();
+      if (!/^new videos right to you$/i.test(raw)) continue;
+      hideEl(findEmptyStateContainer(node.parentElement));
+    }
+  });
+}
+
+function nukeSubsParachutes() {
+  if (!isSubsPage()) return;
+  getBrowseRoots().forEach(browse => {
+    browse.querySelectorAll('#contents > *').forEach(child => {
+      if (hasFeedVideo(child)) return;
+      if (isEmptyFeedSection(child) || child.querySelector(
+        'ytm-message-renderer, ytm-empty-state-renderer, ytm-zero-state-renderer, ytm-attention-grabber-view-model, ytm-statement-banner-renderer, ytm-feed-nudge-renderer, ytm-background-promo-renderer, yt-empty-state-view-model'
+      )) hideEl(child);
+    });
+    queryDeep(browse, 'ytm-rich-section-renderer, ytm-item-section-renderer, ytm-section-list-renderer').forEach(sec => {
+      if (hasFeedVideo(sec)) return;
+      if (isEmptyFeedSection(sec) || sec.querySelector(
+        'ytm-message-renderer, ytm-empty-state-renderer, ytm-zero-state-renderer, ytm-attention-grabber-view-model, ytm-feed-nudge-renderer, ytm-background-promo-renderer, yt-empty-state-view-model'
+      )) hideEl(sec);
+    });
+  });
+  hideDuplicateEmptyHeadings();
+}
+
 function hideFeedEmptyStates() {
-  if (!settings.yt_recs || !isOnFeedPage()) return;
+  const onSubs = isSubsPage();
+  if (!isOnFeedPage() && !onSubs) return;
+  if (!settings.yt_recs && !onSubs) return;
+
+  if (onSubs) {
+    nukeSubsParachutes();
+    return;
+  }
 
   const roots = getBrowseRoots();
   const scope = roots.length ? roots : [document];
@@ -713,6 +932,7 @@ function hideFeedEmptyStates() {
   });
 
   collapseEmptyFeed();
+  hideDuplicateEmptyHeadings();
 
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   let node;
@@ -738,9 +958,11 @@ function tickFast() {
 }
 
 function tickHeavy() {
+  if (!settings.yt_thumbs && !settings.yt_blur) clearThumbOverrides(document);
   hideListThumbnails();
   applyBlurThumbnails();
   hideRelatedOnWatch();
+  if (isSubsPage()) nukeSubsParachutes();
   hideFeedEmptyStates();
 }
 
@@ -782,8 +1004,11 @@ async function loadSettings() {
   settingsLoaded = true;
 }
 
-chrome.runtime.onMessage.addListener(msg => {
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg?.type === 'vfocus:settings') loadSettings();
+  if (msg?.type === 'vfocus:ping') {
+    sendResponse({ ok: true, version: VITA_VERSION, site: 'youtube' });
+  }
 });
 
 const obs = new MutationObserver(mutations => {

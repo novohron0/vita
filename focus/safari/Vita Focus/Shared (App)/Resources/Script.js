@@ -27,5 +27,4 @@ function post(action) {
 
 document.querySelector(".open-preferences")?.addEventListener("click", () => post("open-preferences"));
 document.querySelector(".open-youtube")?.addEventListener("click", () => post("open-youtube"));
-document.querySelector(".open-youtube-subs")?.addEventListener("click", () => post("open-youtube-subs"));
 document.querySelector(".open-settings")?.addEventListener("click", () => post("open-settings"));

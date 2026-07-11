@@ -35,13 +35,10 @@ html { height: 100%; background: var(--body-base); }
 body {
     margin: 0;
     min-height: 100%;
-    padding: max(24px, env(safe-area-inset-top)) 20px max(28px, env(safe-area-inset-bottom));
+    padding: max(20px, env(safe-area-inset-top)) 20px max(28px, env(safe-area-inset-bottom));
     background: linear-gradient(var(--body-grad-a), var(--body-grad-b)), var(--body-base);
     color: var(--text);
     font: -apple-system-body;
-    display: flex;
-    align-items: center;
-    justify-content: center;
     position: relative;
 }
 
@@ -57,12 +54,13 @@ body::before {
     position: relative; z-index: 1;
     width: 100%;
     max-width: 360px;
-    text-align: center;
+    margin: 0 auto;
+    text-align: left;
 }
 
 .glass-head {
     display: flex; align-items: center; justify-content: center; gap: 10px;
-    margin-bottom: 18px; padding: 12px 14px;
+    margin-bottom: 16px; padding: 12px 14px;
     border-radius: 16px;
     background: var(--glass-bg);
     background-image: var(--glass-shine);
@@ -83,49 +81,177 @@ body::before {
 .brand span { color: var(--text-muted); font-weight: 600; margin-left: 4px; }
 
 .lead {
-    margin: 0 0 20px;
+    margin: 0 0 18px;
     color: var(--text-muted);
     font-size: 15px;
     line-height: 1.45;
+    text-align: center;
 }
 
-.steps {
-    list-style: none;
-    margin: 0 0 20px;
-    padding: 0;
-    text-align: left;
+.flow {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 12px;
+    margin-bottom: 16px;
 }
 
-.steps li {
+.step-card {
     background: var(--glass-bg);
     background-image: var(--glass-shine);
     backdrop-filter: blur(18px) saturate(var(--glass-saturate));
     -webkit-backdrop-filter: blur(18px) saturate(var(--glass-saturate));
     border: 1px solid var(--glass-border);
-    border-radius: 14px;
-    padding: 12px 14px;
-    font-size: 14px;
-    line-height: 1.4;
-    color: #d1d1d6;
+    border-radius: 16px;
+    padding: 14px 14px 12px;
     box-shadow: var(--glass-inset), var(--glass-shadow);
 }
 
-.steps b { color: var(--accent); font-weight: 700; }
+.step-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.step-num {
+    flex: none;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-size: 14px;
+    font-weight: 700;
+    color: #000;
+    background: var(--accent);
+}
+
+.step-title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.step-text {
+    margin: 0 0 12px;
+    font-size: 14px;
+    line-height: 1.45;
+    color: #d1d1d6;
+}
+
+.step-text b { color: var(--text); font-weight: 600; }
+
+.step-hint {
+    margin: 10px 0 0;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--text-muted);
+}
+
+.guide-steps {
+    list-style: none;
+    margin: 0 0 14px;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.guide-steps li p {
+    margin: 8px 0 0;
+    font-size: 13px;
+    line-height: 1.45;
+    color: #d1d1d6;
+}
+
+.guide-steps li p b { color: var(--text); }
+
+.guide-shot {
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,.12);
+    background: rgba(0,0,0,.35);
+}
+
+.shot-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 10px;
+    background: rgba(255,255,255,.06);
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.shot-url { font-weight: 600; color: #c7c7cc; }
+.shot-puzzle, .shot-share { font-weight: 700; color: var(--text); }
+
+.shot-body {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 10px;
+}
+
+.shot-chip {
+    font-size: 11px;
+    padding: 5px 8px;
+    border-radius: 999px;
+    background: rgba(255,255,255,.08);
+    color: #aeaeb2;
+}
+
+.shot-chip.on {
+    background: rgba(52,199,89,.22);
+    color: #7fd4a3;
+}
+
+.shot-share-list {
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.shot-share-list span:first-child {
+    color: var(--text);
+    font-weight: 600;
+    font-size: 12px;
+}
+
+.shot-share-list span:last-child {
+    color: var(--text-muted);
+    font-size: 11px;
+}
+
+.step-card button {
+    margin-bottom: 0;
+}
+
+.foot-note {
+    margin: 0;
+    padding: 12px 14px;
+    border-radius: 14px;
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--text-muted);
+    text-align: center;
+    background: var(--glass-bg-soft);
+    border: 1px solid var(--glass-border);
+}
+
+.foot-note b { color: var(--text); }
 
 button {
     display: block;
     width: 100%;
     border: 0;
-    border-radius: 16px;
-    padding: 15px 16px;
+    border-radius: 14px;
+    padding: 14px 16px;
     font: inherit;
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 600;
     cursor: pointer;
-    margin-bottom: 10px;
     transition: transform .15s;
 }
 button:active { transform: scale(0.98); }
@@ -143,25 +269,19 @@ button.secondary {
     box-shadow: var(--glass-inset);
 }
 
-.tip {
-    margin-top: 18px;
-    padding: 14px;
-    border-radius: 16px;
-    text-align: left;
-    background: var(--glass-bg);
-    background-image: var(--glass-shine);
-    backdrop-filter: blur(18px);
-    -webkit-backdrop-filter: blur(18px);
-    border: 1px solid var(--glass-border);
-    box-shadow: var(--glass-inset), var(--glass-shadow);
-}
-
-.tip b { display: block; font-size: 14px; margin-bottom: 6px; }
-.tip p { margin: 0; font-size: 13px; line-height: 1.45; color: var(--text-muted); }
-
 body:not(.platform-mac, .platform-ios) :is(.platform-mac, .platform-ios) { display: none; }
 body.platform-ios .platform-mac { display: none; }
 body.platform-mac .platform-ios { display: none; }
 body:not(.state-on, .state-off) :is(.state-on, .state-off) { display: none; }
 body.state-on :is(.state-off, .state-unknown) { display: none; }
 body.state-off :is(.state-on, .state-unknown) { display: none; }
+
+body.platform-mac {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100%;
+}
+
+body.platform-mac .shell { text-align: center; }
+body.platform-mac .open-preferences { margin-top: 8px; }

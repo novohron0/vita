@@ -14,26 +14,50 @@
             <div class="brand">⠿ vita <span>Focus</span></div>
         </header>
 
-        <p class="lead platform-ios">Настрой один раз — открывай YouTube чистым, как своё приложение.</p>
+        <p class="lead platform-ios">Два шага — потом YouTube в Safari как своё приложение.</p>
         <p class="lead platform-mac state-unknown">Включи расширение в Safari — и ленты перестанут отвлекать.</p>
         <p class="lead platform-mac state-on">Расширение включено. Можно открывать сайты в Safari.</p>
         <p class="lead platform-mac state-off">Расширение выключено. Включи его в настройках Safari.</p>
 
-        <ol class="steps platform-ios">
-            <li><b>1.</b> Настройки → Safari → Расширения → <b>Vita Focus</b> → вкл.</li>
-            <li><b>2.</b> Настрой блоки в popup расширения на youtube.com</li>
-            <li><b>3.</b> Жми кнопку ниже — откроется YouTube в Safari с твоими правилами</li>
-            <li><b>4.</b> Добавь <b>виджет Vita Focus</b> на экран «Домой» — быстрый запуск и статус блоков</li>
-        </ol>
+        <div class="flow platform-ios">
+            <section class="step-card">
+                <div class="step-head">
+                    <span class="step-num">1</span>
+                    <h2 class="step-title">Включи расширение</h2>
+                </div>
+                <p class="step-text">Кнопка откроет <b>Safari → Расширения</b>. Включи <b>Vita Focus</b> и «Разрешить на всех сайтах».</p>
+                <button type="button" class="primary open-settings">Safari → Расширения</button>
+                <p class="step-hint">Если открылись просто Настройки: <b>Приложения → Safari → Расширения</b>.<br>Или прямо в Safari: <b>⋯&nbsp;/&nbsp;АА в адресной строке → Управлять расширениями</b>.</p>
+            </section>
 
-        <button type="button" class="primary platform-ios open-youtube">Открыть YouTube</button>
-        <button type="button" class="secondary platform-ios open-youtube-subs">Режим «Приложение»</button>
-        <button type="button" class="secondary platform-ios open-settings">Safari → Расширения</button>
+            <section class="step-card">
+                <div class="step-head">
+                    <span class="step-num">2</span>
+                    <h2 class="step-title">YouTube + блоки + на «Домой»</h2>
+                </div>
 
-        <div class="tip platform-ios">
-            <b>На экран «Домой»</b>
-            <p>Держи иконку <b>Vita Focus</b> на домашнем экране — это твой «чистый YouTube». Не добавляй youtube.com отдельно: без Safari расширение не работает.</p>
+                <ol class="guide-steps">
+                    <li>
+                        <div class="guide-shot" aria-hidden="true">
+                            <div class="shot-bar"><span class="shot-url">youtube.com</span><span class="shot-puzzle">🧩</span></div>
+                            <div class="shot-body"><span class="shot-chip on">Shorts</span><span class="shot-chip">Только текст</span></div>
+                        </div>
+                        <p>Нажми <b>🧩</b> в Safari → <b>Vita Focus</b> → включи блоки (Shorts, превью…).</p>
+                    </li>
+                    <li>
+                        <div class="guide-shot" aria-hidden="true">
+                            <div class="shot-bar"><span class="shot-share">Поделиться ↗</span></div>
+                            <div class="shot-body shot-share-list"><span>На экран «Домой»</span><span>Закладки</span></div>
+                        </div>
+                        <p>Нажми <b>Поделиться ↗</b> → <b>На экран «Домой»</b> — получишь свой «чистый YouTube».</p>
+                    </li>
+                </ol>
+
+                <button type="button" class="primary open-youtube">YouTube в Safari</button>
+            </section>
         </div>
+
+        <p class="foot-note platform-ios">Открывай YouTube через иконку на «Домой» или кнопку выше — расширение работает только в Safari.</p>
 
         <button type="button" class="primary platform-mac open-preferences">Открыть настройки Safari…</button>
     </div>

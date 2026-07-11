@@ -4,8 +4,8 @@ import {
   exportBundle, importBundle, getDarkMode, setDarkMode,
 } from '../shared/storage.js';
 import {
-  siteFromUrl, featuredSites, siteCount, splitGroups,
-  appendGroupCard, moveTabIndicator, el,
+  siteFromUrl, featuredSites, siteCount,
+  appendGroupCard, moveTabIndicator,
 } from './ui.js';
 
 const REGISTRY_URL = chrome.runtime.getURL('shared/registry.json');
@@ -13,7 +13,6 @@ const $ = s => document.querySelector(s);
 
 let sites = [];
 let presets = [];
-let mainPresets = [];
 let uiMeta = {};
 let featured = [];
 let restSites = [];
@@ -21,6 +20,7 @@ let active = 'youtube';
 let settings = {};
 let pinEnabled = false;
 let tabUrl = '';
+let tabId = null;
 let pinResolve = null;
 let statusTimer = null;
 let registryCache = null;
@@ -45,16 +45,8 @@ async function saveTheme(mode) {
   applyTheme(mode);
 }
 
-function setStatus(text, kind = 'idle') {
-  const pill = $('#statusPill');
-  pill.textContent = text;
-  pill.classList.remove('on', 'busy');
-  if (kind === 'on') pill.classList.add('on');
-  if (kind === 'busy') pill.classList.add('busy');
+function setStatus(_text, _kind = 'idle') {
   clearTimeout(statusTimer);
-  if (kind === 'on') {
-    statusTimer = setTimeout(() => setStatus('Готово · изменения на странице', 'idle'), 2200);
-  }
 }
 
 async function pushApply() {
@@ -120,9 +112,6 @@ async function init() {
   presets = (data.presets || []).filter(p =>
     (uiMeta.settingsPresetIds || []).includes(p.id)
   );
-  mainPresets = (data.presets || []).filter(p =>
-    (uiMeta.mainPresetIds || uiMeta.settingsPresetIds?.slice(0, 3) || []).includes(p.id)
-  );
   ({ featured, rest: restSites } = featuredSites(sites, uiMeta));
 
   const [settingsData, , , , , activeSiteStored] = await Promise.all([
@@ -143,24 +132,44 @@ async function init() {
   buildTabs();
   buildSiteList();
   buildPresets();
-  buildMainPresets();
   refreshSiteHead();
   refreshMaster();
   renderRows();
   bindAll();
+  refreshPageStatus();
   requestAnimationFrame(() => moveTabIndicator($('#tabs'), active));
-  setStatus(tabUrl ? 'На этой странице · переключайте блоки' : 'Готово', 'idle');
 }
 
 async function loadTabContext() {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     tabUrl = tab?.url || '';
+    tabId = tab?.id ?? null;
     const hit = siteFromUrl(tabUrl, sites);
     if (hit) active = hit.id;
   } catch {
     tabUrl = '';
+    tabId = null;
   }
+}
+
+async function refreshPageStatus() {
+  const el = $('#pageStatus');
+  if (!el) return;
+  if (tabId == null || !/^https?:/i.test(tabUrl)) {
+    el.hidden = true;
+    return;
+  }
+  try {
+    const res = await chrome.tabs.sendMessage(tabId, { type: 'vfocus:ping' });
+    if (!res?.ok) throw new Error('no-pong');
+    el.textContent = `Работает на этой вкладке · v${res.version || '?'}`;
+    el.className = 'page-status ok';
+  } catch {
+    el.textContent = 'На этой вкладке не активен — обнови страницу';
+    el.className = 'page-status off';
+  }
+  el.hidden = false;
 }
 
 function showMain() {
@@ -343,19 +352,9 @@ function renderRows() {
   box.innerHTML = '';
   if (!site) return;
 
-  const { primary, advanced } = splitGroups(site, uiMeta);
-  const useFilters = site.id === 'youtube';
-
-  primary.forEach(g => appendGroupCard(box, g, settings, useFilters));
-
-  if (advanced.length) {
-    const details = el('details', 'adv');
-    details.innerHTML = '<summary>Ещё настройки</summary>';
-    advanced.forEach(g => appendGroupCard(details, g, settings, useFilters));
-    box.appendChild(details);
-  } else if (site.toggles.length && !primary.length) {
-    appendGroupCard(box, { label: null, toggles: site.toggles }, settings, useFilters);
-  }
+  const mainToggles = site.toggles.filter(t => (t.group || 'main') === 'main');
+  const toggles = mainToggles.length ? mainToggles : site.toggles;
+  appendGroupCard(box, { label: null, toggles }, settings, false);
 }
 
 async function toggleId(id, on) {
@@ -367,20 +366,6 @@ async function toggleId(id, on) {
   }
   if (on && id === 'yt_thumbs') settings = await setSetting('yt_blur', false);
   if (on && id === 'yt_blur') settings = await setSetting('yt_thumbs', false);
-}
-
-function buildMainPresets() {
-  const nav = $('#mainPresets');
-  if (!nav) return;
-  nav.innerHTML = '';
-  mainPresets.forEach(p => {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'preset';
-    b.textContent = `${p.glyph || ''} ${p.name}`.trim();
-    b.addEventListener('click', () => applyPreset(p));
-    nav.appendChild(b);
-  });
 }
 
 function buildPresets() {

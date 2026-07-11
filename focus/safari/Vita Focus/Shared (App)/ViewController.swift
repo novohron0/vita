@@ -28,7 +28,8 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         self.webView.navigationDelegate = self
 
 #if os(iOS)
-        self.webView.scrollView.isScrollEnabled = false
+        self.webView.scrollView.isScrollEnabled = true
+        self.webView.scrollView.alwaysBounceVertical = true
 #endif
 
         self.webView.configuration.userContentController.add(self, name: "controller")
@@ -62,18 +63,15 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
 #if os(iOS)
         guard let body = message.body as? String else { return }
-        if body == "open-youtube" || body == "open-youtube-subs" {
+        if body == "open-youtube" {
             FocusDeepLinks.openURL(FocusDeepLinks.youtubeSubs)
             return
         }
         if body == "open-settings" {
-            if let url = URL(string: UIApplication.openSettingsURLString) {
-                UIApplication.shared.open(url)
-            }
+            openSafariExtensionSettings()
             return
         }
-#endif
-#if os(macOS)
+#elseif os(macOS)
         if (message.body as! String != "open-preferences") {
             return
         }
@@ -89,5 +87,60 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         }
 #endif
     }
+
+#if os(iOS)
+    private func openSafariExtensionSettings() {
+        let deepLinks = [
+            "settings-navigation://com.apple.Settings.Apps/com.apple.mobilesafari/WEB_EXTENSIONS",
+            "settings-navigation://com.apple.Settings.Apps/com.apple.mobilesafari/Extensions",
+            "App-Prefs:com.apple.mobilesafari/WEB_EXTENSIONS",
+            "App-Prefs:com.apple.mobilesafari/Extensions",
+            "App-Prefs:com.apple.mobilesafari&path=WEB_EXTENSIONS",
+            "App-Prefs:com.apple.mobilesafari&path=Extensions",
+            "prefs:root=SAFARI&path=WEB_EXTENSIONS",
+            "prefs:root=SAFARI&path=Extensions",
+            "App-Prefs:root=SAFARI&path=WEB_EXTENSIONS",
+        ]
+        tryOpenSettingsURLs(deepLinks) { opened in
+            if opened { return }
+            self.tryOpenSettingsURLs(["App-Prefs:com.apple.mobilesafari"]) { _ in
+                self.showExtensionsHint()
+            }
+        }
+    }
+
+    private func showExtensionsHint() {
+        let alert = UIAlertController(
+            title: "Где включить расширение",
+            message: "Настройки → Приложения → Safari → Расширения → Vita Focus → ВКЛ + «Разрешить на всех сайтах».\n\nИли прямо в Safari: кнопка ⋯ (или «АА») в адресной строке → «Управлять расширениями».",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
+    }
+
+    private func tryOpenSettingsURLs(_ urls: [String], done: ((Bool) -> Void)? = nil) {
+        tryOpenSettingsURLs(urls, index: 0, done: done)
+    }
+
+    private func tryOpenSettingsURLs(_ urls: [String], index: Int, done: ((Bool) -> Void)?) {
+        guard index < urls.count else {
+            done?(false)
+            return
+        }
+        let next = urls[index]
+        guard let url = URL(string: next) else {
+            tryOpenSettingsURLs(urls, index: index + 1, done: done)
+            return
+        }
+        UIApplication.shared.open(url, options: [:]) { ok in
+            if ok {
+                done?(true)
+            } else {
+                self.tryOpenSettingsURLs(urls, index: index + 1, done: done)
+            }
+        }
+    }
+#endif
 
 }

@@ -1,9 +1,9 @@
 {
-  "version": 12,
+  "version": 13,
   "ui": {
-    "featuredSiteIds": ["youtube", "facebook", "x", "instagram", "reddit", "linkedin", "gmail", "tiktok", "telegram", "vk"],
+    "featuredSiteIds": ["youtube", "instagram", "gmail", "telegram", "vk"],
     "settingsPresetIds": ["app", "work", "youtube", "social", "ru", "shop", "streams", "off"],
-    "mainPresetIds": ["app", "youtube", "work"],
+    "mainPresetIds": [],
     "advancedGroups": ["extra", "watch", "feed", "visual", "filter"],
     "groupLabels": {
       "main": null,

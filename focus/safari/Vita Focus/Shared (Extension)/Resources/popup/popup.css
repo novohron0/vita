@@ -407,3 +407,16 @@ button.wide { width: 100%; }
   .status-pill.on { transform: none; }
   .preset:active, .btn-row button:active { transform: none; }
 }
+
+.page-status {
+  font-size: 11px; margin-top: 6px; padding: 3px 0 0;
+  color: var(--text-muted); display: flex; align-items: center; gap: 6px;
+}
+.page-status::before {
+  content: ''; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--text-muted); flex: none;
+}
+.page-status.ok { color: var(--accent); }
+.page-status.ok::before { background: var(--accent); }
+.page-status.off { color: #e08a3c; }
+.page-status.off::before { background: #e08a3c; }
