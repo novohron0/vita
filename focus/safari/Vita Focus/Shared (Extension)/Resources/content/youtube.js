@@ -19,14 +19,13 @@ const RULES = {
   yt_recs: `
     ytd-browse[page-subtype="home"] ytd-rich-grid-renderer,
     ytd-browse[page-subtype="home"] #contents ytd-rich-item-renderer,
-    ytm-browse[page-subtype="home"] ytm-rich-item-renderer,
     ytm-browse[page-subtype="home"] .rich-grid-renderer-contents,
     ytm-browse[page-subtype="home"] ytm-rich-grid-renderer,
     ytm-browse[page-subtype="home"] ytm-video-with-context-renderer,
     ytd-browse[page-subtype="subscriptions"] ytd-shelf-renderer,
     ytd-browse[page-subtype="subscriptions"] ytd-rich-item-renderer[is-slim-media],
-    ytm-item-section-renderer[section-identifier="feed"] ytm-rich-item-renderer,
-    ytm-item-section-renderer[section-identifier="feed"] ytm-video-with-context-renderer
+    ytm-browse[page-subtype="subscriptions"] ytm-rich-shelf-renderer,
+    ytm-browse[page-subtype="subscriptions"] ytm-item-section-renderer[is-shelf]
   `,
   yt_shelf: `
     ytd-rich-shelf-renderer,
