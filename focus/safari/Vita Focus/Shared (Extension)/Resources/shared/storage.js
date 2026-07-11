@@ -1,17 +1,41 @@
 const DEFAULT_DARK = { enabled: false, brightness: 100, contrast: 95, sepia: 8 };
 
+/** Safari iOS: sync ненадёжен между popup и content script — local первичен. */
+async function readStore(keys) {
+  const list = Array.isArray(keys) ? keys : [keys];
+  const local = await chrome.storage.local.get(list);
+  const needSync = list.filter(k => local[k] === undefined);
+  if (!needSync.length) return local;
+  try {
+    const sync = await chrome.storage.sync.get(needSync);
+    return { ...sync, ...local };
+  } catch {
+    return local;
+  }
+}
+
+async function writeStore(patch) {
+  const payload = { ...patch };
+  if (patch.settings || patch.schedule || patch.pending || patch.darkMode || patch.cooldownHours != null) {
+    payload.settingsRev = patch.settingsRev ?? Date.now();
+  }
+  await chrome.storage.local.set(payload);
+  try { await chrome.storage.sync.set(payload); } catch { /* Safari sync optional */ }
+  return payload.settingsRev;
+}
+
 export async function getDarkMode() {
-  const data = await chrome.storage.sync.get('darkMode');
+  const data = await readStore('darkMode');
   return { ...DEFAULT_DARK, ...(data.darkMode || {}) };
 }
 
 export async function setDarkMode(patch) {
   const darkMode = { ...(await getDarkMode()), ...patch };
-  await chrome.storage.sync.set({ darkMode });
+  await writeStore({ darkMode });
   return darkMode;
 }
 
-/** Vita Focus — настройки в browser.storage.sync (Safari / Chrome). */
+/** Vita Focus — настройки (local + sync mirror). */
 const DEFAULT_SETTINGS = {
   yt_shorts: true,
   yt_recs: true,
@@ -41,49 +65,44 @@ const DEFAULT_SETTINGS = {
 const DEFAULT_SCHEDULE = { enabled: false, start: 9, end: 22 };
 
 export async function getSettings() {
-  const data = await chrome.storage.sync.get(['settings', 'migration_v290']);
+  const data = await readStore(['settings', 'migration_v290']);
   let settings = { ...DEFAULT_SETTINGS, ...(data.settings || {}) };
 
-  // Редирект «Главная → Подписки» был в пресетах, но скрыт из popup — выключаем раз.
   if (!data.migration_v290) {
     if (settings.yt_home_subs) {
       settings = { ...settings, yt_home_subs: false };
-      await chrome.storage.sync.set({
-        settings,
-        settingsRev: Date.now(),
-        migration_v290: true,
-      });
+      await writeStore({ settings, migration_v290: true });
     } else {
-      await chrome.storage.sync.set({ migration_v290: true });
+      await writeStore({ migration_v290: true });
     }
   }
   return settings;
 }
 
 export async function getSchedule() {
-  const data = await chrome.storage.sync.get('schedule');
+  const data = await readStore('schedule');
   return { ...DEFAULT_SCHEDULE, ...(data.schedule || {}) };
 }
 
 export async function setSchedule(patch) {
   const schedule = { ...(await getSchedule()), ...patch };
-  await chrome.storage.sync.set({ schedule, settingsRev: Date.now() });
+  await writeStore({ schedule });
   return schedule;
 }
 
 export async function getCooldownHours() {
-  const data = await chrome.storage.sync.get('cooldownHours');
+  const data = await readStore('cooldownHours');
   return data.cooldownHours ?? 0;
 }
 
 export async function setCooldownHours(h) {
   const hours = Math.max(0, Math.min(48, Number(h) || 0));
-  await chrome.storage.sync.set({ cooldownHours: hours });
+  await writeStore({ cooldownHours: hours });
   return hours;
 }
 
 async function getPending() {
-  const data = await chrome.storage.sync.get('pending');
+  const data = await readStore('pending');
   return data.pending || {};
 }
 
@@ -107,7 +126,7 @@ function applyPending(settings, pending) {
       changed = true;
     }
   }
-  if (changed) chrome.storage.sync.set({ pending: nextPending });
+  if (changed) writeStore({ pending: nextPending });
   return out;
 }
 
@@ -132,24 +151,24 @@ export async function setSetting(id, on) {
     const hours = await getCooldownHours();
     if (hours > 0) {
       pending[id] = Date.now() + hours * 3600000;
-      await chrome.storage.sync.set({ pending, settingsRev: Date.now() });
+      await writeStore({ pending });
       return settings;
     }
   }
 
   if (on && pending[id]) {
     delete pending[id];
-    await chrome.storage.sync.set({ pending });
+    await writeStore({ pending });
   }
 
   settings[id] = !!on;
-  await chrome.storage.sync.set({ settings, settingsRev: Date.now() });
+  await writeStore({ settings });
   return settings;
 }
 
 export async function setSettings(patch) {
   const settings = { ...(await getSettings()), ...patch };
-  await chrome.storage.sync.set({ settings, settingsRev: Date.now() });
+  await writeStore({ settings });
   return settings;
 }
 
@@ -168,20 +187,20 @@ async function hashPin(pin) {
 }
 
 export async function getPinState() {
-  const d = await chrome.storage.sync.get(['pinHash', 'pinEnabled']);
+  const d = await readStore(['pinHash', 'pinEnabled']);
   return { hash: d.pinHash || '', enabled: !!d.pinEnabled };
 }
 
 export async function setPin(pin) {
   if (!pin || pin.length < 4) throw new Error('short');
   const pinHash = await hashPin(pin);
-  await chrome.storage.sync.set({ pinHash, pinEnabled: true });
+  await writeStore({ pinHash, pinEnabled: true });
 }
 
 export async function clearPin(currentPin) {
   const ok = await verifyPin(currentPin);
   if (!ok) throw new Error('bad');
-  await chrome.storage.sync.set({ pinHash: '', pinEnabled: false });
+  await writeStore({ pinHash: '', pinEnabled: false });
 }
 
 export async function verifyPin(pin) {
@@ -191,7 +210,7 @@ export async function verifyPin(pin) {
 }
 
 export async function exportBundle() {
-  const data = await chrome.storage.sync.get(['settings', 'schedule', 'cooldownHours', 'activeSite', 'darkMode', 'uiTheme']);
+  const data = await readStore(['settings', 'schedule', 'cooldownHours', 'activeSite', 'darkMode', 'uiTheme']);
   return JSON.stringify({ v: 1, exportedAt: new Date().toISOString(), ...data }, null, 2);
 }
 
@@ -204,7 +223,6 @@ export async function importBundle(raw) {
   if (data.activeSite) patch.activeSite = data.activeSite;
   if (data.darkMode) patch.darkMode = data.darkMode;
   if (data.uiTheme) patch.uiTheme = data.uiTheme;
-  patch.settingsRev = Date.now();
-  await chrome.storage.sync.set(patch);
+  await writeStore(patch);
   return getEffectiveSettings();
 }

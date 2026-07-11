@@ -126,6 +126,18 @@ async function init() {
   $('#ver').textContent = 'v' + chrome.runtime.getManifest().version;
   loadTheme();
 
+  // Одноразово: перенос sync → local (Safari iOS не шлёт sync в content script).
+  try {
+    const { vfocusLocalMigrated } = await chrome.storage.local.get('vfocusLocalMigrated');
+    if (!vfocusLocalMigrated) {
+      const sync = await chrome.storage.sync.get(null);
+      if (sync && Object.keys(sync).length) {
+        await chrome.storage.local.set({ ...sync, settingsRev: Date.now() });
+      }
+      await chrome.storage.local.set({ vfocusLocalMigrated: true });
+    }
+  } catch { /* ignore */ }
+
   const data = await loadRegistry();
   sites = data.sites;
   uiMeta = data.ui || {};
@@ -184,10 +196,16 @@ async function refreshPageStatus() {
   try {
     const res = await chrome.tabs.sendMessage(tabId, { type: 'vfocus:ping' });
     if (!res?.ok) throw new Error('no-pong');
+    const onYoutube = /youtube\.com/i.test(tabUrl);
+    if (onYoutube && res.site !== 'youtube') {
+      throw new Error('youtube-script-missing');
+    }
     el.textContent = `Работает на этой вкладке · v${res.version || '?'}`;
     el.className = 'page-status ok';
   } catch {
-    el.textContent = 'На этой вкладке не активен — обнови страницу';
+    el.textContent = /youtube\.com/i.test(tabUrl)
+      ? 'YouTube-скрипт не загрузился — обнови страницу (pull-to-refresh)'
+      : 'На этой вкладке не активен — обнови страницу';
     el.className = 'page-status off';
   }
   el.hidden = false;

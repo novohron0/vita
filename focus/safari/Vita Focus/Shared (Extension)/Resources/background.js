@@ -1,6 +1,27 @@
-import { getEffectiveSettings, getDarkMode, getSchedule } from './shared/storage.js';
-
+/* Classic service worker — без ES modules (Safari iOS ломает type:module). */
 const NATIVE_APP = 'ru.vitadots.focus';
+
+const DEFAULT_SETTINGS = {
+  yt_shorts: true, yt_recs: true, yt_comments: false, yt_related: false,
+  yt_autoplay: false, yt_thumbs: false, yt_blur: false, yt_endscreen: false,
+  yt_notifications: false, yt_search: false, yt_livechat: false, yt_home_subs: false,
+  yt_shelf: false, yt_chips: false, yt_mix: false, yt_keywords: false, yt_kw: '',
+  yt_channels: false, yt_ch: '', yt_explore: false, yt_theater: false,
+  yt_watch_clean: false, yt_upnext: false,
+};
+
+async function readStore(keys) {
+  const list = Array.isArray(keys) ? keys : [keys];
+  const local = await chrome.storage.local.get(list);
+  const needSync = list.filter(k => local[k] === undefined);
+  if (!needSync.length) return local;
+  try {
+    const sync = await chrome.storage.sync.get(needSync);
+    return { ...sync, ...local };
+  } catch {
+    return local;
+  }
+}
 
 function inScheduleWindow(schedule) {
   const h = new Date().getHours();
@@ -10,11 +31,36 @@ function inScheduleWindow(schedule) {
   return h >= start || h < end;
 }
 
+async function getEffectiveSettingsBg() {
+  const data = await readStore(['settings', 'schedule', 'pending']);
+  let settings = { ...DEFAULT_SETTINGS, ...(data.settings || {}) };
+  const pending = data.pending || {};
+  const now = Date.now();
+  for (const [id, until] of Object.entries(pending)) {
+    if (until <= now) settings[id] = false;
+  }
+  const schedule = { enabled: false, start: 9, end: 22, ...(data.schedule || {}) };
+  if (schedule.enabled && !inScheduleWindow(schedule)) {
+    settings = Object.fromEntries(Object.keys(settings).map(k => [k, false]));
+  }
+  return settings;
+}
+
+async function getDarkModeBg() {
+  const data = await readStore('darkMode');
+  return { enabled: false, brightness: 100, contrast: 95, sepia: 8, ...(data.darkMode || {}) };
+}
+
+async function getScheduleBg() {
+  const data = await readStore('schedule');
+  return { enabled: false, start: 9, end: 22, ...(data.schedule || {}) };
+}
+
 async function buildWidgetSnapshot() {
   const [settings, schedule, meta] = await Promise.all([
-    getEffectiveSettings(),
-    getSchedule(),
-    chrome.storage.sync.get(['activeSite']),
+    getEffectiveSettingsBg(),
+    getScheduleBg(),
+    readStore('activeSite'),
   ]);
   const blocksOn = Object.entries(settings).filter(([k, v]) => {
     if (!v) return false;
@@ -42,10 +88,19 @@ async function pushWidgetSnapshot() {
   } catch { /* no native host */ }
 }
 
-chrome.runtime.onInstalled.addListener(async () => {
-  const cur = await chrome.storage.sync.get(['settings', 'schedule']);
-  if (!cur.settings) await chrome.storage.sync.set({ settings: {} });
-  if (!cur.schedule) await chrome.storage.sync.set({ schedule: { enabled: false, start: 9, end: 22 } });
+async function ensureDefaults() {
+  const cur = await readStore(['settings', 'schedule']);
+  const patch = {};
+  if (!cur.settings) patch.settings = {};
+  if (!cur.schedule) patch.schedule = { enabled: false, start: 9, end: 22 };
+  if (Object.keys(patch).length) {
+    await chrome.storage.local.set(patch);
+    try { await chrome.storage.sync.set(patch); } catch { /* noop */ }
+  }
+}
+
+chrome.runtime.onInstalled.addListener(() => {
+  ensureDefaults();
   pushWidgetSnapshot();
 });
 
@@ -70,21 +125,24 @@ async function broadcastAll(activeFirst = false) {
   }
 }
 
-chrome.storage.onChanged.addListener((changes, area) => {
-  if (area !== 'sync') return;
-  if (changes.settings || changes.schedule || changes.pending || changes.cooldownHours || changes.darkMode) {
+function storageChanged(changes) {
+  if (changes.settings || changes.settingsRev || changes.schedule || changes.pending || changes.cooldownHours || changes.darkMode) {
     broadcastAll(true);
     pushWidgetSnapshot();
   }
+}
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' || area === 'sync') storageChanged(changes);
 });
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg?.type === 'vfocus:get') {
-    getEffectiveSettings().then(sendResponse);
+    getEffectiveSettingsBg().then(sendResponse);
     return true;
   }
   if (msg?.type === 'vfocus:dark') {
-    getDarkMode().then(sendResponse);
+    getDarkModeBg().then(sendResponse);
     return true;
   }
   if (msg?.type === 'vfocus:broadcast') {

@@ -4,6 +4,18 @@ const DEFAULTS = { enabled: false, brightness: 100, contrast: 95, sepia: 8 };
 
 let cfg = { ...DEFAULTS };
 let styleEl = null;
+let lastDarkRev = 0;
+
+async function readDarkCfg() {
+  const local = await chrome.storage.local.get(['darkMode', 'settingsRev']);
+  if (local.darkMode) return local;
+  try {
+    const sync = await chrome.storage.sync.get('darkMode');
+    return { ...sync, ...local };
+  } catch {
+    return local;
+  }
+}
 
 function pageFilter() {
   const parts = ['invert(1)', 'hue-rotate(180deg)'];
@@ -69,8 +81,13 @@ function apply() {
 
 async function load() {
   try {
-    const res = await chrome.runtime.sendMessage({ type: 'vfocus:dark' });
-    if (res) cfg = { ...DEFAULTS, ...res };
+    const data = await readDarkCfg();
+    if (data.settingsRev) lastDarkRev = data.settingsRev;
+    if (data.darkMode) cfg = { ...DEFAULTS, ...data.darkMode };
+    else {
+      const res = await chrome.runtime.sendMessage({ type: 'vfocus:dark' });
+      if (res) cfg = { ...DEFAULTS, ...res };
+    }
   } catch {
     cfg = { ...DEFAULTS };
   }
@@ -80,11 +97,20 @@ async function load() {
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg?.type === 'vfocus:settings' || msg?.type === 'vfocus:dark') load();
   if (msg?.type === 'vfocus:ping') {
+    if (/youtube\.com/i.test(location.hostname)) return;
     let version = 'dev';
     try { version = chrome.runtime.getManifest().version; } catch { /* noop */ }
     sendResponse({ ok: true, version, site: 'any' });
+    return true;
   }
 });
+
+try {
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'local' && area !== 'sync') return;
+    if (changes.darkMode || changes.settingsRev) load();
+  });
+} catch { /* noop */ }
 
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', load, { once: true });
@@ -92,3 +118,13 @@ if (document.readyState === 'loading') {
   load();
 }
 load();
+setInterval(async () => {
+  try {
+    const local = await chrome.storage.local.get('settingsRev');
+    const rev = local.settingsRev;
+    if (rev && rev !== lastDarkRev) {
+      lastDarkRev = rev;
+      load();
+    }
+  } catch { /* noop */ }
+}, 500);

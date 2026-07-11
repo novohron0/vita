@@ -1005,8 +1005,22 @@ function inScheduleWindowCS(schedule) {
 
 // Читаем storage напрямую: background-воркер в iOS Safari часто мёртв,
 // и через vfocus:get настройки просто не доезжают до страницы.
+// Safari iOS: local storage — единственный надёжный канал popup → content script.
+async function vfocusReadStore(keys) {
+  const list = Array.isArray(keys) ? keys : [keys];
+  const local = await chrome.storage.local.get(list);
+  const needSync = list.filter(k => local[k] === undefined);
+  if (!needSync.length) return local;
+  try {
+    const sync = await chrome.storage.sync.get(needSync);
+    return { ...sync, ...local };
+  } catch {
+    return local;
+  }
+}
+
 async function readSettingsDirect() {
-  const data = await chrome.storage.sync.get(['settings', 'schedule', 'pending', 'settingsRev']);
+  const data = await vfocusReadStore(['settings', 'schedule', 'pending', 'settingsRev']);
   if (data.settingsRev) lastSettingsRev = data.settingsRev;
   const raw = { ...DEFAULTS, ...(data.settings || {}) };
   const pending = data.pending || {};
@@ -1044,7 +1058,7 @@ async function loadSettings() {
 
 try {
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area !== 'sync') return;
+    if (area !== 'local' && area !== 'sync') return;
     if (changes.settings || changes.settingsRev || changes.schedule || changes.pending || changes.cooldownHours) loadSettings();
   });
 } catch { /* нет chrome.storage — останется поллинг */ }
@@ -1079,14 +1093,14 @@ let pollTick = 0;
 setInterval(async () => {
   pollTick++;
   try {
-    const { settingsRev } = await chrome.storage.sync.get('settingsRev');
-    if (settingsRev && settingsRev !== lastSettingsRev) {
-      lastSettingsRev = settingsRev;
+    const local = await chrome.storage.local.get('settingsRev');
+    const rev = local.settingsRev || (await chrome.storage.sync.get('settingsRev')).settingsRev;
+    if (rev && rev !== lastSettingsRev) {
+      lastSettingsRev = rev;
       loadSettings();
       return;
     }
   } catch { /* ignore */ }
-  // Fallback: iOS Safari иногда не шлёт onChanged
   if (pollTick % 8 === 0) loadSettings();
 }, 250);
 document.addEventListener('visibilitychange', () => {
