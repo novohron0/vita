@@ -42,8 +42,8 @@ enum FocusSnapshotStore {
     }
 
     static func save(_ snap: FocusSnapshot) {
-        guard let data = try? JSONEncoder().encode(snap) else { return }
-        defaults?.set(data, forKey: key)
+        guard let defaults = defaults, let data = try? JSONEncoder().encode(snap) else { return }
+        defaults.set(data, forKey: key)
     }
 
     static func save(from dict: [String: Any]) {
