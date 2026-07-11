@@ -13,6 +13,10 @@
     --accent: #34c759;
     --card: rgba(255,255,255,0.06);
     --border: rgba(255,255,255,0.12);
+    --ring: inset 0 0 0 1px rgba(255,255,255,0.1);
+    --elev-card: 0 1px 0 rgba(255,255,255,0.05);
+    --elev-btn: 0 8px 28px rgba(52,199,89,.22), inset 0 1px 0 rgba(255,255,255,.18);
+    --elev-tip: 0 12px 36px rgba(0,0,0,.35);
 }
 
 html { height: 100%; background: var(--bg); }
@@ -35,7 +39,7 @@ body {
     text-align: center;
 }
 
-.logo { border-radius: 22px; margin-bottom: 12px; }
+.logo { border-radius: 22px; margin-bottom: 12px; box-shadow: 0 10px 32px rgba(0,0,0,.45); }
 
 h1 {
     margin: 0 0 8px;
@@ -69,6 +73,7 @@ h1 {
     font-size: 14px;
     line-height: 1.4;
     color: #d1d1d6;
+    box-shadow: var(--elev-card);
 }
 
 .steps b { color: var(--accent); font-weight: 700; }
@@ -89,12 +94,14 @@ button {
 button.primary {
     background: var(--accent);
     color: #fff;
+    box-shadow: var(--elev-btn);
 }
 
 button.ghost {
     background: var(--card);
     color: var(--text);
     border: 1px solid var(--border);
+    box-shadow: var(--ring);
 }
 
 .tip {
@@ -104,6 +111,7 @@ button.ghost {
     background: var(--card);
     border: 1px solid var(--border);
     text-align: left;
+    box-shadow: var(--elev-tip);
 }
 
 .tip b { display: block; font-size: 14px; margin-bottom: 6px; }

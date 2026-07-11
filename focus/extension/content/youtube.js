@@ -263,6 +263,15 @@ const THUMB_CSS = `
     min-height: 0 !important;
     margin: 0 !important;
     padding: 0 !important;
+    box-shadow: none !important;
+    filter: none !important;
+  }
+  ytm-thumbnail-cover yt-image-shadow,
+  ytm-media-item-thumbnail-renderer yt-image-shadow,
+  ytd-thumbnail yt-image-shadow {
+    display: none !important;
+    box-shadow: none !important;
+    filter: none !important;
   }
   ytd-rich-item-renderer #video-title,
   ytd-video-renderer #video-title,
