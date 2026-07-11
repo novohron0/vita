@@ -2,60 +2,116 @@
     -webkit-user-select: none;
     -webkit-user-drag: none;
     cursor: default;
+    box-sizing: border-box;
 }
 
 :root {
     color-scheme: light dark;
-
-    --spacing: 20px;
+    --bg: #000;
+    --text: #f4f4f7;
+    --sub: #8e8e93;
+    --accent: #34c759;
+    --card: rgba(255,255,255,0.06);
+    --border: rgba(255,255,255,0.12);
 }
 
-html {
-    height: 100%;
-}
+html { height: 100%; background: var(--bg); }
 
 body {
+    margin: 0;
+    min-height: 100%;
+    padding: max(24px, env(safe-area-inset-top)) 20px max(28px, env(safe-area-inset-bottom));
+    background: var(--bg);
+    color: var(--text);
+    font: -apple-system-body;
     display: flex;
     align-items: center;
     justify-content: center;
-    flex-direction: column;
+}
 
-    gap: var(--spacing);
-    margin: 0 calc(var(--spacing) * 2);
-    height: 100%;
-
-    font: -apple-system-short-body;
+.shell {
+    width: 100%;
+    max-width: 360px;
     text-align: center;
 }
 
-body:not(.platform-mac, .platform-ios) :is(.platform-mac, .platform-ios) {
-    display: none;
+.logo { border-radius: 22px; margin-bottom: 12px; }
+
+h1 {
+    margin: 0 0 8px;
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.4px;
 }
 
-body.platform-ios .platform-mac {
-    display: none;
+.lead {
+    margin: 0 0 20px;
+    color: var(--sub);
+    font-size: 15px;
+    line-height: 1.45;
 }
 
-body.platform-mac .platform-ios {
-    display: none;
+.steps {
+    list-style: none;
+    margin: 0 0 20px;
+    padding: 0;
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
 }
 
-body.platform-ios .platform-mac {
-    display: none;
+.steps li {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 12px 14px;
+    font-size: 14px;
+    line-height: 1.4;
+    color: #d1d1d6;
 }
 
-body:not(.state-on, .state-off) :is(.state-on, .state-off) {
-    display: none;
-}
-
-body.state-on :is(.state-off, .state-unknown) {
-    display: none;
-}
-
-body.state-off :is(.state-on, .state-unknown) {
-    display: none;
-}
+.steps b { color: var(--accent); font-weight: 700; }
 
 button {
-    font-size: 1em;
+    display: block;
+    width: 100%;
+    border: 0;
+    border-radius: 14px;
+    padding: 14px 16px;
+    font: inherit;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-bottom: 10px;
 }
+
+button.primary {
+    background: var(--accent);
+    color: #fff;
+}
+
+button.ghost {
+    background: var(--card);
+    color: var(--text);
+    border: 1px solid var(--border);
+}
+
+.tip {
+    margin-top: 18px;
+    padding: 14px;
+    border-radius: 14px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    text-align: left;
+}
+
+.tip b { display: block; font-size: 14px; margin-bottom: 6px; }
+.tip p { margin: 0; font-size: 13px; line-height: 1.45; color: var(--sub); }
+
+body:not(.platform-mac, .platform-ios) :is(.platform-mac, .platform-ios) { display: none; }
+body.platform-ios .platform-mac { display: none; }
+body.platform-mac .platform-ios { display: none; }
+body:not(.state-on, .state-off) :is(.state-on, .state-off) { display: none; }
+body.state-on :is(.state-off, .state-unknown) { display: none; }
+body.state-off :is(.state-on, .state-unknown) { display: none; }

@@ -2,10 +2,14 @@ function show(platform, enabled, useSettingsInsteadOfPreferences) {
     document.body.classList.add(`platform-${platform}`);
 
     if (useSettingsInsteadOfPreferences) {
-        document.getElementsByClassName('platform-mac state-on')[0].innerText = "Vita Focus’s extension is currently on. You can turn it off in the Extensions section of Safari Settings.";
-        document.getElementsByClassName('platform-mac state-off')[0].innerText = "Vita Focus’s extension is currently off. You can turn it on in the Extensions section of Safari Settings.";
-        document.getElementsByClassName('platform-mac state-unknown')[0].innerText = "You can turn on Vita Focus’s extension in the Extensions section of Safari Settings.";
-        document.getElementsByClassName('platform-mac open-preferences')[0].innerText = "Quit and Open Safari Settings…";
+        document.querySelector('.platform-mac.state-on').innerText =
+            "Расширение включено. Можно открывать сайты в Safari.";
+        document.querySelector('.platform-mac.state-off').innerText =
+            "Расширение выключено. Включи его в настройках Safari.";
+        document.querySelector('.platform-mac.state-unknown').innerText =
+            "Включи расширение в Safari — и ленты перестанут отвлекать.";
+        document.querySelector('.platform-mac.open-preferences').innerText =
+            "Открыть настройки Safari…";
     }
 
     if (typeof enabled === "boolean") {
@@ -17,8 +21,10 @@ function show(platform, enabled, useSettingsInsteadOfPreferences) {
     }
 }
 
-function openPreferences() {
-    webkit.messageHandlers.controller.postMessage("open-preferences");
+function post(action) {
+    webkit.messageHandlers.controller.postMessage(action);
 }
 
-document.querySelector("button.open-preferences").addEventListener("click", openPreferences);
+document.querySelector(".open-preferences")?.addEventListener("click", () => post("open-preferences"));
+document.querySelector(".open-youtube")?.addEventListener("click", () => post("open-youtube"));
+document.querySelector(".open-settings")?.addEventListener("click", () => post("open-settings"));

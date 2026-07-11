@@ -60,6 +60,21 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
     }
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+#if os(iOS)
+        guard let body = message.body as? String else { return }
+        if body == "open-youtube" {
+            if let url = URL(string: "https://m.youtube.com/feed/subscriptions") {
+                UIApplication.shared.open(url)
+            }
+            return
+        }
+        if body == "open-settings" {
+            if let url = URL(string: UIApplication.openSettingsURLString) {
+                UIApplication.shared.open(url)
+            }
+            return
+        }
+#endif
 #if os(macOS)
         if (message.body as! String != "open-preferences") {
             return
@@ -67,7 +82,6 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
 
         SFSafariApplication.showPreferencesForExtension(withIdentifier: extensionBundleIdentifier) { error in
             guard error == nil else {
-                // Insert code to inform the user that something went wrong.
                 return
             }
 

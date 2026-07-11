@@ -1,20 +1,36 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'">
-
-    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover">
     <link rel="stylesheet" href="../Style.css">
     <script src="../Script.js" defer></script>
 </head>
 <body>
-    <img src="../Icon.png" width="128" height="128" alt="Vita Focus Icon">
-    <p class="platform-ios">You can turn on Vita Focus’s Safari extension in Settings.</p>
-    <p class="platform-mac state-unknown">You can turn on Vita Focus’s extension in Safari Extensions preferences.</p>
-    <p class="platform-mac state-on">Vita Focus’s extension is currently on. You can turn it off in Safari Extensions preferences.</p>
-    <p class="platform-mac state-off">Vita Focus’s extension is currently off. You can turn it on in Safari Extensions preferences.</p>
-    <button class="platform-mac open-preferences">Quit and Open Safari Extensions Preferences…</button>
+    <div class="shell">
+        <img src="../Icon.png" width="96" height="96" alt="Vita Focus" class="logo">
+        <h1>Vita Focus</h1>
+        <p class="lead platform-ios">Настрой один раз — открывай YouTube чистым, как своё приложение.</p>
+        <p class="lead platform-mac state-unknown">Включи расширение в Safari — и ленты перестанут отвлекать.</p>
+        <p class="lead platform-mac state-on">Расширение включено. Можно открывать сайты в Safari.</p>
+        <p class="lead platform-mac state-off">Расширение выключено. Включи его в настройках Safari.</p>
+
+        <ol class="steps platform-ios">
+            <li><b>1.</b> Настройки → Safari → Расширения → <b>Vita Focus</b> → вкл.</li>
+            <li><b>2.</b> Настрой блоки в popup расширения на youtube.com</li>
+            <li><b>3.</b> Жми кнопку ниже — откроется YouTube в Safari с твоими правилами</li>
+        </ol>
+
+        <button type="button" class="primary platform-ios open-youtube">▶ Открыть YouTube</button>
+        <button type="button" class="ghost platform-ios open-settings">⚙ Safari → Расширения</button>
+
+        <div class="tip platform-ios">
+            <b>На экран «Домой»</b>
+            <p>Держи иконку <b>Vita Focus</b> на домашнем экране — это твой «чистый YouTube». Не добавляй youtube.com отдельно: без Safari расширение не работает.</p>
+        </div>
+
+        <button type="button" class="primary platform-mac open-preferences">Открыть настройки Safari…</button>
+    </div>
 </body>
 </html>
