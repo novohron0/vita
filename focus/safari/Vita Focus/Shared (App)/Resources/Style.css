@@ -149,6 +149,17 @@ body::before {
     color: var(--text-muted);
 }
 
+.step-warn {
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    font-size: 13px;
+    line-height: 1.4;
+    background: rgba(255, 159, 10, 0.15);
+    color: #ffb340;
+    border: 1px solid rgba(255, 159, 10, 0.25);
+}
+
 .guide-steps {
     list-style: none;
     margin: 0 0 14px;
