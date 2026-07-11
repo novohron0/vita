@@ -62,16 +62,8 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
 #if os(iOS)
         guard let body = message.body as? String else { return }
-        if body == "open-youtube" {
-            if let url = URL(string: "https://m.youtube.com/feed/subscriptions") {
-                UIApplication.shared.open(url)
-            }
-            return
-        }
-        if body == "open-youtube-subs" {
-            if let url = URL(string: "https://m.youtube.com/feed/subscriptions") {
-                UIApplication.shared.open(url)
-            }
+        if body == "open-youtube" || body == "open-youtube-subs" {
+            FocusDeepLinks.openURL(FocusDeepLinks.youtubeSubs)
             return
         }
         if body == "open-settings" {

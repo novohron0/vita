@@ -16,6 +16,13 @@ done
 sips -z 56 56 "$SRC" --out "$EXT/popup/icon.png" >/dev/null
 cp "$SRC" "$SAFARI_APP/Resources/Icon.png"
 
+LARGE="$SAFARI_APP/Assets.xcassets/LargeIcon.imageset"
+if [ -d "$LARGE" ]; then
+  sips -z 128 128 "$SRC" --out "$LARGE/icon128.png" >/dev/null
+  sips -z 256 256 "$SRC" --out "$LARGE/icon256.png" >/dev/null
+  sips -z 384 384 "$SRC" --out "$LARGE/icon384.png" >/dev/null
+fi
+
 if [ -d "$ASSET" ]; then
   sips -z 1024 1024 "$SRC" --out "$ASSET/universal-icon-1024@1x.png" >/dev/null
   sips -z 16 16 "$SRC" --out "$ASSET/mac-icon-16@1x.png" >/dev/null

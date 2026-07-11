@@ -365,6 +365,8 @@ async function toggleId(id, on) {
   } else {
     settings = await setSetting(id, on);
   }
+  if (on && id === 'yt_thumbs') settings = await setSetting('yt_blur', false);
+  if (on && id === 'yt_blur') settings = await setSetting('yt_thumbs', false);
 }
 
 function buildMainPresets() {

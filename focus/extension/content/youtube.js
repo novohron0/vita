@@ -87,12 +87,20 @@ const RULES = {
     ytm-item-section-renderer[section-identifier="related-items"],
     ytm-item-section-renderer[section-identifier="watch-next"],
     ytm-watch ytm-compact-video-renderer,
+    ytm-watch ytm-video-with-context-renderer,
+    ytm-watch ytm-rich-item-renderer,
     ytm-watch #related,
     ytm-watch ytm-item-section-renderer[section-identifier="related-items"],
     ytm-watch ytm-item-section-renderer[section-identifier="watch-next"],
+    ytm-watch ytm-rich-section-renderer,
+    ytm-watch ytm-item-section-renderer[is-shelf],
+    ytm-browse ytm-rich-section-renderer[is-shelf],
     .related-chips-slot-wrapper,
     ytd-compact-radio-renderer,
-    ytm-compact-radio-renderer
+    ytm-compact-radio-renderer,
+    ytm-structured-description-content-renderer ~ ytm-item-section-renderer,
+    ytm-watch #items ytm-compact-video-renderer,
+    ytm-watch #items ytm-video-with-context-renderer
   `,
   yt_endscreen: `
     .ytp-ce-element,
@@ -552,6 +560,45 @@ function hideChannelVideos() {
   );
 }
 
+function hideRelatedOnWatch() {
+  if (!settings.yt_related) return;
+  if (!/\/watch/.test(location.pathname)) return;
+
+  const hideSel = `
+    ytm-watch ytm-compact-video-renderer,
+    ytm-watch ytm-video-with-context-renderer,
+    ytm-watch ytm-rich-item-renderer,
+    ytm-watch ytm-rich-section-renderer,
+    ytm-single-column-watch-next-results-renderer,
+    ytm-watch-next-secondary-results-renderer,
+    ytm-item-section-renderer[section-identifier="related-items"],
+    ytm-item-section-renderer[section-identifier="watch-next"]
+  `.trim().split(/\s*,\s*/).join(', ');
+
+  document.querySelectorAll(hideSel).forEach(el => {
+    if (el.closest('ytm-comments-entry-point, ytm-comment-section-renderer, #comments')) return;
+    el.style.setProperty('display', 'none', 'important');
+  });
+
+  queryDeep(document.querySelector('ytm-watch, ytd-watch-flexy') || document, hideSel).forEach(el => {
+    if (el.closest('ytm-comments-entry-point, ytm-comment-section-renderer, #comments')) return;
+    el.style.setProperty('display', 'none', 'important');
+  });
+}
+
+function applyBlurThumbnails() {
+  if (!settings.yt_blur || settings.yt_thumbs) return;
+  const roots = getBrowseRoots().length ? [...getBrowseRoots()] : [document];
+  if (/\/watch/.test(location.pathname)) roots.push(document);
+  roots.forEach(root => {
+    queryDeep(root, `${THUMB_HIDE_SEL}, img.ytCoreImageHost`).forEach(el => {
+      if (el.closest('ytm-player, #player, .html5-video-player, ytd-player, ytm-player-controls, .html5-video-container')) return;
+      el.style.setProperty('filter', 'grayscale(1) blur(10px)', 'important');
+      el.style.setProperty('opacity', '0.35', 'important');
+    });
+  });
+}
+
 function hideListThumbnails() {
   if (!settings.yt_thumbs) return;
   if (/\/watch/.test(location.pathname)) return;
@@ -692,6 +739,8 @@ function tickFast() {
 
 function tickHeavy() {
   hideListThumbnails();
+  applyBlurThumbnails();
+  hideRelatedOnWatch();
   hideFeedEmptyStates();
 }
 
@@ -742,7 +791,7 @@ const obs = new MutationObserver(mutations => {
   const added = mutations.some(m => m.addedNodes.length);
   if (!anyActive() && !added) return;
   scheduleTick();
-  if (added && (settings.yt_recs || settings.yt_thumbs)) scheduleHeavy();
+  if (added && (settings.yt_recs || settings.yt_thumbs || settings.yt_blur || settings.yt_related)) scheduleHeavy();
 });
 function watch() {
   tick();
