@@ -6,13 +6,13 @@
 //
 
 import WebKit
+import SafariServices
 
 #if os(iOS)
 import UIKit
 typealias PlatformViewController = UIViewController
 #elseif os(macOS)
 import Cocoa
-import SafariServices
 typealias PlatformViewController = NSViewController
 #endif
 
@@ -37,9 +37,16 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         self.webView.loadFileURL(Bundle.main.url(forResource: "Main", withExtension: "html")!, allowingReadAccessTo: Bundle.main.resourceURL!)
     }
 
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+#if os(iOS)
+        refreshExtensionState(in: webView)
+#endif
+    }
+
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
 #if os(iOS)
-        webView.evaluateJavaScript("show('ios')")
+        refreshExtensionState(in: webView)
 #elseif os(macOS)
         webView.evaluateJavaScript("show('mac')")
 
@@ -89,6 +96,15 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
     }
 
 #if os(iOS)
+    private func refreshExtensionState(in webView: WKWebView) {
+        SFSafariExtensionManager.getStateOfSafariExtension(withIdentifier: extensionBundleIdentifier) { state, _ in
+            DispatchQueue.main.async {
+                let enabled = state?.isEnabled ?? false
+                webView.evaluateJavaScript("show('ios', \(enabled))")
+            }
+        }
+    }
+
     private func openSafariExtensionSettings() {
         let deepLinks = [
             "settings-navigation://com.apple.Settings.Apps/com.apple.mobilesafari/WEB_EXTENSIONS",

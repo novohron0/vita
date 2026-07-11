@@ -14,12 +14,18 @@
             <div class="brand">⠿ vita <span>Focus</span></div>
         </header>
 
-        <p class="lead platform-ios">Два шага — потом YouTube в Safari как своё приложение.</p>
+        <p class="lead platform-ios state-unknown">Проверяем расширение Safari…</p>
+        <p class="lead platform-ios state-on">✅ Расширение включено. Открой YouTube в Safari (кнопка ниже).</p>
+        <p class="lead platform-ios state-off">❌ Расширение <b>выключено</b> — блоки не работают. Сначала шаг 1.</p>
         <p class="lead platform-mac state-unknown">Включи расширение в Safari — и ленты перестанут отвлекать.</p>
         <p class="lead platform-mac state-on">Расширение включено. Можно открывать сайты в Safari.</p>
         <p class="lead platform-mac state-off">Расширение выключено. Включи его в настройках Safari.</p>
 
         <div class="flow platform-ios">
+            <section class="step-card platform-ios state-off">
+                <p class="step-warn">Если включить не получается: удали Vita Focus с iPhone → Xcode <b>⇧⌘K</b> → <b>⌘R</b> → включи снова.</p>
+            </section>
+
             <section class="step-card">
                 <div class="step-head">
                     <span class="step-num">1</span>

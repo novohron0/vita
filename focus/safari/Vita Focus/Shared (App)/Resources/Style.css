@@ -286,6 +286,8 @@ body.platform-mac .platform-ios { display: none; }
 body:not(.state-on, .state-off) :is(.state-on, .state-off) { display: none; }
 body.state-on :is(.state-off, .state-unknown) { display: none; }
 body.state-off :is(.state-on, .state-unknown) { display: none; }
+body.state-off .platform-ios.state-off.step-card { display: block; }
+body.state-on .platform-ios.state-off.step-card { display: none; }
 
 body.platform-mac {
     display: flex;
