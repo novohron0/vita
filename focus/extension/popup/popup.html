@@ -8,15 +8,18 @@
 <body>
   <div id="viewMain">
     <header class="top">
-      <div class="brand">⠿ Vita Focus</div>
+      <div class="brand">Vita Focus <span id="ver" class="ver"></span></div>
       <button type="button" id="openSettings" class="icon-btn" title="Настройки">⚙</button>
     </header>
 
-    <nav id="tabs" class="tabs"></nav>
-    <div class="site-title">
-      <span id="siteName">YouTube</span>
-      <span id="siteCnt" class="muted">0/0</span>
-    </div>
+    <button type="button" id="sitePick" class="site-pick">
+      <span id="siteGlyph" class="site-glyph">▶</span>
+      <span class="site-pick-text">
+        <span id="siteName">YouTube</span>
+        <span id="siteCnt" class="muted">0 из 0</span>
+      </span>
+      <span class="chev">›</span>
+    </button>
 
     <div id="rows" class="rows"></div>
 
@@ -25,6 +28,18 @@
       <input id="kwIn" type="text" placeholder="Слова: mrbeast, обзор…" spellcheck="false">
       <input id="chIn" type="text" placeholder="Каналы: имя автора…" spellcheck="false">
     </details>
+  </div>
+
+  <div id="siteSheet" class="sheet-wrap" hidden>
+    <div class="sheet-backdrop"></div>
+    <div class="sheet">
+      <div class="sheet-head">
+        <span>Сайты</span>
+        <button type="button" id="closeSheet" class="icon-btn sm">✕</button>
+      </div>
+      <input id="siteSearch" type="search" placeholder="Поиск…" spellcheck="false" autocomplete="off">
+      <div id="siteList" class="site-list"></div>
+    </div>
   </div>
 
   <div id="viewSettings" hidden>

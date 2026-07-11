@@ -5,6 +5,10 @@ import {
 } from '../shared/storage.js';
 
 const REGISTRY_URL = chrome.runtime.getURL('shared/registry.json');
+const YT_MAIN = new Set([
+  'yt_shorts', 'yt_recs', 'yt_comments', 'yt_related', 'yt_autoplay',
+  'yt_thumbs', 'yt_blur', 'yt_endscreen', 'yt_home_subs', 'yt_watch_clean',
+]);
 const $ = s => document.querySelector(s);
 
 let sites = [];
@@ -13,20 +17,43 @@ let active = 'youtube';
 let settings = {};
 let pinEnabled = false;
 
+function hostMatch(host, pattern) {
+  const h = host.replace(/^www\./, '');
+  const p = pattern.replace(/^www\./, '');
+  return h === p || h.endsWith('.' + p);
+}
+
+async function detectSiteFromTab() {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.url?.startsWith('http')) return null;
+    const host = new URL(tab.url).hostname;
+    return sites.find(s => (s.hosts || []).some(h => hostMatch(host, h)))?.id || null;
+  } catch {
+    return null;
+  }
+}
+
 async function init() {
+  $('#ver').textContent = chrome.runtime.getManifest().version;
+
   const r = await fetch(REGISTRY_URL);
   const data = await r.json();
   sites = data.sites;
   presets = (data.presets || []).filter(p => ['work', 'youtube', 'social', 'off'].includes(p.id));
   settings = await getSettings();
+
+  const fromTab = await detectSiteFromTab();
   const stored = await chrome.storage.sync.get('activeSite');
-  if (stored.activeSite && sites.some(s => s.id === stored.activeSite)) active = stored.activeSite;
+  if (fromTab) active = fromTab;
+  else if (stored.activeSite && sites.some(s => s.id === stored.activeSite)) active = stored.activeSite;
 
   await refreshPinUi();
   await refreshScheduleUi();
   await refreshSchedBadge();
-  buildTabs();
   buildPresets();
+  buildSiteList();
+  updateSiteHeader();
   renderRows();
   updateYtExtras();
   bindRows();
@@ -35,6 +62,7 @@ async function init() {
   bindSchedule();
   bindIO();
   bindNav();
+  bindSitePicker();
 }
 
 function showMain() {
@@ -50,6 +78,49 @@ function showSettings() {
 function bindNav() {
   $('#openSettings').addEventListener('click', showSettings);
   $('#closeSettings').addEventListener('click', showMain);
+}
+
+function openSheet() {
+  $('#siteSheet').hidden = false;
+  $('#siteSearch').value = '';
+  filterSiteList('');
+  $('#siteSearch').focus();
+}
+
+function closeSheet() {
+  $('#siteSheet').hidden = true;
+}
+
+function bindSitePicker() {
+  $('#sitePick').addEventListener('click', openSheet);
+  $('#closeSheet').addEventListener('click', closeSheet);
+  $('.sheet-backdrop').addEventListener('click', closeSheet);
+  $('#siteSearch').addEventListener('input', e => filterSiteList(e.target.value));
+}
+
+function buildSiteList() {
+  const box = $('#siteList');
+  box.innerHTML = '';
+  sites.forEach(s => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'site-item' + (s.id === active ? ' on' : '');
+    b.dataset.id = s.id;
+    b.innerHTML = `<span class="g">${s.glyph}</span><span class="n">${s.name}</span><span class="c">${siteCount(s)}/${s.toggles.length}</span>`;
+    b.addEventListener('click', () => {
+      selectSite(s.id);
+      closeSheet();
+    });
+    box.appendChild(b);
+  });
+}
+
+function filterSiteList(q) {
+  const needle = q.trim().toLowerCase();
+  [...$('#siteList').children].forEach(el => {
+    const s = sites.find(x => x.id === el.dataset.id);
+    el.hidden = needle && !s.name.toLowerCase().includes(needle);
+  });
 }
 
 function scheduleActive(sched) {
@@ -144,40 +215,32 @@ async function applyPreset(preset) {
   const patch = Object.fromEntries(ids.map(id => [id, false]));
   Object.assign(patch, preset.settings);
   settings = await setSettings(patch);
-  buildTabs();
+  updateSiteHeader();
   renderRows();
+  buildSiteList();
   await refreshScheduleUi();
   await refreshSchedBadge();
 }
 
-function buildTabs() {
-  const nav = $('#tabs');
-  nav.innerHTML = '';
-  sites.forEach(s => {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'tab' + (s.id === active ? ' on' : '');
-    b.title = s.name;
-    b.textContent = s.glyph;
-    if (siteCount(s) > 0) b.classList.add('has');
-    b.addEventListener('click', () => selectSite(s.id));
-    nav.appendChild(b);
-  });
+function updateSiteHeader() {
   const site = sites.find(s => s.id === active);
-  if (site) {
-    $('#siteName').textContent = site.name;
-    $('#siteCnt').textContent = `${siteCount(site)}/${site.toggles.length}`;
-  }
+  if (!site) return;
+  $('#siteGlyph').textContent = site.glyph;
+  $('#siteName').textContent = site.name;
+  $('#siteCnt').textContent = `${siteCount(site)} из ${site.toggles.length} включено`;
 }
 
 function selectSite(id) {
   active = id;
   chrome.storage.sync.set({ activeSite: active });
-  buildTabs();
+  updateSiteHeader();
   renderRows();
   updateYtExtras();
-  const el = $(`.tab.on`);
-  el?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+  [...$('#siteList').children].forEach(el => {
+    el.classList.toggle('on', el.dataset.id === active);
+    const s = sites.find(x => x.id === el.dataset.id);
+    if (s) el.querySelector('.c').textContent = `${siteCount(s)}/${s.toggles.length}`;
+  });
 }
 
 function updateYtExtras() {
@@ -200,29 +263,57 @@ function bindYtExtras() {
   $('#chIn').addEventListener('blur', save);
 }
 
+function makeRow(t) {
+  const on = !!settings[t.id];
+  const row = document.createElement('div');
+  row.className = 'row' + (on ? ' on' : '');
+  row.dataset.id = t.id;
+  row.innerHTML = `<b>${t.label}</b><div class="sw"></div>`;
+  row.title = t.desc || '';
+  return row;
+}
+
+function makeGroup(title, toggles) {
+  if (!toggles.length) return null;
+  const wrap = document.createElement('section');
+  wrap.className = 'group';
+  if (title) {
+    const h = document.createElement('div');
+    h.className = 'group-h';
+    h.textContent = title;
+    wrap.appendChild(h);
+  }
+  const card = document.createElement('div');
+  card.className = 'card';
+  toggles.forEach(t => card.appendChild(makeRow(t)));
+  wrap.appendChild(card);
+  return wrap;
+}
+
 function renderRows() {
   const site = sites.find(s => s.id === active);
   const box = $('#rows');
   box.innerHTML = '';
   if (!site) return;
-  site.toggles.forEach(t => {
-    const on = !!settings[t.id];
-    const row = document.createElement('div');
-    row.className = 'row' + (on ? ' on' : '');
-    row.dataset.id = t.id;
-    row.innerHTML = `<b>${t.label}</b><div class="sw"></div>`;
-    row.title = t.desc;
-    box.appendChild(row);
-  });
-  $('#siteCnt').textContent = `${siteCount(site)}/${site.toggles.length}`;
-  refreshTabDots();
+
+  if (site.id === 'youtube') {
+    const main = site.toggles.filter(t => YT_MAIN.has(t.id));
+    const extra = site.toggles.filter(t => !YT_MAIN.has(t.id));
+    box.appendChild(makeGroup(null, main));
+    const more = makeGroup('Ещё', extra);
+    if (more) box.appendChild(more);
+  } else {
+    box.appendChild(makeGroup(null, site.toggles));
+  }
+
+  $('#siteCnt').textContent = `${siteCount(site)} из ${site.toggles.length} включено`;
+  refreshSiteListCounts();
 }
 
-function refreshTabDots() {
-  sites.forEach(s => {
-    const btn = [...$('#tabs').children].find(b => b.title === s.name);
-    if (!btn) return;
-    btn.classList.toggle('has', siteCount(s) > 0);
+function refreshSiteListCounts() {
+  [...$('#siteList').children].forEach(el => {
+    const s = sites.find(x => x.id === el.dataset.id);
+    if (s) el.querySelector('.c').textContent = `${siteCount(s)}/${s.toggles.length}`;
   });
 }
 
@@ -241,9 +332,9 @@ function bindRows() {
       settings = await setSetting(id, next);
     }
     row.classList.toggle('on', !!settings[id]);
-    refreshTabDots();
     const site = sites.find(s => s.id === active);
-    if (site) $('#siteCnt').textContent = `${siteCount(site)}/${site.toggles.length}`;
+    if (site) $('#siteCnt').textContent = `${siteCount(site)} из ${site.toggles.length} включено`;
+    refreshSiteListCounts();
     await refreshScheduleUi();
     await refreshSchedBadge();
   });
@@ -312,8 +403,9 @@ function bindIO() {
     try {
       await importBundle(raw);
       settings = await getSettings();
-      buildTabs();
+      updateSiteHeader();
       renderRows();
+      buildSiteList();
       updateYtExtras();
       await refreshScheduleUi();
       await refreshSchedBadge();
