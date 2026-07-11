@@ -1,8 +1,9 @@
 {
   "version": 10,
   "ui": {
-    "featuredSiteIds": ["youtube", "instagram", "x", "reddit", "tiktok", "vk", "telegram", "facebook"],
+    "featuredSiteIds": ["youtube", "facebook", "x", "instagram", "reddit", "linkedin", "gmail", "tiktok", "telegram", "vk"],
     "settingsPresetIds": ["work", "youtube", "social", "ru", "shop", "streams", "off"],
+    "advancedGroups": ["watch", "feed", "visual", "filter"],
     "groupLabels": {
       "main": null,
       "watch": "Страница видео",

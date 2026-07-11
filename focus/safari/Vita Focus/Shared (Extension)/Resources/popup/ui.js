@@ -1,4 +1,4 @@
-/** Registry-driven popup UI helpers. */
+/** Registry-driven popup UI — SocialFocus / UnTrap pattern. */
 
 export const GROUP_ORDER = ['main', 'watch', 'feed', 'visual', 'filter'];
 
@@ -14,37 +14,15 @@ export function siteFromUrl(url, sites) {
   return sites.find(s => (s.hosts || []).some(h => hostMatch(host, h))) || null;
 }
 
-export function pageContext(url, siteId) {
-  if (!url?.startsWith('http') || !siteId) return '';
-  try {
-    const u = new URL(url);
-    if (siteId === 'youtube') {
-      if (u.pathname.startsWith('/shorts')) return 'Shorts';
-      if (u.pathname.startsWith('/watch')) return 'Видео';
-      if (u.pathname === '/feed/subscriptions') return 'Подписки';
-      if (u.pathname === '/' || u.pathname === '/feed') return 'Главная';
-    }
-    if (siteId === 'instagram' && u.pathname.startsWith('/reels')) return 'Reels';
-    if (siteId === 'tiktok' && u.pathname === '/') return 'For You';
-    if (siteId === 'x' && (u.pathname === '/home' || u.pathname === '/')) return 'Лента';
-  } catch { /* ignore */ }
-  return '';
-}
-
 export function featuredSites(sites, ui) {
   const ids = ui?.featuredSiteIds || ['youtube'];
-  const ordered = ids.map(id => sites.find(s => s.id === id)).filter(Boolean);
+  const featured = ids.map(id => sites.find(s => s.id === id)).filter(Boolean);
   const rest = sites.filter(s => !ids.includes(s.id));
-  return { featured: ordered, rest };
+  return { featured, rest };
 }
 
 export function siteCount(site, settings) {
   return site.toggles.filter(t => settings[t.id]).length;
-}
-
-export function totalActive(sites, settings) {
-  const all = sites.flatMap(s => s.toggles);
-  return all.filter(t => settings[t.id]).length;
 }
 
 export function groupToggles(site, groupLabels = {}) {
@@ -60,18 +38,24 @@ export function groupToggles(site, groupLabels = {}) {
   for (const id of order) {
     const toggles = buckets.get(id);
     if (!toggles?.length) continue;
-    const label = groupLabels[id] ?? (id === 'main' ? null : id);
-    out.push({ id, label, toggles });
+    out.push({
+      id,
+      label: groupLabels[id] ?? null,
+      toggles,
+    });
   }
   return out;
 }
 
-export function masterState(site, settings) {
-  const ids = site.toggles.map(t => t.id);
-  const on = ids.filter(id => settings[id]).length;
-  if (!on) return 'off';
-  if (on === ids.length) return 'on';
-  return 'partial';
+export function splitGroups(site, uiMeta) {
+  const groups = groupToggles(site, uiMeta.groupLabels || {});
+  const advancedIds = new Set(uiMeta.advancedGroups || ['watch', 'feed', 'visual', 'filter']);
+  const primary = groups.filter(g => g.id === 'main' || !advancedIds.has(g.id));
+  const advanced = groups.filter(g => advancedIds.has(g.id));
+  if (!groups.some(g => g.id === 'main') && groups.length) {
+    return { primary: [groups[0]], advanced: groups.slice(1) };
+  }
+  return { primary, advanced };
 }
 
 export function el(tag, cls, html) {
@@ -88,11 +72,32 @@ export function makeRow(toggle, on) {
   return row;
 }
 
+export function appendGroupCard(parent, { label, toggles }, settings, filterBox) {
+  const card = el('div', 'group-card');
+  if (label) {
+    card.appendChild(el('div', 'group-h', label));
+  }
+  toggles.forEach(t => {
+    card.appendChild(makeRow(t, !!settings[t.id]));
+    if (filterBox && t.id === 'yt_keywords') {
+      const box = el('div', 'filter-in');
+      box.innerHTML = '<input data-filter="kw" type="text" placeholder="Слова через запятую…" spellcheck="false">';
+      box.querySelector('input').value = settings.yt_kw || '';
+      card.appendChild(box);
+    }
+    if (filterBox && t.id === 'yt_channels') {
+      const box = el('div', 'filter-in');
+      box.innerHTML = '<input data-filter="ch" type="text" placeholder="Каналы через запятую…" spellcheck="false">';
+      box.querySelector('input').value = settings.yt_ch || '';
+      card.appendChild(box);
+    }
+  });
+  parent.appendChild(card);
+}
+
 export function moveTabIndicator(tabsNav, activeId) {
   const tab = tabsNav.querySelector(`.tab[data-id="${activeId}"]`);
-  const ind = tabsNav.querySelector('.tab-ind');
-  if (!tab || !ind) return;
-  ind.style.width = `${tab.offsetWidth}px`;
-  ind.style.transform = `translateX(${tab.offsetLeft - 5}px)`;
-  tab.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' });
+  if (tab) {
+    tab.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' });
+  }
 }
