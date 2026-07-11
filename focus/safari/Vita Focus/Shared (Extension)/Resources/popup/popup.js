@@ -1,7 +1,7 @@
 import {
   getSettings, setSetting, setSettings, getPinState, setPin, clearPin, verifyPin,
   getSchedule, setSchedule, getCooldownHours, setCooldownHours, getPendingInfo,
-  exportBundle, importBundle,
+  exportBundle, importBundle, getDarkMode, setDarkMode,
 } from '../shared/storage.js';
 import {
   siteFromUrl, featuredSites, siteCount, splitGroups,
@@ -24,6 +24,7 @@ let tabUrl = '';
 let pinResolve = null;
 let statusTimer = null;
 let registryCache = null;
+let darkMode = { enabled: false, brightness: 100, contrast: 95, sepia: 8 };
 
 function applyTheme(mode) {
   const root = document.documentElement;
@@ -63,6 +64,31 @@ async function pushApply() {
   } catch {
     setStatus('Сохранено', 'on');
   }
+}
+
+async function pushDark() {
+  try {
+    await chrome.runtime.sendMessage({ type: 'vfocus:broadcast' });
+    setStatus(darkMode.enabled ? 'Тёмная тема вкл ✓' : 'Тёмная тема выкл', 'on');
+  } catch {
+    setStatus('Сохранено', 'on');
+  }
+}
+
+function refreshDarkUi() {
+  const row = $('#darkRow');
+  if (!row) return;
+  row.classList.toggle('on', !!darkMode.enabled);
+  $('#darkState').textContent = darkMode.enabled ? 'вкл' : 'выкл';
+  $('#dmBright').value = darkMode.brightness;
+  $('#dmContrast').value = darkMode.contrast;
+  $('#dmBrightVal').textContent = darkMode.brightness;
+  $('#dmContrastVal').textContent = darkMode.contrast;
+}
+
+async function loadDarkUi() {
+  darkMode = await getDarkMode();
+  refreshDarkUi();
 }
 
 async function loadRegistry() {
@@ -106,6 +132,7 @@ async function init() {
     refreshScheduleUi(),
     refreshSchedBadge(),
     chrome.storage.sync.get('activeSite'),
+    loadDarkUi(),
   ]);
   settings = settingsData;
 
@@ -452,6 +479,33 @@ function bindAll() {
     if (!btn) return;
     saveTheme(btn.dataset.theme);
   });
+
+  $('#darkRow')?.addEventListener('click', async () => {
+    darkMode.enabled = !darkMode.enabled;
+    refreshDarkUi();
+    setStatus('Сохраняю…', 'busy');
+    await setDarkMode({ enabled: darkMode.enabled });
+    await pushDark();
+  });
+
+  const saveDarkSliders = async () => {
+    darkMode.brightness = Number($('#dmBright').value) || 100;
+    darkMode.contrast = Number($('#dmContrast').value) || 95;
+    refreshDarkUi();
+    await setDarkMode({
+      brightness: darkMode.brightness,
+      contrast: darkMode.contrast,
+    });
+    await pushDark();
+  };
+  $('#dmBright')?.addEventListener('input', e => {
+    $('#dmBrightVal').textContent = e.target.value;
+  });
+  $('#dmContrast')?.addEventListener('input', e => {
+    $('#dmContrastVal').textContent = e.target.value;
+  });
+  $('#dmBright')?.addEventListener('change', saveDarkSliders);
+  $('#dmContrast')?.addEventListener('change', saveDarkSliders);
 
   $('#rows').addEventListener('click', async e => {
     if (e.target.matches('input[data-filter]')) return;

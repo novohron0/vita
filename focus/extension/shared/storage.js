@@ -1,3 +1,16 @@
+const DEFAULT_DARK = { enabled: false, brightness: 100, contrast: 95, sepia: 8 };
+
+export async function getDarkMode() {
+  const data = await chrome.storage.sync.get('darkMode');
+  return { ...DEFAULT_DARK, ...(data.darkMode || {}) };
+}
+
+export async function setDarkMode(patch) {
+  const darkMode = { ...(await getDarkMode()), ...patch };
+  await chrome.storage.sync.set({ darkMode });
+  return darkMode;
+}
+
 /** Vita Focus — настройки в browser.storage.sync (Safari / Chrome). */
 const DEFAULT_SETTINGS = {
   yt_shorts: true,
@@ -163,7 +176,7 @@ export async function verifyPin(pin) {
 }
 
 export async function exportBundle() {
-  const data = await chrome.storage.sync.get(['settings', 'schedule', 'cooldownHours', 'activeSite']);
+  const data = await chrome.storage.sync.get(['settings', 'schedule', 'cooldownHours', 'activeSite', 'darkMode', 'uiTheme']);
   return JSON.stringify({ v: 1, exportedAt: new Date().toISOString(), ...data }, null, 2);
 }
 
@@ -174,6 +187,8 @@ export async function importBundle(raw) {
   if (data.schedule) patch.schedule = data.schedule;
   if (data.cooldownHours != null) patch.cooldownHours = data.cooldownHours;
   if (data.activeSite) patch.activeSite = data.activeSite;
+  if (data.darkMode) patch.darkMode = data.darkMode;
+  if (data.uiTheme) patch.uiTheme = data.uiTheme;
   await chrome.storage.sync.set(patch);
   return getEffectiveSettings();
 }

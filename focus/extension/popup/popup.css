@@ -354,6 +354,19 @@ body::before {
 .site-item .g { width: 28px; text-align: center; font-size: 18px; flex: none; }
 
 .block { margin-bottom: 22px; }
+.block-note {
+  font-size: 12px; line-height: 1.4; color: var(--text-muted);
+  margin: -4px 0 10px;
+}
+.range-lbl {
+  display: block; font-size: 13px; color: var(--text-muted);
+  margin: 10px 0 0; padding: 0 2px;
+}
+.range-lbl span { color: var(--accent-soft); font-weight: 600; font-variant-numeric: tabular-nums; }
+.range-lbl input[type="range"] {
+  width: 100%; margin-top: 6px; accent-color: var(--accent);
+}
+#darkRow { margin-top: 4px; border-radius: 14px; background: var(--glass-bg-soft); border: 1px solid var(--glass-border); }
 .block-h {
   font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 8px;
   text-transform: uppercase; letter-spacing: .4px;

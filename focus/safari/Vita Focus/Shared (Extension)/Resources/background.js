@@ -1,4 +1,4 @@
-import { getEffectiveSettings } from './shared/storage.js';
+import { getEffectiveSettings, getDarkMode } from './shared/storage.js';
 
 chrome.runtime.onInstalled.addListener(async () => {
   const cur = await chrome.storage.sync.get(['settings', 'schedule']);
@@ -10,6 +10,7 @@ async function broadcastTab(tabId) {
   if (!tabId) return;
   try {
     await chrome.tabs.sendMessage(tabId, { type: 'vfocus:settings' });
+    await chrome.tabs.sendMessage(tabId, { type: 'vfocus:dark' });
   } catch { /* no content script */ }
 }
 
@@ -28,7 +29,7 @@ async function broadcastAll(activeFirst = false) {
 
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'sync') return;
-  if (changes.settings || changes.schedule || changes.pending || changes.cooldownHours) {
+  if (changes.settings || changes.schedule || changes.pending || changes.cooldownHours || changes.darkMode) {
     broadcastAll(true);
   }
 });
@@ -36,6 +37,10 @@ chrome.storage.onChanged.addListener((changes, area) => {
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg?.type === 'vfocus:get') {
     getEffectiveSettings().then(sendResponse);
+    return true;
+  }
+  if (msg?.type === 'vfocus:dark') {
+    getDarkMode().then(sendResponse);
     return true;
   }
   if (msg?.type === 'vfocus:broadcast') {

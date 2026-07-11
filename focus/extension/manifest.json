@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Vita Focus",
   "description": "UnTrap + SocialFocus в одном: Shorts, ленты, рекомендации — тишина в Safari.",
-  "version": "0.20.0",
+  "version": "0.21.0",
   "icons": {
     "48": "icons/icon48.png",
     "96": "icons/icon96.png",
@@ -49,7 +49,9 @@
     "*://habr.com/*",
     "*://www.habr.com/*",
     "*://dzen.ru/*",
-    "*://www.dzen.ru/*"
+    "*://www.dzen.ru/*",
+    "http://*/*",
+    "https://*/*"
   ],
   "background": {
     "service_worker": "background.js",
@@ -60,6 +62,12 @@
     "default_popup": "popup/popup.html"
   },
   "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content/darkmode.js"],
+      "run_at": "document_start",
+      "all_frames": false
+    },
     {
       "matches": ["*://*.youtube.com/*"],
       "js": ["content/youtube.js"],

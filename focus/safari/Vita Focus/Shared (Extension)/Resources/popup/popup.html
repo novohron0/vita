@@ -54,12 +54,27 @@
     </header>
 
     <section class="block">
-      <div class="block-h">Оформление</div>
+      <div class="block-h">Оформление popup</div>
       <div class="theme-row" id="themeRow">
         <button type="button" class="theme-btn on" data-theme="system">Система</button>
         <button type="button" class="theme-btn" data-theme="light">Светлая</button>
         <button type="button" class="theme-btn" data-theme="dark">Тёмная</button>
       </div>
+    </section>
+
+    <section class="block">
+      <div class="block-h">Тёмная тема сайтов <span id="darkState" class="muted">выкл</span></div>
+      <p class="block-note">Как Dark Reader — затемняет любую страницу в Safari, не только сайты из списка.</p>
+      <div class="row" id="darkRow">
+        <div class="row-txt"><b>Тёмный режим</b><span>Инверсия цветов + фикс картинок</span></div>
+        <div class="sw"></div>
+      </div>
+      <label class="range-lbl">Яркость <span id="dmBrightVal">100</span>%
+        <input type="range" id="dmBright" min="70" max="120" value="100">
+      </label>
+      <label class="range-lbl">Контраст <span id="dmContrastVal">95</span>%
+        <input type="range" id="dmContrast" min="80" max="120" value="95">
+      </label>
     </section>
 
     <section class="block">
