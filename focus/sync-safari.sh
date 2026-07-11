@@ -7,6 +7,8 @@ REPO="$(cd "$FOCUS/.." && pwd)"
 "$FOCUS/sync-registry.sh"
 "$FOCUS/sync-icons.sh"
 
+"$FOCUS/scripts/make-popup-shims.sh"
+
 SAFARI_RES="$REPO/focus/safari/Vita Focus/Shared (Extension)/Resources"
 if [ -d "$SAFARI_RES" ]; then
   rsync -a --delete \

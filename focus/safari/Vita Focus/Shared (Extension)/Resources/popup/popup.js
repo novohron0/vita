@@ -1,12 +1,20 @@
-import {
+const {
   getSettings, setSetting, setSettings, getPinState, setPin, clearPin, verifyPin,
   getSchedule, setSchedule, getCooldownHours, setCooldownHours, getPendingInfo,
   exportBundle, importBundle, getDarkMode, setDarkMode,
-} from '../shared/storage.js';
-import {
+} = globalThis.VFocusStorage || {};
+const {
   siteFromUrl, featuredSites, siteCount, visibleToggles,
   appendGroupCard, moveTabIndicator,
-} from './ui.js';
+} = globalThis.VFocusUi || {};
+
+if (!globalThis.VFocusStorage || !globalThis.VFocusUi) {
+  document.addEventListener('DOMContentLoaded', () => {
+    const box = document.getElementById('rows');
+    if (box) box.innerHTML = '<div class="msg err" style="padding:12px">Popup: не загрузились скрипты. Пересобери в Xcode (⇧⌘K → ⌘R).</div>';
+  });
+  throw new Error('VFocus shims missing');
+}
 
 const REGISTRY_URL = chrome.runtime.getURL('shared/registry.json');
 const $ = s => document.querySelector(s);
