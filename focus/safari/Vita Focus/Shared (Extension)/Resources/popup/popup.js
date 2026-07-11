@@ -13,6 +13,7 @@ const $ = s => document.querySelector(s);
 
 let sites = [];
 let presets = [];
+let mainPresets = [];
 let uiMeta = {};
 let featured = [];
 let restSites = [];
@@ -93,6 +94,9 @@ async function init() {
   presets = (data.presets || []).filter(p =>
     (uiMeta.settingsPresetIds || []).includes(p.id)
   );
+  mainPresets = (data.presets || []).filter(p =>
+    (uiMeta.mainPresetIds || uiMeta.settingsPresetIds?.slice(0, 3) || []).includes(p.id)
+  );
   ({ featured, rest: restSites } = featuredSites(sites, uiMeta));
 
   const [settingsData, , , , , activeSiteStored] = await Promise.all([
@@ -112,7 +116,9 @@ async function init() {
   buildTabs();
   buildSiteList();
   buildPresets();
+  buildMainPresets();
   refreshSiteHead();
+  refreshMaster();
   renderRows();
   bindAll();
   requestAnimationFrame(() => moveTabIndicator($('#tabs'), active));
@@ -174,6 +180,42 @@ function currentSite() {
   return sites.find(s => s.id === active);
 }
 
+function refreshMaster() {
+  const site = currentSite();
+  const btn = $('#siteMaster');
+  if (!site || !btn) return;
+  const n = siteCount(site, settings);
+  const total = site.toggles.length;
+  btn.classList.toggle('on', n > 0);
+  btn.classList.toggle('part', n > 0 && n < total);
+  const lbl = $('#masterLabel');
+  if (lbl) {
+    lbl.textContent = n === total ? 'Фокус вкл' : n ? `${n}/${total}` : 'Фокус выкл';
+  }
+}
+
+async function setSiteMaster(on) {
+  const site = currentSite();
+  if (!site) return;
+  if (!on) {
+    const turningOff = site.toggles.filter(t => settings[t.id]);
+    if (turningOff.length && pinEnabled) {
+      const pin = await askPin('Пароль для выключения');
+      if (!pin || !(await verifyPin(pin))) return;
+    }
+  }
+  setStatus('Сохраняю…', 'busy');
+  const patch = Object.fromEntries(site.toggles.map(t => [t.id, on]));
+  settings = await setSettings(patch);
+  renderRows();
+  refreshSiteHead();
+  refreshTabs();
+  refreshMaster();
+  await refreshScheduleUi();
+  await refreshSchedBadge();
+  await pushApply();
+}
+
 function refreshSiteHead() {
   const site = currentSite();
   if (!site) return;
@@ -189,11 +231,12 @@ function buildTabs() {
   nav.querySelectorAll('.tab').forEach(n => n.remove());
 
   featured.forEach(s => {
+    const n = siteCount(s, settings);
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = 'tab' + (s.id === active ? ' on' : '');
+    b.className = 'tab' + (s.id === active ? ' on' : '') + (n ? ' has' : '');
     b.dataset.id = s.id;
-    b.innerHTML = `<span class="g">${s.glyph}</span><span>${s.name}</span>`;
+    b.innerHTML = `<span class="g">${s.glyph}</span><span>${s.name}</span><span class="tab-cnt">${n || ''}</span>`;
     b.addEventListener('click', () => selectSite(s.id));
     nav.insertBefore(b, $('#tabInd'));
   });
@@ -211,8 +254,14 @@ function buildTabs() {
 }
 
 function refreshTabs() {
-  $('#tabs').querySelectorAll('.tab[data-id]').forEach(b => {
-    b.classList.toggle('on', b.dataset.id === active);
+  featured.forEach(s => {
+    const b = $(`#tabs .tab[data-id="${s.id}"]`);
+    if (!b) return;
+    const n = siteCount(s, settings);
+    b.classList.toggle('on', s.id === active);
+    b.classList.toggle('has', n > 0);
+    const cnt = b.querySelector('.tab-cnt');
+    if (cnt) cnt.textContent = n || '';
   });
   requestAnimationFrame(() => moveTabIndicator($('#tabs'), active));
 }
@@ -257,6 +306,7 @@ function selectSite(id) {
   chrome.storage.sync.set({ activeSite: active });
   refreshTabs();
   refreshSiteHead();
+  refreshMaster();
   renderRows();
 }
 
@@ -290,6 +340,20 @@ async function toggleId(id, on) {
   }
 }
 
+function buildMainPresets() {
+  const nav = $('#mainPresets');
+  if (!nav) return;
+  nav.innerHTML = '';
+  mainPresets.forEach(p => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'preset';
+    b.textContent = `${p.glyph || ''} ${p.name}`.trim();
+    b.addEventListener('click', () => applyPreset(p));
+    nav.appendChild(b);
+  });
+}
+
 function buildPresets() {
   const nav = $('#presets');
   nav.innerHTML = '';
@@ -316,6 +380,7 @@ async function applyPreset(preset) {
   settings = await setSettings(patch);
   refreshTabs();
   refreshSiteHead();
+  refreshMaster();
   renderRows();
   await refreshScheduleUi();
   await refreshSchedBadge();
@@ -372,6 +437,12 @@ function pinMsg(text, show = true, ok = false) {
 function bindAll() {
   $('#openSettings').addEventListener('click', showSettings);
   $('#closeSettings').addEventListener('click', showMain);
+  $('#siteMaster').addEventListener('click', async () => {
+    const site = currentSite();
+    if (!site) return;
+    const allOn = site.toggles.every(t => settings[t.id]);
+    await setSiteMaster(!allOn);
+  });
   $('#closeSheet').addEventListener('click', closeSheet);
   $('#siteSheet .overlay-bg').addEventListener('click', closeSheet);
   $('#siteSearch').addEventListener('input', e => filterSiteList(e.target.value));
@@ -398,6 +469,8 @@ function bindAll() {
     void row.offsetWidth;
     row.classList.add('flash');
     refreshSiteHead();
+    refreshMaster();
+    refreshTabs();
     setStatus('Сохраняю…', 'busy');
 
     try {
@@ -421,6 +494,7 @@ function bindAll() {
       ? { yt_kw: input.value }
       : { yt_ch: input.value };
     settings = await setSettings(patch);
+    await pushApply();
   });
   $('#rows').addEventListener('blur', async e => {
     const input = e.target.closest('input[data-filter]');
@@ -429,6 +503,7 @@ function bindAll() {
       ? { yt_kw: input.value }
       : { yt_ch: input.value };
     settings = await setSettings(patch);
+    await pushApply();
   }, true);
 
   $('#pinSave').addEventListener('click', async () => {
@@ -488,9 +563,11 @@ function bindAll() {
       await importBundle(raw);
       settings = await getSettings();
       refreshTabs();
+      refreshMaster();
       renderRows();
       await refreshScheduleUi();
       await refreshSchedBadge();
+      await pushApply();
       pinMsg('Импорт OK', true, true);
       setTimeout(() => pinMsg('', false), 2000);
     } catch {

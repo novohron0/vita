@@ -455,7 +455,12 @@ function scheduleTick() {
   tickTimer = setTimeout(() => {
     tickTimer = null;
     tick();
-  }, 32);
+  }, 48);
+}
+
+let settingsLoaded = false;
+function anyActive() {
+  return Object.entries(settings).some(([k, v]) => v && k.startsWith('yt_'));
 }
 
 async function loadSettings() {
@@ -466,16 +471,23 @@ async function loadSettings() {
     settings = { ...DEFAULTS };
   }
   tick();
+  settingsLoaded = true;
 }
 
 chrome.runtime.onMessage.addListener(msg => {
   if (msg?.type === 'vfocus:settings') loadSettings();
 });
 
-const obs = new MutationObserver(scheduleTick);
+const obs = new MutationObserver(mutations => {
+  if (!settingsLoaded) return;
+  if (!anyActive() && !mutations.some(m => m.addedNodes.length)) return;
+  scheduleTick();
+});
 function watch() {
   tick();
-  if (document.body) obs.observe(document.body, { childList: true, subtree: true });
+  if (document.body) {
+    obs.observe(document.body, { childList: true, subtree: true });
+  }
 }
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', watch, { once: true });

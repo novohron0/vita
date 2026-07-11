@@ -1,8 +1,9 @@
 {
-  "version": 10,
+  "version": 11,
   "ui": {
     "featuredSiteIds": ["youtube", "facebook", "x", "instagram", "reddit", "linkedin", "gmail", "tiktok", "telegram", "vk"],
-    "settingsPresetIds": ["work", "youtube", "social", "ru", "shop", "streams", "off"],
+    "settingsPresetIds": ["app", "work", "youtube", "social", "ru", "shop", "streams", "off"],
+    "mainPresetIds": ["app", "youtube", "work"],
     "advancedGroups": ["watch", "feed", "visual", "filter"],
     "groupLabels": {
       "main": null,
@@ -13,6 +14,26 @@
     }
   },
   "presets": [
+    {
+      "id": "app",
+      "name": "Приложение",
+      "glyph": "📱",
+      "settings": {
+        "yt_shorts": true,
+        "yt_recs": true,
+        "yt_comments": true,
+        "yt_related": true,
+        "yt_autoplay": true,
+        "yt_thumbs": true,
+        "yt_endscreen": true,
+        "yt_upnext": true,
+        "yt_home_subs": true,
+        "yt_shelf": true,
+        "yt_chips": true,
+        "yt_notifications": true,
+        "yt_watch_clean": false
+      }
+    },
     {
       "id": "work",
       "name": "Работа",

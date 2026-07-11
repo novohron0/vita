@@ -97,7 +97,12 @@ export function appendGroupCard(parent, { label, toggles }, settings, filterBox)
 
 export function moveTabIndicator(tabsNav, activeId) {
   const tab = tabsNav.querySelector(`.tab[data-id="${activeId}"]`);
+  const ind = tabsNav.querySelector('.tab-ind');
   if (tab) {
     tab.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' });
+    if (ind) {
+      ind.style.width = `${tab.offsetWidth}px`;
+      ind.style.transform = `translateX(${tab.offsetLeft}px)`;
+    }
   }
 }

@@ -68,6 +68,12 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
             }
             return
         }
+        if body == "open-youtube-subs" {
+            if let url = URL(string: "https://m.youtube.com/feed/subscriptions") {
+                UIApplication.shared.open(url)
+            }
+            return
+        }
         if body == "open-settings" {
             if let url = URL(string: UIApplication.openSettingsURLString) {
                 UIApplication.shared.open(url)
