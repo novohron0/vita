@@ -21,8 +21,14 @@ export function featuredSites(sites, ui) {
   return { featured, rest };
 }
 
-export function siteCount(site, settings) {
-  return site.toggles.filter(t => settings[t.id]).length;
+export function visibleToggles(site) {
+  const main = site.toggles.filter(t => (t.group || 'main') === 'main');
+  return main.length ? main : site.toggles;
+}
+
+export function siteCount(site, settings, toggles = null) {
+  const list = toggles || site.toggles;
+  return list.filter(t => settings[t.id]).length;
 }
 
 export function groupToggles(site, groupLabels = {}) {

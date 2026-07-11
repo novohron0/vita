@@ -41,8 +41,23 @@ const DEFAULT_SETTINGS = {
 const DEFAULT_SCHEDULE = { enabled: false, start: 9, end: 22 };
 
 export async function getSettings() {
-  const data = await chrome.storage.sync.get('settings');
-  return { ...DEFAULT_SETTINGS, ...(data.settings || {}) };
+  const data = await chrome.storage.sync.get(['settings', 'migration_v290']);
+  let settings = { ...DEFAULT_SETTINGS, ...(data.settings || {}) };
+
+  // Редирект «Главная → Подписки» был в пресетах, но скрыт из popup — выключаем раз.
+  if (!data.migration_v290) {
+    if (settings.yt_home_subs) {
+      settings = { ...settings, yt_home_subs: false };
+      await chrome.storage.sync.set({
+        settings,
+        settingsRev: Date.now(),
+        migration_v290: true,
+      });
+    } else {
+      await chrome.storage.sync.set({ migration_v290: true });
+    }
+  }
+  return settings;
 }
 
 export async function getSchedule() {
@@ -52,7 +67,7 @@ export async function getSchedule() {
 
 export async function setSchedule(patch) {
   const schedule = { ...(await getSchedule()), ...patch };
-  await chrome.storage.sync.set({ schedule });
+  await chrome.storage.sync.set({ schedule, settingsRev: Date.now() });
   return schedule;
 }
 
@@ -117,8 +132,8 @@ export async function setSetting(id, on) {
     const hours = await getCooldownHours();
     if (hours > 0) {
       pending[id] = Date.now() + hours * 3600000;
-      await chrome.storage.sync.set({ pending });
-      return getEffectiveSettings();
+      await chrome.storage.sync.set({ pending, settingsRev: Date.now() });
+      return settings;
     }
   }
 
@@ -128,14 +143,14 @@ export async function setSetting(id, on) {
   }
 
   settings[id] = !!on;
-  await chrome.storage.sync.set({ settings });
-  return getEffectiveSettings();
+  await chrome.storage.sync.set({ settings, settingsRev: Date.now() });
+  return settings;
 }
 
 export async function setSettings(patch) {
   const settings = { ...(await getSettings()), ...patch };
-  await chrome.storage.sync.set({ settings });
-  return getEffectiveSettings();
+  await chrome.storage.sync.set({ settings, settingsRev: Date.now() });
+  return settings;
 }
 
 export async function getPendingInfo() {
@@ -189,6 +204,7 @@ export async function importBundle(raw) {
   if (data.activeSite) patch.activeSite = data.activeSite;
   if (data.darkMode) patch.darkMode = data.darkMode;
   if (data.uiTheme) patch.uiTheme = data.uiTheme;
+  patch.settingsRev = Date.now();
   await chrome.storage.sync.set(patch);
   return getEffectiveSettings();
 }

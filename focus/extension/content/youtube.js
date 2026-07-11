@@ -47,7 +47,8 @@ const VITA_VERSION = (() => {
       if (/continuation|chip|header|spinner|ghost/.test(tag)) return;
       if (hasVideoIn(child)) return;
       const text = (child.textContent || '').replace(/\s+/g, ' ').trim();
-      if (PARACHUTE.test(text) || text.length < 220) hideNode(child);
+      // Парашют / пустое состояние: короткий блок без видео на ленте подписок.
+      if (PARACHUTE.test(text) || (text.length > 0 && text.length < 220)) hideNode(child);
     });
     const walker = document.createTreeWalker(document.documentElement, NodeFilter.SHOW_TEXT);
     let node;
@@ -989,20 +990,64 @@ function scheduleHeavy() {
 }
 
 let settingsLoaded = false;
+let lastSettingsRev = 0;
 function anyActive() {
   return Object.entries(settings).some(([k, v]) => v && k.startsWith('yt_'));
 }
 
+function inScheduleWindowCS(schedule) {
+  const h = new Date().getHours();
+  const { start, end } = schedule;
+  if (start === end) return true;
+  if (start < end) return h >= start && h < end;
+  return h >= start || h < end;
+}
+
+// Читаем storage напрямую: background-воркер в iOS Safari часто мёртв,
+// и через vfocus:get настройки просто не доезжают до страницы.
+async function readSettingsDirect() {
+  const data = await chrome.storage.sync.get(['settings', 'schedule', 'pending', 'settingsRev']);
+  if (data.settingsRev) lastSettingsRev = data.settingsRev;
+  const raw = { ...DEFAULTS, ...(data.settings || {}) };
+  const pending = data.pending || {};
+  const now = Date.now();
+  for (const [id, until] of Object.entries(pending)) {
+    if (until <= now) raw[id] = false;
+  }
+  const schedule = { enabled: false, start: 9, end: 22, ...(data.schedule || {}) };
+  if (schedule.enabled && !inScheduleWindowCS(schedule)) {
+    for (const k of Object.keys(raw)) raw[k] = false;
+  }
+  return raw;
+}
+
 async function loadSettings() {
+  const prev = JSON.stringify(settings);
   try {
-    const res = await chrome.runtime.sendMessage({ type: 'vfocus:get' });
-    if (res) settings = { ...DEFAULTS, ...res };
+    settings = await readSettingsDirect();
   } catch {
-    settings = { ...DEFAULTS };
+    try {
+      const res = await chrome.runtime.sendMessage({ type: 'vfocus:get' });
+      if (res) settings = { ...DEFAULTS, ...res };
+    } catch {
+      settings = { ...DEFAULTS };
+    }
+  }
+  const next = JSON.stringify(settings);
+  if (prev === next) return;
+  if (!settings.yt_thumbs && !settings.yt_blur) {
+    clearThumbOverrides(document);
   }
   tick();
   settingsLoaded = true;
 }
+
+try {
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'sync') return;
+    if (changes.settings || changes.settingsRev || changes.schedule || changes.pending || changes.cooldownHours) loadSettings();
+  });
+} catch { /* нет chrome.storage — останется поллинг */ }
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg?.type === 'vfocus:settings') loadSettings();
@@ -1030,4 +1075,20 @@ if (document.readyState === 'loading') {
   watch();
 }
 loadSettings();
-setInterval(loadSettings, 60000);
+let pollTick = 0;
+setInterval(async () => {
+  pollTick++;
+  try {
+    const { settingsRev } = await chrome.storage.sync.get('settingsRev');
+    if (settingsRev && settingsRev !== lastSettingsRev) {
+      lastSettingsRev = settingsRev;
+      loadSettings();
+      return;
+    }
+  } catch { /* ignore */ }
+  // Fallback: iOS Safari иногда не шлёт onChanged
+  if (pollTick % 8 === 0) loadSettings();
+}, 250);
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) loadSettings();
+});

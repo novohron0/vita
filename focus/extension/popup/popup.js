@@ -4,7 +4,7 @@ import {
   exportBundle, importBundle, getDarkMode, setDarkMode,
 } from '../shared/storage.js';
 import {
-  siteFromUrl, featuredSites, siteCount,
+  siteFromUrl, featuredSites, siteCount, visibleToggles,
   appendGroupCard, moveTabIndicator,
 } from './ui.js';
 
@@ -49,13 +49,33 @@ function setStatus(_text, _kind = 'idle') {
   clearTimeout(statusTimer);
 }
 
-async function pushApply() {
-  try {
-    await chrome.runtime.sendMessage({ type: 'vfocus:broadcast' });
-    setStatus('Применено на странице ✓', 'on');
-  } catch {
-    setStatus('Сохранено', 'on');
+async function refreshPauseBanner() {
+  const banner = $('#pauseBanner');
+  if (!banner) return;
+  const sched = await getSchedule();
+  const h = new Date().getHours();
+  const { start, end } = sched;
+  const inWindow = !sched.enabled || start === end
+    || (start < end ? h >= start && h < end : h >= start || h < end);
+  if (sched.enabled && !inWindow) {
+    banner.textContent = `Расписание: пауза (${start}:00–${end}:00). На странице фильтры выключены.`;
+    banner.hidden = false;
+    return;
   }
+  banner.hidden = true;
+}
+
+function pushApply() {
+  const msg = { type: 'vfocus:settings' };
+  const tid = tabId;
+  if (tid != null) {
+    chrome.tabs.sendMessage(tid, msg).catch(() => {});
+  } else {
+    chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
+      if (tab?.id) chrome.tabs.sendMessage(tab.id, msg).catch(() => {});
+    }).catch(() => {});
+  }
+  chrome.runtime.sendMessage({ type: 'vfocus:broadcast' }).catch(() => {});
 }
 
 async function pushDark() {
@@ -137,6 +157,7 @@ async function init() {
   renderRows();
   bindAll();
   refreshPageStatus();
+  await refreshPauseBanner();
   requestAnimationFrame(() => moveTabIndicator($('#tabs'), active));
 }
 
@@ -220,8 +241,9 @@ function refreshMaster() {
   const site = currentSite();
   const btn = $('#siteMaster');
   if (!site || !btn) return;
-  const n = siteCount(site, settings);
-  const total = site.toggles.length;
+  const toggles = visibleToggles(site);
+  const n = siteCount(site, settings, toggles);
+  const total = toggles.length;
   btn.classList.toggle('on', n > 0);
   btn.classList.toggle('part', n > 0 && n < total);
   const lbl = $('#masterLabel');
@@ -233,15 +255,16 @@ function refreshMaster() {
 async function setSiteMaster(on) {
   const site = currentSite();
   if (!site) return;
+  const toggles = visibleToggles(site);
   if (!on) {
-    const turningOff = site.toggles.filter(t => settings[t.id]);
+    const turningOff = toggles.filter(t => settings[t.id]);
     if (turningOff.length && pinEnabled) {
       const pin = await askPin('Пароль для выключения');
       if (!pin || !(await verifyPin(pin))) return;
     }
   }
   setStatus('Сохраняю…', 'busy');
-  const patch = Object.fromEntries(site.toggles.map(t => [t.id, on]));
+  const patch = Object.fromEntries(toggles.map(t => [t.id, on]));
   settings = await setSettings(patch);
   renderRows();
   refreshSiteHead();
@@ -249,13 +272,15 @@ async function setSiteMaster(on) {
   refreshMaster();
   await refreshScheduleUi();
   await refreshSchedBadge();
-  await pushApply();
+  await refreshPauseBanner();
+  pushApply();
 }
 
 function refreshSiteHead() {
   const site = currentSite();
   if (!site) return;
-  const n = siteCount(site, settings);
+  const toggles = visibleToggles(site);
+  const n = siteCount(site, settings, toggles);
   $('#siteTitle').textContent = site.name;
   $('#siteMeta').textContent = n
     ? `${n} ${n === 1 ? 'блок включён' : n < 5 ? 'блока включено' : 'блоков включено'}`
@@ -267,7 +292,7 @@ function buildTabs() {
   nav.querySelectorAll('.tab').forEach(n => n.remove());
 
   featured.forEach(s => {
-    const n = siteCount(s, settings);
+    const n = siteCount(s, settings, visibleToggles(s));
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'tab' + (s.id === active ? ' on' : '') + (n ? ' has' : '');
@@ -293,7 +318,7 @@ function refreshTabs() {
   featured.forEach(s => {
     const b = $(`#tabs .tab[data-id="${s.id}"]`);
     if (!b) return;
-    const n = siteCount(s, settings);
+    const n = siteCount(s, settings, visibleToggles(s));
     b.classList.toggle('on', s.id === active);
     b.classList.toggle('has', n > 0);
     const cnt = b.querySelector('.tab-cnt');
@@ -352,12 +377,11 @@ function renderRows() {
   box.innerHTML = '';
   if (!site) return;
 
-  const mainToggles = site.toggles.filter(t => (t.group || 'main') === 'main');
-  const toggles = mainToggles.length ? mainToggles : site.toggles;
+  const toggles = visibleToggles(site);
   appendGroupCard(box, { label: null, toggles }, settings, false);
 }
 
-async function toggleId(id, on) {
+async function persistToggle(id, on) {
   const hours = await getCooldownHours();
   if (!on && hours > 0 && settings[id]) {
     settings = await setSetting(id, false);
@@ -366,6 +390,7 @@ async function toggleId(id, on) {
   }
   if (on && id === 'yt_thumbs') settings = await setSetting('yt_blur', false);
   if (on && id === 'yt_blur') settings = await setSetting('yt_thumbs', false);
+  return settings;
 }
 
 function buildPresets() {
@@ -398,7 +423,8 @@ async function applyPreset(preset) {
   renderRows();
   await refreshScheduleUi();
   await refreshSchedBadge();
-  await pushApply();
+  await refreshPauseBanner();
+  pushApply();
 }
 
 async function refreshPinUi() {
@@ -454,7 +480,8 @@ function bindAll() {
   $('#siteMaster').addEventListener('click', async () => {
     const site = currentSite();
     if (!site) return;
-    const allOn = site.toggles.every(t => settings[t.id]);
+    const toggles = visibleToggles(site);
+    const allOn = toggles.every(t => settings[t.id]);
     await setSiteMaster(!allOn);
   });
   $('#closeSheet').addEventListener('click', closeSheet);
@@ -503,25 +530,27 @@ function bindAll() {
     const next = !on;
     if (!(await needPinToDisable(on, next))) return;
 
-    const prev = settings[id];
+    const prev = { ...settings };
     settings[id] = next;
     row.classList.toggle('on', next);
     row.classList.remove('flash');
     void row.offsetWidth;
     row.classList.add('flash');
-    refreshSiteHead();
-    refreshMaster();
-    refreshTabs();
     setStatus('Сохраняю…', 'busy');
 
     try {
-      await toggleId(id, next);
-      row.classList.toggle('on', !!settings[id]);
-      await pushApply();
-    } catch {
-      settings[id] = prev;
-      row.classList.toggle('on', !!prev);
+      await persistToggle(id, next);
+      row.classList.toggle('on', next);
       refreshSiteHead();
+      refreshMaster();
+      refreshTabs();
+      refreshPauseBanner();
+      pushApply();
+    } catch {
+      settings = prev;
+      renderRows();
+      refreshSiteHead();
+      refreshMaster();
       setStatus('Ошибка сохранения', 'idle');
     }
     await refreshScheduleUi();
@@ -535,7 +564,7 @@ function bindAll() {
       ? { yt_kw: input.value }
       : { yt_ch: input.value };
     settings = await setSettings(patch);
-    await pushApply();
+    pushApply();
   });
   $('#rows').addEventListener('blur', async e => {
     const input = e.target.closest('input[data-filter]');
@@ -544,7 +573,7 @@ function bindAll() {
       ? { yt_kw: input.value }
       : { yt_ch: input.value };
     settings = await setSettings(patch);
-    await pushApply();
+    pushApply();
   }, true);
 
   $('#pinSave').addEventListener('click', async () => {
@@ -608,7 +637,7 @@ function bindAll() {
       renderRows();
       await refreshScheduleUi();
       await refreshSchedBadge();
-      await pushApply();
+      pushApply();
       pinMsg('Импорт OK', true, true);
       setTimeout(() => pinMsg('', false), 2000);
     } catch {
@@ -624,4 +653,10 @@ function bindAll() {
   });
 }
 
-init();
+init().catch(err => {
+  console.error('[Vita Focus popup]', err);
+  const box = $('#rows');
+  if (box) {
+    box.innerHTML = '<div class="msg err" style="padding:12px">Ошибка popup — обнови расширение в Xcode.</div>';
+  }
+});

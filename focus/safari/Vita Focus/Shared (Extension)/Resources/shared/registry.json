@@ -28,7 +28,6 @@
         "yt_autoplay": true,
         "yt_endscreen": true,
         "yt_upnext": true,
-        "yt_home_subs": true,
         "yt_shelf": true,
         "yt_chips": true,
         "yt_notifications": true,
@@ -48,7 +47,6 @@
         "yt_thumbs": false,
         "yt_blur": true,
         "yt_endscreen": true,
-        "yt_home_subs": true,
         "yt_watch_clean": true,
         "gn_feed": true,
         "gn_for_you": true,
@@ -72,8 +70,7 @@
         "yt_related": true,
         "yt_autoplay": true,
         "yt_thumbs": true,
-        "yt_endscreen": true,
-        "yt_home_subs": true
+        "yt_endscreen": true
       }
     },
     {

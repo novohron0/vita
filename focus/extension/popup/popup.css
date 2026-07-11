@@ -420,3 +420,8 @@ button.wide { width: 100%; }
 .page-status.ok::before { background: var(--accent); }
 .page-status.off { color: #e08a3c; }
 .page-status.off::before { background: #e08a3c; }
+
+.pause-banner {
+  font-size: 11px; margin-top: 6px; padding: 6px 8px; border-radius: 8px;
+  background: rgba(224, 138, 60, 0.12); color: #c97a32; line-height: 1.3;
+}
