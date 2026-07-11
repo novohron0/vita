@@ -4,13 +4,41 @@ const VITA_VERSION = (() => {
 })();
 
 (function markAlive() {
-  // Диагностика: data-vita-focus на <html> + строка в консоли.
   const mark = () => {
     if (document.documentElement) document.documentElement.dataset.vitaFocus = VITA_VERSION;
   };
   mark();
   document.addEventListener('DOMContentLoaded', mark, { once: true });
   try { console.info(`[Vita Focus] youtube.js v${VITA_VERSION} — ${location.href}`); } catch { /* noop */ }
+})();
+
+(function vitaHud() {
+  const el = document.createElement('div');
+  el.id = 'vita-focus-hud';
+  el.setAttribute('aria-hidden', 'true');
+  el.style.cssText = [
+    'position:fixed',
+    'bottom:calc(10px + env(safe-area-inset-bottom,0px))',
+    'left:8px',
+    'z-index:2147483647',
+    'padding:7px 10px',
+    'border-radius:9px',
+    'font:600 11px/1.35 -apple-system,BlinkMacSystemFont,sans-serif',
+    'background:rgba(107,33,168,0.94)',
+    'color:#fff',
+    'pointer-events:none',
+    'box-shadow:0 4px 16px rgba(0,0,0,.35)',
+    'letter-spacing:.02em',
+  ].join(';');
+  const paint = (txt) => { el.textContent = txt; };
+  paint(`VF ${VITA_VERSION} boot…`);
+  const attach = () => {
+    const root = document.documentElement || document.body;
+    if (root && !root.contains(el)) root.appendChild(el);
+  };
+  attach();
+  document.addEventListener('DOMContentLoaded', attach, { once: true });
+  window.__vitaHudUpdate = paint;
 })();
 
 (function killSubsSpamEarly() {
@@ -1037,15 +1065,21 @@ async function readSettingsDirect() {
 
 async function loadSettings() {
   const prev = JSON.stringify(settings);
+  let storageOk = true;
   try {
     settings = await readSettingsDirect();
-  } catch {
+  } catch (e) {
+    storageOk = false;
     try {
       const res = await chrome.runtime.sendMessage({ type: 'vfocus:get' });
       if (res) settings = { ...DEFAULTS, ...res };
     } catch {
       settings = { ...DEFAULTS };
     }
+  }
+  const on = Object.entries(settings).filter(([k, v]) => v && k.startsWith('yt_')).map(([k]) => k.replace('yt_', '')).slice(0, 4);
+  if (typeof window.__vitaHudUpdate === 'function') {
+    window.__vitaHudUpdate(`VF ${VITA_VERSION} · ${storageOk ? 'storage OK' : 'storage FAIL'} · ${on.length ? on.join(',') : 'off'}`);
   }
   const next = JSON.stringify(settings);
   if (prev === next) return;
@@ -1088,7 +1122,9 @@ if (document.readyState === 'loading') {
 } else {
   watch();
 }
+tick();
 loadSettings();
+[0, 50, 200, 600, 1500].forEach(ms => setTimeout(loadSettings, ms));
 let pollTick = 0;
 setInterval(async () => {
   pollTick++;

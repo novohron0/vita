@@ -262,6 +262,8 @@ body::before {
   display: flex; align-items: center; gap: 12px; padding: 11px 16px;
   cursor: pointer; border-top: 1px solid var(--sep);
   transition: background .12s;
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  user-select: none;
 }
 .row.flash { animation: rowFlash .35s ease; }
 @keyframes rowFlash {

@@ -557,6 +557,10 @@ function bindAll() {
     setStatus('Сохраняю…', 'busy');
 
     try {
+      chrome.storage.local.get('settings', data => {
+        const s = { ...(data.settings || {}), [id]: next };
+        chrome.storage.local.set({ settings: s, settingsRev: Date.now() });
+      });
       await persistToggle(id, next);
       row.classList.toggle('on', next);
       refreshSiteHead();
