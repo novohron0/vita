@@ -99,3 +99,25 @@ document.querySelectorAll(".open-goals").forEach((button) => button.addEventList
 document.querySelectorAll(".open-active-habit").forEach((button) => button.addEventListener("click", () => post("open-active-habit")));
 document.querySelectorAll(".refresh-habit").forEach((button) => button.addEventListener("click", () => post("refresh-habit")));
 document.querySelectorAll(".disconnect-habit").forEach((button) => button.addEventListener("click", () => post("disconnect-habit")));
+
+function showWidgetTheme(state) {
+    if (!state || typeof state !== "object") return;
+    document.querySelectorAll(".widget-theme").forEach((button) => {
+        const active = button.dataset.theme === state.theme;
+        button.classList.toggle("is-active", active);
+        button.setAttribute("aria-pressed", String(active));
+    });
+    const status = document.getElementById("widgetThemeStatus");
+    if (status) {
+        status.textContent = state.status || "";
+        status.classList.toggle("is-error", Boolean(state.isError));
+        status.classList.toggle("is-success", Boolean(state.status) && !state.isError);
+    }
+}
+
+document.querySelectorAll(".widget-theme").forEach((button) => {
+    button.addEventListener("click", () => {
+        showWidgetTheme({ theme: button.dataset.theme, status: "Применяем…" });
+        post({ action: "set-widget-theme", theme: button.dataset.theme });
+    });
+});

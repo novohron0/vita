@@ -12,6 +12,7 @@ struct FocusEntry: TimelineEntry {
     let dots: VitaDotsGrid
     let habit: VitaHabitSnapshot?
     let accent: Color
+    let widgetTheme: VitaWidgetTheme
 }
 
 struct FocusProvider: TimelineProvider {
@@ -49,7 +50,8 @@ struct FocusProvider: TimelineProvider {
             snapshot: FocusSnapshotStore.load(),
             dots: VitaGoalDotsStore.grid(for: date),
             habit: habit,
-            accent: Color(hex: model.accentHex) ?? Color(red: 0.66, green: 0.33, blue: 0.97)
+            accent: Color(hex: model.accentHex) ?? Color(red: 0.66, green: 0.33, blue: 0.97),
+            widgetTheme: VitaWidgetThemeStore.load()
         )
     }
 
@@ -65,25 +67,69 @@ struct FocusProvider: TimelineProvider {
 // MARK: - Shared styling
 
 private struct VitaWidgetBackground: View {
+    let theme: VitaWidgetTheme
+
     var body: some View {
-        LinearGradient(
-            colors: [
-                Color(red: 0.11, green: 0.11, blue: 0.13),
-                Color(red: 0.07, green: 0.07, blue: 0.09),
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+        ZStack {
+            LinearGradient(
+                colors: baseColors,
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            RadialGradient(
+                colors: [glow.opacity(0.62), glow.opacity(0)],
+                center: .topTrailing,
+                startRadius: 0,
+                endRadius: 180
+            )
+            RadialGradient(
+                colors: [secondaryGlow.opacity(0.24), secondaryGlow.opacity(0)],
+                center: .bottomLeading,
+                startRadius: 0,
+                endRadius: 150
+            )
+        }
+    }
+
+    private var baseColors: [Color] {
+        switch theme {
+        case .graphite:
+            return [Color(red: 0.12, green: 0.12, blue: 0.15), Color(red: 0.025, green: 0.025, blue: 0.035)]
+        case .violet:
+            return [Color(red: 0.23, green: 0.07, blue: 0.39), Color(red: 0.045, green: 0.02, blue: 0.08)]
+        case .ocean:
+            return [Color(red: 0.04, green: 0.22, blue: 0.31), Color(red: 0.015, green: 0.055, blue: 0.09)]
+        case .ember:
+            return [Color(red: 0.34, green: 0.105, blue: 0.075), Color(red: 0.08, green: 0.02, blue: 0.018)]
+        }
+    }
+
+    private var glow: Color {
+        switch theme {
+        case .graphite: return Color(red: 0.46, green: 0.48, blue: 0.56)
+        case .violet: return Color(red: 0.76, green: 0.36, blue: 1.0)
+        case .ocean: return Color(red: 0.18, green: 0.76, blue: 0.96)
+        case .ember: return Color(red: 1.0, green: 0.48, blue: 0.22)
+        }
+    }
+
+    private var secondaryGlow: Color {
+        switch theme {
+        case .graphite: return .white
+        case .violet: return Color(red: 0.95, green: 0.4, blue: 0.72)
+        case .ocean: return Color(red: 0.24, green: 0.95, blue: 0.72)
+        case .ember: return Color(red: 1.0, green: 0.78, blue: 0.35)
+        }
     }
 }
 
 private extension View {
     @ViewBuilder
-    func vitaBackground() -> some View {
+    func vitaBackground(_ theme: VitaWidgetTheme) -> some View {
         if #available(iOS 17.0, *) {
-            containerBackground(for: .widget) { VitaWidgetBackground() }
+            containerBackground(for: .widget) { VitaWidgetBackground(theme: theme) }
         } else {
-            background(VitaWidgetBackground())
+            background(VitaWidgetBackground(theme: theme))
         }
     }
 }
@@ -160,8 +206,8 @@ struct VitaMonthDotsWidgetView: View {
                 .foregroundStyle(.white.opacity(0.62))
         }
         .padding(14)
-        .vitaBackground()
-        .widgetURL(FocusDeepLinks.youtubeSubs)
+        .vitaBackground(entry.widgetTheme)
+        .widgetURL(FocusDeepLinks.appHome)
     }
 
     private var mediumBody: some View {
@@ -183,8 +229,8 @@ struct VitaMonthDotsWidgetView: View {
             VitaDotsGridView(grid: entry.dots, accent: entry.accent, dotSize: 11, spacing: 5)
         }
         .padding(14)
-        .vitaBackground()
-        .widgetURL(FocusDeepLinks.youtubeSubs)
+        .vitaBackground(entry.widgetTheme)
+        .widgetURL(FocusDeepLinks.appHome)
     }
 
     private var largeBody: some View {
@@ -206,8 +252,8 @@ struct VitaMonthDotsWidgetView: View {
             }
         }
         .padding(16)
-        .vitaBackground()
-        .widgetURL(FocusDeepLinks.youtubeSubs)
+        .vitaBackground(entry.widgetTheme)
+        .widgetURL(FocusDeepLinks.appHome)
     }
 
     private var header: some View {
@@ -262,7 +308,7 @@ struct VitaHabitWidgetView: View {
                 emptyBody
             }
         }
-        .vitaBackground()
+        .vitaBackground(entry.widgetTheme)
         .widgetURL(entry.habit.flatMap { VitaHabitStore.deepLinkURL(for: $0.code) }
             ?? URL(string: "https://vitadots.ru/goals"))
     }
@@ -422,27 +468,42 @@ struct YouTubeFocusWidgetView: View {
     var entry: FocusEntry
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 9) {
             HStack {
-                Text("vita")
+                Text("vita focus")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.white.opacity(0.55))
                 Spacer()
-                Text("YT")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(.red.opacity(0.9))
+                Image(systemName: "safari.fill")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.72))
             }
-            Text("YouTube Focus")
-                .font(.headline)
-                .foregroundStyle(.white)
+            HStack(spacing: 9) {
+                ZStack {
+                    Circle()
+                        .fill(LinearGradient(colors: [.red, Color(red: 0.72, green: 0.02, blue: 0.08)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    Image(systemName: "play.fill")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.white)
+                        .offset(x: 1)
+                }
+                .frame(width: 32, height: 32)
+                Text("YouTube")
+                    .font(.headline)
+                    .foregroundStyle(.white)
+            }
             Text(statusLine(entry.snapshot))
                 .font(.caption)
                 .foregroundStyle(.white.opacity(0.65))
                 .lineLimit(2)
+            Spacer(minLength: 0)
+            Text("Главная · Safari  ↗")
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(.white.opacity(0.52))
         }
         .padding(14)
-        .vitaBackground()
-        .widgetURL(FocusDeepLinks.youtubeSubs)
+        .vitaBackground(entry.widgetTheme)
+        .widgetURL(FocusDeepLinks.youtubeHome)
     }
 }
 
@@ -454,7 +515,7 @@ struct YouTubeFocusWidget: Widget {
             YouTubeFocusWidgetView(entry: entry)
         }
         .configurationDisplayName("YouTube Focus")
-        .description("Подписки в Safari без Shorts.")
+        .description("Главная YouTube в Safari с активным Vita Focus.")
         .supportedFamilies([.systemSmall])
     }
 }
@@ -476,8 +537,8 @@ struct FocusStatusWidgetView: View {
             Spacer(minLength: 0)
         }
         .padding(14)
-        .vitaBackground()
-        .widgetURL(FocusDeepLinks.youtubeSubs)
+        .vitaBackground(entry.widgetTheme)
+        .widgetURL(FocusDeepLinks.youtubeHome)
     }
 }
 
@@ -503,24 +564,33 @@ struct QuickLaunchWidgetView: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.white.opacity(0.55))
             HStack(spacing: 10) {
-                launchTile(url: FocusDeepLinks.youtubeSubs, title: "YouTube")
-                launchTile(url: FocusDeepLinks.instagram, title: "Instagram")
-                launchTile(url: FocusDeepLinks.x, title: "X")
+                launchTile(url: FocusDeepLinks.youtubeHome, title: "YouTube", icon: "play.fill", tint: .red)
+                launchTile(url: FocusDeepLinks.instagram, title: "Instagram", icon: "camera.fill", tint: Color(red: 0.82, green: 0.25, blue: 0.66))
+                launchTile(url: FocusDeepLinks.x, title: "X", icon: "xmark", tint: .white)
             }
         }
         .padding(14)
-        .vitaBackground()
+        .vitaBackground(entry.widgetTheme)
     }
 
     @ViewBuilder
-    private func launchTile(url: URL, title: String) -> some View {
+    private func launchTile(url: URL, title: String, icon: String, tint: Color) -> some View {
         Link(destination: url) {
-            Text(title)
-                .font(.caption2.weight(.medium))
-                .foregroundStyle(.white.opacity(0.9))
+            VStack(spacing: 7) {
+                Image(systemName: icon)
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(tint)
+                Text(title)
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.9))
+            }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(Color.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
+                .padding(.vertical, 10)
+                .background(
+                    LinearGradient(colors: [Color.white.opacity(0.13), Color.white.opacity(0.055)], startPoint: .topLeading, endPoint: .bottomTrailing),
+                    in: RoundedRectangle(cornerRadius: 12)
+                )
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.1), lineWidth: 0.5))
         }
     }
 }

@@ -71,6 +71,7 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
 #if os(iOS)
         refreshExtensionState(in: webView)
         pushHabitState(to: webView, isRefreshing: VitaHabitStore.activeCode != nil)
+        pushWidgetTheme(to: webView)
         refreshActiveHabit(in: webView)
 #elseif os(macOS)
         webView.evaluateJavaScript("show('mac')")
@@ -96,7 +97,7 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
 #if os(iOS)
         if let body = message.body as? String {
             if body == "open-youtube" {
-                FocusDeepLinks.openURL(FocusDeepLinks.youtubeSubs)
+                FocusDeepLinks.openURL(FocusDeepLinks.youtubeHome)
                 return
             }
             if body == "open-settings" {
@@ -126,9 +127,15 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
             }
         }
         if let payload = message.body as? [String: Any],
-           payload["action"] as? String == "connect-habit" {
-            connectHabit(payload["value"] as? String ?? "", in: webView)
-            return
+           let action = payload["action"] as? String {
+            if action == "connect-habit" {
+                connectHabit(payload["value"] as? String ?? "", in: webView)
+                return
+            }
+            if action == "set-widget-theme" {
+                saveWidgetTheme(payload["theme"] as? String ?? "", in: webView)
+                return
+            }
         }
 #elseif os(macOS)
         if (message.body as! String != "open-preferences") {
@@ -249,6 +256,31 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
               let data = try? JSONSerialization.data(withJSONObject: payload),
               let json = String(data: data, encoding: .utf8) else { return }
         webView.evaluateJavaScript("showHabitState(\(json))", completionHandler: nil)
+    }
+
+    private func saveWidgetTheme(_ raw: String, in webView: WKWebView) {
+        guard let theme = VitaWidgetThemeStore.save(rawValue: raw) else {
+            pushWidgetTheme(to: webView, status: "Неизвестная тема", isError: true)
+            return
+        }
+        WidgetCenter.shared.reloadAllTimelines()
+        pushWidgetTheme(to: webView, status: "Тема применена", theme: theme)
+    }
+
+    private func pushWidgetTheme(
+        to webView: WKWebView,
+        status: String? = nil,
+        isError: Bool = false,
+        theme: VitaWidgetTheme? = nil
+    ) {
+        var payload: [String: Any] = ["theme": (theme ?? VitaWidgetThemeStore.load()).rawValue]
+        if let status {
+            payload["status"] = status
+            payload["isError"] = isError
+        }
+        guard let data = try? JSONSerialization.data(withJSONObject: payload),
+              let json = String(data: data, encoding: .utf8) else { return }
+        webView.evaluateJavaScript("showWidgetTheme(\(json))", completionHandler: nil)
     }
 
     private func openSafariExtensionSettings() {

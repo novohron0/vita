@@ -11,6 +11,10 @@ extension FocusDeepLinks {
 
     static func handle(_ incoming: URL) {
         if ["vita", "vitafocus"].contains(incoming.scheme?.lowercased() ?? ""),
+           incoming.host?.lowercased() == "home" {
+            return
+        }
+        if ["vita", "vitafocus"].contains(incoming.scheme?.lowercased() ?? ""),
            incoming.host?.lowercased() == "goal",
            let code = VitaHabitStore.code(from: incoming.absoluteString),
            (try? VitaHabitStore.activate(code)) != nil {

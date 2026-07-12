@@ -43,13 +43,28 @@ function applyTheme(mode) {
   });
 }
 
+async function readUiValue(key) {
+  const local = await chrome.storage.local.get(key);
+  if (local[key] !== undefined) return local[key];
+  try {
+    const sync = await chrome.storage.sync.get(key);
+    return sync[key];
+  } catch {
+    return undefined;
+  }
+}
+
+async function writeUiValue(key, value) {
+  await chrome.storage.local.set({ [key]: value });
+  try { await chrome.storage.sync.set({ [key]: value }); } catch { /* optional mirror */ }
+}
+
 async function loadTheme() {
-  const { uiTheme } = await chrome.storage.sync.get('uiTheme');
-  applyTheme(uiTheme || 'system');
+  applyTheme((await readUiValue('uiTheme')) || 'system');
 }
 
 async function saveTheme(mode) {
-  await chrome.storage.sync.set({ uiTheme: mode });
+  await writeUiValue('uiTheme', mode);
   applyTheme(mode);
 }
 
@@ -173,7 +188,7 @@ async function init() {
     refreshPinUi(),
     refreshScheduleUi(),
     refreshSchedBadge(),
-    chrome.storage.sync.get('activeSite'),
+    readUiValue('activeSite').then(activeSite => ({ activeSite })),
     loadDarkUi(),
   ]);
   settings = settingsData;
@@ -403,7 +418,7 @@ function closeSheet() {
 
 function selectSite(id) {
   active = id;
-  chrome.storage.sync.set({ activeSite: active });
+  writeUiValue('activeSite', active).catch(() => {});
   refreshTabs();
   refreshSiteHead();
   refreshMaster();

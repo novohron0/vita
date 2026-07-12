@@ -35,6 +35,10 @@ Vita — не набор отдельных демо, а одна система
 6. App Intent «Отметить сегодня» вызывает `/api/goal/{code}/toggle`, обновляет
    кэш и WidgetKit. `/gw/{code}.png` автоматически отражает ту же отметку.
 
+Все виджеты используют общую тему из App Group: `graphite`, `violet`, `ocean`
+или `ember`. Тема выбирается в native app и применяется через
+`WidgetCenter.reloadAllTimelines()`.
+
 Пока активная привычка одна. Следующий продуктовый шаг — несколько привычек и
 `AppIntentConfiguration`, чтобы каждый экземпляр виджета выбирал свою цель.
 
@@ -55,6 +59,12 @@ youtube.js / site content scripts
 
 Не обещать, что extension работает на iPhone, пока нет device-диагностики.
 PWA «На экран Домой» не поддерживает Safari extensions — нужен Safari.
+Для домашнего запуска использовать виджеты **YouTube Focus** / **Быстрый запуск**:
+они открывают главную `https://www.youtube.com/` именно в Safari. Обычная иконка
+сайта «На экран Домой» запускает web-app без extension.
+
+Popup UI (`uiTheme`, `activeSite`) тоже local-first; `storage.sync` для этих
+полей — только необязательное зеркало и не должен ронять инициализацию popup.
 
 ## Диагностика на iPhone
 

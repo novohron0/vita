@@ -4,6 +4,34 @@ enum FocusAppGroup {
     static let id = "group.ru.vitadots.focus"
 }
 
+enum VitaWidgetTheme: String, Codable, CaseIterable {
+    case graphite
+    case violet
+    case ocean
+    case ember
+}
+
+enum VitaWidgetThemeStore {
+    private static let key = "vitaWidgetTheme"
+
+    static var defaults: UserDefaults? {
+        UserDefaults(suiteName: FocusAppGroup.id)
+    }
+
+    static func load() -> VitaWidgetTheme {
+        guard let raw = defaults?.string(forKey: key),
+              let theme = VitaWidgetTheme(rawValue: raw) else { return .graphite }
+        return theme
+    }
+
+    @discardableResult
+    static func save(rawValue: String) -> VitaWidgetTheme? {
+        guard let theme = VitaWidgetTheme(rawValue: rawValue) else { return nil }
+        defaults?.set(theme.rawValue, forKey: key)
+        return theme
+    }
+}
+
 struct FocusSnapshot: Codable {
     var blocksOn: Int
     var scheduleEnabled: Bool
@@ -62,16 +90,18 @@ enum FocusSnapshotStore {
 }
 
 enum FocusDeepLinks {
+    static let appHome = URL(string: "vita://home")!
+    static let youtubeHome = URL(string: "https://www.youtube.com/")!
     static let youtubeSubs = URL(string: "https://m.youtube.com/feed/subscriptions")!
     static let instagram = URL(string: "https://www.instagram.com/")!
     static let x = URL(string: "https://x.com/")!
 
     static func url(for host: String?) -> URL {
         switch host?.lowercased() {
-        case "youtube", "yt": return youtubeSubs
+        case "youtube", "yt": return youtubeHome
         case "instagram", "ig": return instagram
         case "x", "twitter": return x
-        default: return youtubeSubs
+        default: return youtubeHome
         }
     }
 }
