@@ -68,6 +68,44 @@
                 <p class="step-text">Долгое нажатие на домашний экран → <b>+</b> → <b>Vita Focus</b> → виджет <b>«Vita · точки»</b> — сетка дней как на vitadots.ru.</p>
                 <p class="step-hint">На iOS 17+ в среднем/большом виджете есть кнопка <b>«Отметить день»</b>. Расширение Safari для этого не нужно.</p>
             </section>
+
+            <section class="step-card habit-settings">
+                <div class="step-head">
+                    <span class="step-num">4</span>
+                    <h2 class="step-title">Привычка из Vita</h2>
+                </div>
+                <p class="step-text">Одна отметка дня обновляет цель на <b>vitadots.ru</b>, Habit‑виджет и «Обои жизни».</p>
+
+                <div id="habitEmpty">
+                    <p class="step-hint habit-lead">Создай цель на сайте и нажми там <b>«Открыть в Vita»</b>. Или вставь сюда ссылку вида <span class="mono">vitadots.ru/g/…</span>.</p>
+                    <label class="habit-code-field">
+                        <span>Ссылка или код цели</span>
+                        <input id="habitCode" type="text" inputmode="text" autocomplete="off" autocapitalize="none" placeholder="vitadots.ru/g/abcdef">
+                    </label>
+                    <button id="connectHabit" type="button" class="primary">Подключить привычку</button>
+                    <button type="button" class="secondary open-goals">Создать на vitadots.ru</button>
+                </div>
+
+                <div id="habitConnected" class="habit-connected" hidden>
+                    <div class="habit-title-row">
+                        <span id="habitDot" class="habit-dot"></span>
+                        <strong id="habitTitle">Загружаем цель…</strong>
+                    </div>
+                    <div class="habit-stats">
+                        <div><b id="habitDone">—</b><span>выполнено</span></div>
+                        <div><b id="habitStreak">—</b><span>стрик</span></div>
+                        <div><b id="habitBest">—</b><span>рекорд</span></div>
+                    </div>
+                    <div class="habit-progress"><i id="habitProgress"></i></div>
+                    <button type="button" class="primary open-active-habit">Открыть цель и обои</button>
+                    <div class="habit-actions">
+                        <button type="button" class="secondary refresh-habit">Обновить</button>
+                        <button type="button" class="secondary disconnect-habit">Сменить</button>
+                    </div>
+                </div>
+
+                <p id="habitStatus" class="habit-status" role="status" aria-live="polite"></p>
+            </section>
         </div>
 
         <p class="foot-note platform-ios">YouTube только через приложение <b>Safari</b> (видна адресная строка). Иконка с «Домой» = без Vita Focus.</p>

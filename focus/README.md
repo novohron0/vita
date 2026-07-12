@@ -1,7 +1,8 @@
 # Vita Focus — Safari Web Extension
 
 Блокирует Shorts, ленты и прочий шум на YouTube (и дальше — Instagram, X, Reddit).
-Настройки синкаются через `browser.storage.sync` (iCloud на Apple-устройствах).
+`browser.storage.local` — источник правды; `sync` используется как best-effort
+зеркало/fallback. Привычки и обои синхронизируются отдельно через API vitadots.ru.
 
 ## Структура
 

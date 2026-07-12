@@ -9,6 +9,7 @@
 			<string>ru.vitadots.focus</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
+				<string>vita</string>
 				<string>vitafocus</string>
 			</array>
 		</dict>

@@ -7,7 +7,7 @@
 
 import SafariServices
 import os.log
-#if canImport(WidgetKit)
+#if os(iOS)
 import WidgetKit
 #endif
 
@@ -32,14 +32,14 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
 
         os_log(.default, "Received message from browser.runtime.sendNativeMessage: %@ (profile: %@)", String(describing: message), profile?.uuidString ?? "none")
 
+        #if os(iOS)
         if let dict = message as? [String: Any], dict["type"] as? String == "widget-snapshot" {
             FocusSnapshotStore.save(from: dict)
-            #if canImport(WidgetKit)
-            if #available(iOS 14.0, macOS 11.0, *) {
+            if #available(iOS 14.0, *) {
                 WidgetCenter.shared.reloadAllTimelines()
             }
-            #endif
         }
+        #endif
 
         let response = NSExtensionItem()
         if #available(iOS 15.0, macOS 11.0, *) {

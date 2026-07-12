@@ -10,33 +10,55 @@ struct FocusEntry: TimelineEntry {
     let date: Date
     let snapshot: FocusSnapshot
     let dots: VitaDotsGrid
+    let habit: VitaHabitSnapshot?
     let accent: Color
 }
 
 struct FocusProvider: TimelineProvider {
     func placeholder(in context: Context) -> FocusEntry {
-        makeEntry(date: .now)
+        makeEntry(date: .now, habit: .placeholder)
     }
 
     func getSnapshot(in context: Context, completion: @escaping (FocusEntry) -> Void) {
-        completion(makeEntry(date: .now))
+        let habit = VitaHabitStore.loadSnapshot() ?? (context.isPreview ? .placeholder : nil)
+        completion(makeEntry(date: .now, habit: habit))
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<FocusEntry>) -> Void) {
-        let entry = makeEntry(date: .now)
-        let next = Calendar.current.date(byAdding: .hour, value: 1, to: .now)
-            ?? .now.addingTimeInterval(3600)
-        completion(Timeline(entries: [entry], policy: .after(next)))
+        let cached = VitaHabitStore.loadSnapshot()
+        guard let code = VitaHabitStore.activeCode else {
+            completion(makeTimeline(habit: nil))
+            return
+        }
+        Task {
+            let habit: VitaHabitSnapshot?
+            if let fresh = try? await VitaHabitClient.fetch(code: code) {
+                VitaHabitStore.save(fresh)
+                habit = fresh
+            } else {
+                habit = cached
+            }
+            completion(makeTimeline(habit: habit))
+        }
     }
 
-    private func makeEntry(date: Date) -> FocusEntry {
+    private func makeEntry(date: Date, habit: VitaHabitSnapshot?) -> FocusEntry {
         let model = VitaGoalDotsStore.load()
         return FocusEntry(
             date: date,
             snapshot: FocusSnapshotStore.load(),
             dots: VitaGoalDotsStore.grid(for: date),
+            habit: habit,
             accent: Color(hex: model.accentHex) ?? Color(red: 0.66, green: 0.33, blue: 0.97)
         )
+    }
+
+    private func makeTimeline(habit: VitaHabitSnapshot?) -> Timeline<FocusEntry> {
+        let now = Date.now
+        let entry = makeEntry(date: now, habit: habit)
+        let next = Calendar.current.date(byAdding: .minute, value: 30, to: now)
+            ?? now.addingTimeInterval(1800)
+        return Timeline(entries: [entry], policy: .after(next))
     }
 }
 
@@ -126,7 +148,12 @@ struct VitaMonthDotsWidgetView: View {
     private var smallBody: some View {
         VStack(alignment: .leading, spacing: 8) {
             header
-            VitaDotsGridView(grid: entry.dots, accent: entry.accent, dotSize: 9, spacing: 4)
+            VitaDotsGridView(
+                grid: entry.dots,
+                accent: entry.accent,
+                dotSize: entry.dots.total > 31 ? 7 : 9,
+                spacing: entry.dots.total > 31 ? 2.5 : 4
+            )
             Spacer(minLength: 0)
             Text(entry.dots.footer)
                 .font(.caption2)
@@ -217,6 +244,174 @@ struct VitaMonthDotsWidget: Widget {
         }
         .configurationDisplayName("Vita · точки")
         .description("Месяц или цель — как на vitadots.ru. Тап «Отметить день» на iOS 17+.")
+        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
+    }
+}
+
+// MARK: - Habit Tracker (данные общей цели vitadots.ru)
+
+struct VitaHabitWidgetView: View {
+    @Environment(\.widgetFamily) private var family
+    var entry: FocusEntry
+
+    var body: some View {
+        Group {
+            if let habit = entry.habit {
+                habitBody(habit)
+            } else {
+                emptyBody
+            }
+        }
+        .vitaBackground()
+        .widgetURL(entry.habit.flatMap { VitaHabitStore.deepLinkURL(for: $0.code) }
+            ?? URL(string: "https://vitadots.ru/goals"))
+    }
+
+    @ViewBuilder
+    private func habitBody(_ habit: VitaHabitSnapshot) -> some View {
+        switch family {
+        case .systemMedium:
+            mediumBody(habit)
+        case .systemLarge:
+            largeBody(habit)
+        default:
+            smallBody(habit)
+        }
+    }
+
+    private func smallBody(_ habit: VitaHabitSnapshot) -> some View {
+        let grid = habit.widgetGrid(for: entry.date, maxDots: 30)
+        return VStack(alignment: .leading, spacing: 7) {
+            habitHeader(habit)
+            VitaDotsGridView(grid: grid, accent: habitColor(habit), dotSize: 8, spacing: 3)
+            Spacer(minLength: 0)
+            HStack(spacing: 6) {
+                Text(grid.footer)
+                    .font(.caption2)
+                    .foregroundStyle(.white.opacity(0.62))
+                Spacer(minLength: 0)
+                markHabitControl(habit, compact: true)
+            }
+        }
+        .padding(14)
+    }
+
+    private func mediumBody(_ habit: VitaHabitSnapshot) -> some View {
+        let grid = habit.widgetGrid(for: entry.date, maxDots: 42)
+        return HStack(alignment: .top, spacing: 14) {
+            VStack(alignment: .leading, spacing: 7) {
+                habitHeader(habit)
+                Text("\(habit.doneSet.count)/\(habit.days) выполнено")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.7))
+                Text("\(habit.currentStreak(on: entry.date))🔥 сейчас · \(habit.bestStreak()) рекорд")
+                    .font(.caption2)
+                    .foregroundStyle(.white.opacity(0.48))
+                Spacer(minLength: 0)
+                markHabitControl(habit)
+            }
+            .frame(width: 132, alignment: .leading)
+            VitaDotsGridView(grid: grid, accent: habitColor(habit), dotSize: 11, spacing: 5)
+        }
+        .padding(14)
+    }
+
+    private func largeBody(_ habit: VitaHabitSnapshot) -> some View {
+        let grid = habit.widgetGrid(for: entry.date, maxDots: 120)
+        return VStack(alignment: .leading, spacing: 12) {
+            habitHeader(habit)
+            HStack(spacing: 22) {
+                habitStat("\(habit.doneSet.count)/\(habit.days)", "выполнено")
+                habitStat("\(habit.currentStreak(on: entry.date))🔥", "стрик")
+                habitStat("\(habit.bestStreak())", "рекорд")
+            }
+            VitaDotsGridView(grid: grid, accent: habitColor(habit), dotSize: 11, spacing: 5)
+            Spacer(minLength: 0)
+            HStack {
+                Text(grid.footer)
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.55))
+                Spacer()
+                markHabitControl(habit)
+            }
+        }
+        .padding(16)
+    }
+
+    private var emptyBody: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Text("vita habit")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.5))
+            Text("Подключи привычку")
+                .font(.headline)
+                .foregroundStyle(.white)
+            Text("Открой Vita и свяжи цель с vitadots.ru")
+                .font(.caption)
+                .foregroundStyle(.white.opacity(0.62))
+                .lineLimit(3)
+            Spacer(minLength: 0)
+        }
+        .padding(14)
+    }
+
+    private func habitHeader(_ habit: VitaHabitSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("vita habit")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.5))
+            Text(habit.title)
+                .font(.headline)
+                .foregroundStyle(.white)
+                .lineLimit(family == .systemSmall ? 1 : 2)
+        }
+    }
+
+    private func habitStat(_ value: String, _ label: String) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(value)
+                .font(.headline.monospacedDigit())
+                .foregroundStyle(.white)
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(.white.opacity(0.45))
+        }
+    }
+
+    private func habitColor(_ habit: VitaHabitSnapshot) -> Color {
+        Color(hex: habit.color) ?? Color(red: 0.66, green: 0.33, blue: 0.97)
+    }
+
+    @ViewBuilder
+    private func markHabitControl(_ habit: VitaHabitSnapshot, compact: Bool = false) -> some View {
+        if #available(iOS 17.0, *) {
+            Button(intent: ToggleVitaHabitTodayIntent()) {
+                if compact {
+                    Image(systemName: habit.isDone(on: entry.date) ? "checkmark.circle.fill" : "checkmark.circle")
+                        .font(.caption.weight(.semibold))
+                } else {
+                    Label(
+                        habit.isDone(on: entry.date) ? "Отмечено" : "Отметить сегодня",
+                        systemImage: habit.isDone(on: entry.date) ? "checkmark.circle.fill" : "checkmark.circle"
+                    )
+                    .font(.caption.weight(.medium))
+                }
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(habitColor(habit))
+        }
+    }
+}
+
+struct VitaHabitWidget: Widget {
+    let kind = "VitaHabitWidget"
+
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: kind, provider: FocusProvider()) { entry in
+            VitaHabitWidgetView(entry: entry)
+        }
+        .configurationDisplayName("Vita · привычка")
+        .description("Та же цель, стрик и отметки, что на vitadots.ru и в живых обоях.")
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
     }
 }
@@ -357,6 +552,22 @@ struct MarkFocusDayIntent: AppIntent {
         return .result()
     }
 }
+
+@available(iOS 17.0, *)
+struct ToggleVitaHabitTodayIntent: AppIntent {
+    static var title: LocalizedStringResource = "Отметить привычку сегодня"
+    static var description = IntentDescription("Обновляет эту же отметку на vitadots.ru, в виджете и живых обоях Vita.")
+
+    func perform() async throws -> some IntentResult {
+        guard let code = VitaHabitStore.activeCode else { return .result() }
+        _ = try await VitaHabitClient.toggleToday(code: code)
+        if let snapshot = try? await VitaHabitClient.fetch(code: code) {
+            VitaHabitStore.save(snapshot)
+        }
+        WidgetCenter.shared.reloadTimelines(ofKind: "VitaHabitWidget")
+        return .result()
+    }
+}
 #endif
 
 // MARK: - Bundle
@@ -365,6 +576,7 @@ struct MarkFocusDayIntent: AppIntent {
 struct VitaFocusWidgetBundle: WidgetBundle {
     var body: some Widget {
         VitaMonthDotsWidget()
+        VitaHabitWidget()
         YouTubeFocusWidget()
         FocusStatusWidget()
         QuickLaunchWidget()

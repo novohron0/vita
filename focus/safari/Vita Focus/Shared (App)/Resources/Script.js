@@ -35,3 +35,67 @@ function showDiagnostics(lines) {
     box.textContent = lines.join("\n");
     document.getElementById("diag")?.removeAttribute("hidden");
 }
+
+function showHabitState(state) {
+    if (!state || typeof state !== "object") return;
+    const empty = document.getElementById("habitEmpty");
+    const connected = document.getElementById("habitConnected");
+    if (empty) empty.hidden = Boolean(state.connected);
+    if (connected) connected.hidden = !state.connected;
+
+    const input = document.getElementById("habitCode");
+    if (input && document.activeElement !== input && state.code) input.value = state.code;
+    const title = document.getElementById("habitTitle");
+    if (title) title.textContent = state.title || (state.refreshing ? "Загружаем цель…" : "Цель подключена");
+    const done = Number(state.done) || 0;
+    const days = Math.max(1, Number(state.days) || 1);
+    const doneEl = document.getElementById("habitDone");
+    if (doneEl) doneEl.textContent = state.hasData ? `${done}/${days}` : "—";
+    const streak = document.getElementById("habitStreak");
+    if (streak) streak.textContent = state.hasData ? `${Number(state.streak) || 0}🔥` : "—";
+    const best = document.getElementById("habitBest");
+    if (best) best.textContent = state.hasData ? String(Number(state.best) || 0) : "—";
+    const dot = document.getElementById("habitDot");
+    if (dot) dot.style.background = state.color || "#a855f7";
+    const progress = document.getElementById("habitProgress");
+    if (progress) {
+        progress.style.width = state.hasData ? `${Math.min(100, done / days * 100)}%` : "0%";
+        progress.style.background = state.color || "#a855f7";
+    }
+
+    const status = document.getElementById("habitStatus");
+    if (status) {
+        status.textContent = state.status || (state.refreshing ? "Синхронизируем с vitadots.ru…" : "");
+        status.classList.toggle("is-error", Boolean(state.isError));
+        status.classList.toggle("is-success", Boolean(state.status) && !state.isError);
+    }
+    document.querySelectorAll(".refresh-habit").forEach((button) => { button.disabled = Boolean(state.refreshing); });
+    const connect = document.getElementById("connectHabit");
+    if (connect) connect.disabled = false;
+}
+
+function connectHabit() {
+    const button = document.getElementById("connectHabit");
+    const value = document.getElementById("habitCode")?.value.trim() || "";
+    const status = document.getElementById("habitStatus");
+    if (!value) {
+        if (status) status.textContent = "Вставь ссылку или код цели";
+        status?.classList.add("is-error");
+        return;
+    }
+    if (button) button.disabled = true;
+    if (status) {
+        status.textContent = "Подключаем…";
+        status.classList.remove("is-error", "is-success");
+    }
+    post({ action: "connect-habit", value });
+}
+
+document.getElementById("connectHabit")?.addEventListener("click", connectHabit);
+document.getElementById("habitCode")?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") connectHabit();
+});
+document.querySelectorAll(".open-goals").forEach((button) => button.addEventListener("click", () => post("open-goals")));
+document.querySelectorAll(".open-active-habit").forEach((button) => button.addEventListener("click", () => post("open-active-habit")));
+document.querySelectorAll(".refresh-habit").forEach((button) => button.addEventListener("click", () => post("refresh-habit")));
+document.querySelectorAll(".disconnect-habit").forEach((button) => button.addEventListener("click", () => post("disconnect-habit")));

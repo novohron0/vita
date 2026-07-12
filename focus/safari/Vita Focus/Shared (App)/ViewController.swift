@@ -10,6 +10,7 @@ import SafariServices
 
 #if os(iOS)
 import UIKit
+import WidgetKit
 typealias PlatformViewController = UIViewController
 #elseif os(macOS)
 import Cocoa
@@ -21,10 +22,23 @@ let extensionBundleIdentifier = "ru.vitadots.focus.Extension"
 class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMessageHandler {
 
     @IBOutlet var webView: WKWebView!
+#if os(iOS)
+    private var habitObserver: NSObjectProtocol?
+#endif
 
     override func viewDidLoad() {
         super.viewDidLoad()
+#if os(iOS)
         VitaGoalDotsStore.ensureDefaults()
+        habitObserver = NotificationCenter.default.addObserver(
+            forName: .vitaActiveHabitChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            self.refreshActiveHabit(in: self.webView, successStatus: "Цель открыта из vitadots.ru")
+        }
+#endif
 
         self.webView.navigationDelegate = self
 
@@ -38,16 +52,26 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         self.webView.loadFileURL(Bundle.main.url(forResource: "Main", withExtension: "html")!, allowingReadAccessTo: Bundle.main.resourceURL!)
     }
 
-    override func viewWillAppear(_ animated: Bool) {
-        super.viewWillAppear(animated)
+    deinit {
 #if os(iOS)
-        refreshExtensionState(in: webView)
+        if let habitObserver {
+            NotificationCenter.default.removeObserver(habitObserver)
+        }
 #endif
     }
+
+#if os(iOS)
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        refreshExtensionState(in: webView)
+    }
+#endif
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
 #if os(iOS)
         refreshExtensionState(in: webView)
+        pushHabitState(to: webView, isRefreshing: VitaHabitStore.activeCode != nil)
+        refreshActiveHabit(in: webView)
 #elseif os(macOS)
         webView.evaluateJavaScript("show('mac')")
 
@@ -70,13 +94,40 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
 #if os(iOS)
-        guard let body = message.body as? String else { return }
-        if body == "open-youtube" {
-            FocusDeepLinks.openURL(FocusDeepLinks.youtubeSubs)
-            return
+        if let body = message.body as? String {
+            if body == "open-youtube" {
+                FocusDeepLinks.openURL(FocusDeepLinks.youtubeSubs)
+                return
+            }
+            if body == "open-settings" {
+                openSafariExtensionSettings()
+                return
+            }
+            if body == "open-goals" {
+                FocusDeepLinks.openURL(URL(string: "https://vitadots.ru/goals")!)
+                return
+            }
+            if body == "open-active-habit" {
+                if let code = VitaHabitStore.activeCode,
+                   let url = VitaHabitStore.goalURL(for: code) {
+                    FocusDeepLinks.openURL(url)
+                }
+                return
+            }
+            if body == "refresh-habit" {
+                refreshActiveHabit(in: webView)
+                return
+            }
+            if body == "disconnect-habit" {
+                VitaHabitStore.disconnect()
+                WidgetCenter.shared.reloadTimelines(ofKind: "VitaHabitWidget")
+                pushHabitState(to: webView, status: "Привычка отключена")
+                return
+            }
         }
-        if body == "open-settings" {
-            openSafariExtensionSettings()
+        if let payload = message.body as? [String: Any],
+           payload["action"] as? String == "connect-habit" {
+            connectHabit(payload["value"] as? String ?? "", in: webView)
             return
         }
 #elseif os(macOS)
@@ -126,6 +177,78 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         let lines = report.lines.map { $0.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "'", with: "\\'") }
         let js = "showDiagnostics(['\(lines.joined(separator: "','"))'])"
         webView.evaluateJavaScript(js, completionHandler: nil)
+    }
+
+    private func connectHabit(_ raw: String, in webView: WKWebView) {
+        do {
+            _ = try VitaHabitStore.activate(raw)
+            pushHabitState(to: webView, status: "Подключаем к vitadots.ru…", isRefreshing: true)
+            refreshActiveHabit(in: webView, successStatus: "Готово — сайт, виджет и обои используют одну цель")
+        } catch {
+            pushHabitState(to: webView, status: error.localizedDescription, isError: true)
+        }
+    }
+
+    private func refreshActiveHabit(in webView: WKWebView, successStatus: String? = nil) {
+        guard let code = VitaHabitStore.activeCode else {
+            pushHabitState(to: webView)
+            return
+        }
+        pushHabitState(to: webView, isRefreshing: true)
+        Task { [weak self, weak webView] in
+            do {
+                let snapshot = try await VitaHabitClient.fetch(code: code)
+                VitaHabitStore.save(snapshot)
+                await MainActor.run {
+                    guard let self, let webView else { return }
+                    WidgetCenter.shared.reloadTimelines(ofKind: "VitaHabitWidget")
+                    self.pushHabitState(to: webView, status: successStatus)
+                }
+            } catch {
+                await MainActor.run {
+                    guard let self, let webView else { return }
+                    let cached = VitaHabitStore.loadSnapshot() != nil
+                    self.pushHabitState(
+                        to: webView,
+                        status: cached ? "Нет связи — показаны сохранённые данные" : error.localizedDescription,
+                        isError: !cached
+                    )
+                }
+            }
+        }
+    }
+
+    private func pushHabitState(
+        to webView: WKWebView,
+        status: String? = nil,
+        isError: Bool = false,
+        isRefreshing: Bool = false
+    ) {
+        let code = VitaHabitStore.activeCode
+        let snapshot = VitaHabitStore.loadSnapshot()
+        var payload: [String: Any] = [
+            "connected": code != nil,
+            "hasData": snapshot != nil,
+            "code": code ?? "",
+            "refreshing": isRefreshing,
+        ]
+        if let snapshot {
+            payload["title"] = snapshot.title
+            payload["days"] = snapshot.days
+            payload["done"] = snapshot.doneSet.count
+            payload["streak"] = snapshot.currentStreak()
+            payload["best"] = snapshot.bestStreak()
+            payload["color"] = snapshot.color
+            payload["goalURL"] = VitaHabitStore.goalURL(for: snapshot.code)?.absoluteString ?? ""
+        }
+        if let status {
+            payload["status"] = status
+            payload["isError"] = isError
+        }
+        guard JSONSerialization.isValidJSONObject(payload),
+              let data = try? JSONSerialization.data(withJSONObject: payload),
+              let json = String(data: data, encoding: .utf8) else { return }
+        webView.evaluateJavaScript("showHabitState(\(json))", completionHandler: nil)
     }
 
     private func openSafariExtensionSettings() {

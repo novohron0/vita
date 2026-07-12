@@ -1,156 +1,125 @@
-# Vita Focus — handoff / шпаргалка
+# Vita — handoff
 
-**Что это:** Safari Web Extension + iOS-оболочка. «Чистый YouTube в Safari» — UnTrap + SocialFocus в одном, для себя. Сайт: [vitadots.ru/focus](https://vitadots.ru/focus).
+## North star
 
-**Текущая версия: `0.29.1`** (источник правды — `focus/extension/manifest.json`).
+Vita — не набор отдельных демо, а одна система:
 
-Критично понимать: расширение работает **только в Safari**. Выключено расширение → не работает ничего (ни иконка, ни скрытие «парашютов»).
+- **Vita Focus**: UnTrap для YouTube + SocialFocus для остальных сайтов в Safari.
+- **Vita Habits**: цели, ежедневные отметки, streak и WidgetKit-виджеты.
+- **Обои жизни**: месяц / год / жизнь / цель на `vitadots.ru`.
 
----
+Главный контракт: одна отметка привычки обновляет один серверный goal, поэтому
+одновременно меняются страница цели, Habit-виджет и живые обои `/gw/{code}.png`.
+Настройки блокировок Focus остаются локальными: историю браузинга и список
+включённых фильтров не нужно отправлять на сервер.
 
-## Пути
+## Текущее состояние (12.07.2026)
 
-```
-Repo:      /Users/kamilimangulov/vita
-Источник:  focus/extension/            ← редактировать ЗДЕСЬ
-Xcode:     focus/safari/Vita Focus/Vita Focus.xcodeproj
-Копия:     focus/safari/.../Shared (Extension)/Resources/   ← rsync, не править
-Синк:      cd focus && ./sync-safari.sh
-Bundle:    ru.vitadots.focus / ru.vitadots.focus.Extension  (Team 655542C66J)
-```
+- Extension manifest: **0.30.5**.
+- Все Xcode targets: `MARKETING_VERSION = 0.30.5`.
+- iOS app bundle: `ru.vitadots.focus`.
+- Safari extension: `ru.vitadots.focus.Extension`.
+- Widget: `ru.vitadots.focus.widget`.
+- App Group: `group.ru.vitadots.focus`.
+- Team: `655542C66J`.
 
-Рабочий цикл: правка в `focus/extension/` → `./sync-safari.sh` → Xcode: Clean Build Folder (⇧⌘K) → ⌘R на iPhone.
+## Что уже связано
 
----
+### Сайт → приложение → виджет
 
-## Что сделано в 0.29.1 (11.07.2026)
+1. Цель создаётся на `https://vitadots.ru/goals`.
+2. Страница `/g/{code}` содержит кнопку **«Открыть в Vita»**.
+3. Deep link `vita://goal/{code}` сохраняет активную цель в App Group.
+4. App получает `/api/goal/{code}`, кэширует title/days/done/color/streak.
+5. Виджет **«Vita · привычка»** показывает те же данные.
+6. App Intent «Отметить сегодня» вызывает `/api/goal/{code}/toggle`, обновляет
+   кэш и WidgetKit. `/gw/{code}.png` автоматически отражает ту же отметку.
 
-### Баг G — тумблеры «не работают»
-После клика popup делал `renderRows()` + повторное чтение storage → на iOS тумблер
-откатывался, страница не получала настройки вовремя.
-Фикс: optimistic UI без перерисовки, `pushApply()` fire-and-forget,
-content script слушает `settingsRev` (250ms) + fallback poll 2s.
+Пока активная привычка одна. Следующий продуктовый шаг — несколько привычек и
+`AppIntentConfiguration`, чтобы каждый экземпляр виджета выбирал свою цель.
 
----
-
-## Что сделано в 0.29.0 (11.07.2026)
-
-### Баг D — пустой popup (SyntaxError)
-`visibleToggles` использовался в `popup.js`, но не был экспортирован из `ui.js` —
-Safari падал на import, popup оставался белым. Фикс: экспорт + импорт,
-`init().catch(...)` с сообщением об ошибке в `#rows`.
-
-### Баг E — неожиданный редирект «Главная → Подписки»
-Тумблер `yt_home_subs` был в пресетах, но скрыт из popup (`group: "extra"`).
-Пользователи с профилем «Приложение» / «Работа» получали редирект без контроля.
-Фикс: убран из пресетов; одноразовая миграция `migration_v290` в `storage.js`
-сбрасывает `yt_home_subs: false` у существующих установок.
-
-### Баг F — popup: счётчики и master-toggle
-Master-toggle и meta-счётчик считали только 4 main-тумблера, а badge на табе
-YouTube — все 21 (включая extra из пресетов). Фикс: везде `visibleToggles()`.
-
-### Прочее
-- Баннер паузы по расписанию (`#pauseBanner`) — видно, когда фильтры выключены вне окна.
-- `pushApply()` надёжнее на iOS Safari (fallback через active tab + broadcast).
-- Киллер парашютов из 0.28.0 без изменений логики — проверить на устройстве.
-
----
-
-## Что сделано в 0.28.0 (11.07.2026)
-
-### Баг A — синяя иконка в Safari
-Диагноз: иконка была фактически grayscale (перепад RGB-каналов ≤16), Safari iOS
-считает такие «шаблоном» и перекрашивает в системный синий.
-Фикс: `focus/scripts/prepare-extension-icons.py` переписан — точки получают
-лиловый отлив, центральная точка — явный фиолетовый акцент, фон — слабый
-цветной градиент. Теперь ~15% пикселей с сильной сатурацией (diff ≥30) —
-детектор Safari обязан увидеть цвет. Из манифеста удалён невалидный для MV3
-ключ `browser_action` (иконки остались в `icons` и `action.default_icon`).
-`icons/` подключена в Xcode как folder reference — новые PNG попадают в .appex
-автоматически.
-**Если снова синяя:** удалить приложение с iPhone → Clean Build → поставить
-заново (Safari кэширует иконки агрессивно).
-
-### Баг B — «New videos right to you» (парашюты) на ленте подписок
-В `content/youtube.js` теперь три эшелона:
-1. **CSS на document_start** (`youtube.css`): все известные empty-state теги +
-   новые `ytm/ytd-feed-nudge-renderer`, `ytm/ytd-background-promo-renderer`,
-   `yt-empty-state-view-model`; плюс структурное правило — на
-   `page-subtype="subscriptions"` прячется любой ребёнок `#contents` без видео.
-2. **Ранний JS-киллер** (sweep каждые 400ms + MutationObserver): текстовый
-   матчер поднимается до самого верхнего предка без видео и прячет его —
-   работает при ЛЮБОЙ вёрстке, даже если YouTube переименует все теги.
-   Проверено на стенде: два «парашюта» в незнакомых `div`-ах скрываются,
-   секция с видео остаётся.
-3. Старые `nukeSubsParachutes()` / `hideFeedEmptyStates()` дополнены новыми тегами.
-
-**Диагностика (главное!):** если парашюты всё ещё видны — почти наверняка
-скрипт вообще не выполняется. Проверка за 5 секунд: открыть popup Vita Focus
-на вкладке YouTube — под названием сайта теперь строка статуса:
-- 🟢 «Работает на этой вкладке · v0.29.1» — скрипт жив, копай DOM
-  (Mac Safari → Разработка → iPhone → вкладка → Console, искать `[Vita Focus]`;
-  на `<html>` должен быть атрибут `data-vita-focus="0.29.1"`).
-- 🟠 «На этой вкладке не активен» — расширение выключено / нет разрешения
-  «на всех сайтах» / старый билд / это не Safari.
-
-### Баг C — кнопка «Safari → Расширения» не проваливается в Extensions
-Ограничение Apple: на iOS 18+ deep links в под-страницы Настроек сломаны,
-надёжного URL нет (Apple Forums thread 759900). Каскад URL оставлен
-(`ViewController.swift → openSafariExtensionSettings()`), но фолбэк-алерт и
-онбординг теперь дают точный ручной путь:
-**Настройки → Приложения → Safari → Расширения → Vita Focus**, либо прямо в
-Safari: **⋯ / АА в адресной строке → Управлять расширениями**.
-
----
-
-## Чеклист проверки на iPhone (после ⌘R)
+### Safari Focus
 
 ```
-□ Настройки → Safari → Расширения → Vita Focus → ВКЛ + «Разрешить на всех сайтах»
-□ Safari → m.youtube.com/feed/subscriptions
-□ Popup Vita Focus → строка статуса зелёная «Работает… v0.29.1»
-□ Парашюты «New videos right to you» исчезли
-□ ⋯ → Управлять расширениями → иконка тёмная с фиолетовым акцентом (не синяя)
-□ Тумблеры: Shorts / размыть / только текст / похожие — работают
+popup.html → polyfill → storage-shim → ui-shim → popup.js
+    ↓ chrome.storage.local (источник правды) + best-effort sync mirror
+youtube.js / site content scripts
+    ↓ CSS + DOM filters
 ```
 
----
+- YouTube: 21 фильтр, в мобильном popup показаны 4 основных.
+- Остальные сайты берутся из `focus/shared/registry.json`.
+- Popup и runtime-скрипты Safari не используют ES modules.
+- YouTube HUD: `VF 0.30.5 · storage OK/FAIL · …`.
+- Popup: `v0.30.5 · storage OK/FAIL` + ping текущей вкладки.
 
-## Архитектура (кратко)
+Не обещать, что extension работает на iPhone, пока нет device-диагностики.
+PWA «На экран Домой» не поддерживает Safari extensions — нужен Safari.
 
-- `manifest.json` MV3, Safari strict_min_version 16.4
-- `content/youtube.js` — вся YouTube-логика (~1000 строк), `content/youtube.css` — мгновенное скрытие
-- `content/darkmode.js` — тёмная тема любого сайта, бежит на всех URL (+ отвечает на ping)
-- `background.js` — хранит настройки (chrome.storage.sync), broadcast по вкладкам
-- `popup/` — UI: 4 тумблера YouTube, 5 сайтов в табах, остальное в «⋯»
-- `shared/registry.json` — реестр сайтов/тумблеров (master в `focus/shared/`)
-- Сообщения: `vfocus:get` (настройки), `vfocus:settings` (пуш), `vfocus:ping` → `{ok, version}` (статус)
-- Виджет (`iOS (Widget)`) — вторично, были проблемы с signing на Personal Team
+## Диагностика на iPhone
 
-## Онбординг iOS-app
+В native app есть блок «Диагностика»:
 
-`Shared (App)/Resources/Base.lproj/Main.html` — 2 шага: включить расширение,
-открыть YouTube (кнопка → `https://m.youtube.com/feed/subscriptions` через
-`FocusShared.swift → FocusDeepLinks.youtubeSubs`) + «На экран Домой».
+- версия app/build;
+- встроена ли Safari `.appex` и её manifest version;
+- включено ли расширение (авто-проверка только iOS 26.2+);
+- работает ли App Group;
+- встроен ли Widget `.appex`;
+- число активных блоков и отмеченных дней.
 
-## Быстрый тест без iPhone
+Для следующего extension-фикса нужен один скрин этого блока и popup на вкладке
+YouTube. Не bump-ить версию без проверяемой гипотезы.
 
-- Chrome: `chrome://extensions` → Load unpacked → `focus/extension` (логика YouTube, но не iOS-поведение иконок)
-- Стенд для киллера парашютов: см. историю — синтетический DOM + стаб `chrome`, youtube.js скрывает не-видео секции структурно
+## Пути и правила
 
-## Ссылки
+```
+Repo:        /Users/kamilimangulov/vita
+Extension:   focus/extension/                 ← редактировать здесь
+Registry:    focus/shared/registry.json
+Xcode:       focus/safari/Vita Focus/Vita Focus.xcodeproj
+Safari copy: focus/safari/.../Resources/      ← не править вручную
+Shared iOS:  focus/safari/Vita Focus/Shared/FocusShared.swift
+Widgets:     focus/safari/Vita Focus/iOS (Widget)/VitaFocusWidgets.swift
+Site/API:    app/main.py + static/
+```
 
-- Синяя иконка/tint: https://developer.apple.com/forums/thread/660596, lapcatsoftware.com/articles/2021-7-7.html
-- Deep links в Настройки сломаны на iOS 18: https://developer.apple.com/forums/thread/759900
-- settings-navigation URL: https://github.com/FifiTheBulldog/ios-settings-urls/issues/93
+После extension-правок:
 
-## История версий
+```bash
+./focus/sync-registry.sh
+./focus/sync-safari.sh
+```
 
-| Версия | Что |
-|--------|-----|
-| 0.24–0.26 | 4 тумблера, упрощённый popup, safari-safe иконки, deep links |
-| 0.27.0 | color icons v2, ранний киллер парашютов |
-| 0.28.0 | цветные иконки v3, структурный киллер + feed-nudge/background-promo, статус скрипта в popup, честные подсказки пути в Настройки, манифест без browser_action |
-| **0.29.0** | фикс пустого popup (visibleToggles), миграция yt_home_subs, согласованные счётчики табов, баннер паузы по расписанию, pushApply для iOS |
-| **0.29.1** | фикс тумблеров: без renderRows после клика, settingsRev sync, быстрый poll на странице |
+После prod-правок:
+
+```bash
+./scripts/deploy.sh
+```
+
+## Проверки
+
+```bash
+./focus/tests/run-goal-tests.sh
+node --check "focus/safari/Vita Focus/Shared (App)/Resources/Script.js"
+plutil -lint "focus/safari/Vita Focus/Vita Focus.xcodeproj/project.pbxproj"
+```
+
+Проверено на текущей ветке:
+
+- 28 pure Swift checks для inclusive goal ranges, habit code parsing, streak и
+  rolling widget grid;
+- iOS app target без signing: build success;
+- standalone widget target: build success;
+- macOS app target без signing: build success;
+- `git diff --check`, JS syntax, plist/pbx syntax: clean.
+
+Device signing, App Group provisioning и реальное поведение Safari на iPhone
+подтверждаются только запуском через Xcode на устройстве.
+
+## Приоритет дальше
+
+1. Устройство: проверить диагностику, появление `Vita · привычка`, deep link и
+   отметку дня из WidgetKit.
+2. Multiple habits: server identity для нескольких goal codes + configurable widgets.
+3. Объединить native onboarding в три понятных раздела: Focus / Привычки / Обои.
+4. Extension чинить только по device-сигналу, не вслепую.

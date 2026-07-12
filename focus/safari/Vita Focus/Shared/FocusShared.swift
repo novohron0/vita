@@ -76,11 +76,305 @@ enum FocusDeepLinks {
     }
 }
 
+// MARK: - Vita habits (единая цель сайта, приложения, виджета и обоев)
+
+struct VitaHabitSnapshot: Codable {
+    var code: String
+    var title: String
+    var days: Int
+    var start: String
+    var reward: String
+    var color: String
+    var background: String
+    var shape: String
+    var done: [String]
+    var peers: Int
+    var updatedAt: TimeInterval
+
+    static let placeholder = VitaHabitSnapshot(
+        code: "demo42",
+        title: "Не разрывать цепочку",
+        days: 30,
+        start: VitaHabitStore.isoDay(Calendar.current.date(byAdding: .day, value: -12, to: .now) ?? .now),
+        reward: "",
+        color: "#a855f7",
+        background: "black",
+        shape: "circle",
+        done: (1...10).compactMap {
+            Calendar.current.date(byAdding: .day, value: -$0, to: .now).map { VitaHabitStore.isoDay($0) }
+        },
+        peers: 1,
+        updatedAt: Date().timeIntervalSince1970
+    )
+
+    var doneSet: Set<String> { Set(done) }
+
+    func isDone(on date: Date = .now) -> Bool {
+        doneSet.contains(VitaHabitStore.isoDay(date))
+    }
+
+    func currentStreak(on date: Date = .now) -> Int {
+        let cal = Calendar.current
+        let marks = doneSet
+        var cursor = cal.startOfDay(for: date)
+        if !marks.contains(VitaHabitStore.isoDay(cursor)) {
+            cursor = cal.date(byAdding: .day, value: -1, to: cursor) ?? cursor
+        }
+        var streak = 0
+        while marks.contains(VitaHabitStore.isoDay(cursor)) {
+            streak += 1
+            guard let previous = cal.date(byAdding: .day, value: -1, to: cursor) else { break }
+            cursor = previous
+        }
+        return streak
+    }
+
+    func bestStreak() -> Int {
+        let marks = doneSet
+        guard let startDate = VitaHabitStore.parseISO(start) else { return 0 }
+        let cal = Calendar.current
+        var best = 0
+        var current = 0
+        for offset in 0..<max(1, min(days, 365)) {
+            guard let date = cal.date(byAdding: .day, value: offset, to: startDate) else { continue }
+            if marks.contains(VitaHabitStore.isoDay(date)) {
+                current += 1
+                best = max(best, current)
+            } else {
+                current = 0
+            }
+        }
+        return best
+    }
+
+    func widgetGrid(for date: Date = .now, maxDots: Int = 42) -> VitaDotsGrid {
+        let cal = Calendar.current
+        let totalDays = max(1, min(days, 365))
+        let visibleCount = max(1, min(maxDots, totalDays))
+        let startDate = cal.startOfDay(for: VitaHabitStore.parseISO(start) ?? date)
+        let rawToday = cal.dateComponents([.day], from: startDate, to: cal.startOfDay(for: date)).day ?? 0
+        let focusIndex = min(max(rawToday, 0), totalDays - 1)
+        let history = max(0, visibleCount - min(7, visibleCount))
+        let windowStart = min(max(focusIndex - history, 0), totalDays - visibleCount)
+        let windowEnd = windowStart + visibleCount
+        let indices = Set(done.compactMap { raw -> Int? in
+            guard let marked = VitaHabitStore.parseISO(raw) else { return nil }
+            let fullIndex = cal.dateComponents([.day], from: startDate, to: cal.startOfDay(for: marked)).day
+            guard let fullIndex, (windowStart..<windowEnd).contains(fullIndex) else { return nil }
+            return fullIndex - windowStart
+        })
+        let todayIndex = (windowStart..<windowEnd).contains(rawToday) ? rawToday - windowStart : nil
+        let columns = visibleCount <= 42 ? 6 : visibleCount <= 120 ? 10 : 14
+        return VitaDotsGrid(
+            total: visibleCount,
+            columns: columns,
+            pastFilled: 0,
+            todayIndex: todayIndex,
+            markedIndices: indices,
+            footer: "\(doneSet.count)/\(totalDays) · \(currentStreak(on: date))🔥",
+            title: title
+        )
+    }
+}
+
+enum VitaHabitError: LocalizedError {
+    case invalidCode
+    case invalidResponse
+    case server(Int)
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidCode:
+            return "Вставь ссылку на цель или её шестизначный код"
+        case .invalidResponse:
+            return "Сайт вернул неполные данные цели"
+        case .server(404):
+            return "Цель с таким кодом не найдена"
+        case .server:
+            return "vitadots.ru временно не отвечает"
+        }
+    }
+}
+
+enum VitaHabitStore {
+    private static let activeCodeKey = "vitaActiveHabitCode"
+    private static let snapshotKey = "vitaActiveHabitSnapshot"
+    private static let codeAlphabet = CharacterSet(charactersIn: "abcdefghjkmnpqrstuvwxyz23456789")
+
+    static var defaults: UserDefaults? {
+        UserDefaults(suiteName: FocusAppGroup.id)
+    }
+
+    static var activeCode: String? {
+        guard let raw = defaults?.string(forKey: activeCodeKey) else { return nil }
+        return code(from: raw)
+    }
+
+    static func code(from raw: String) -> String? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if isValidCode(trimmed) { return trimmed }
+        guard let url = URL(string: trimmed) else { return nil }
+        let candidates = Array(url.pathComponents.reversed()) + [url.host ?? ""]
+        for candidate in candidates where isValidCode(candidate) {
+            return candidate
+        }
+        return nil
+    }
+
+    static func activate(_ raw: String) throws -> String {
+        guard let code = code(from: raw) else { throw VitaHabitError.invalidCode }
+        if activeCode != code {
+            defaults?.removeObject(forKey: snapshotKey)
+        }
+        defaults?.set(code, forKey: activeCodeKey)
+        return code
+    }
+
+    static func disconnect() {
+        defaults?.removeObject(forKey: activeCodeKey)
+        defaults?.removeObject(forKey: snapshotKey)
+    }
+
+    static func loadSnapshot() -> VitaHabitSnapshot? {
+        guard let activeCode,
+              let data = defaults?.data(forKey: snapshotKey),
+              let snapshot = try? JSONDecoder().decode(VitaHabitSnapshot.self, from: data),
+              snapshot.code == activeCode else { return nil }
+        return snapshot
+    }
+
+    static func save(_ snapshot: VitaHabitSnapshot) {
+        guard let code = code(from: snapshot.code), code == snapshot.code,
+              let data = try? JSONEncoder().encode(snapshot) else { return }
+        defaults?.set(code, forKey: activeCodeKey)
+        defaults?.set(data, forKey: snapshotKey)
+    }
+
+    static func goalURL(for code: String) -> URL? {
+        guard let code = self.code(from: code) else { return nil }
+        return URL(string: "https://vitadots.ru/g/\(code)")
+    }
+
+    static func deepLinkURL(for code: String) -> URL? {
+        guard let code = self.code(from: code) else { return nil }
+        return URL(string: "vita://goal/\(code)")
+    }
+
+    static func isoDay(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar.current
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: date)
+    }
+
+    static func parseISO(_ raw: String) -> Date? {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar.current
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.isLenient = false
+        guard let date = formatter.date(from: raw), formatter.string(from: date) == raw else { return nil }
+        return date
+    }
+
+    private static func isValidCode(_ value: String) -> Bool {
+        value.count == 6 && value.unicodeScalars.allSatisfy(codeAlphabet.contains)
+    }
+}
+
+enum VitaHabitClient {
+    private struct GoalResponse: Decodable {
+        let title: String
+        let days: Int
+        let start: String
+        let reward: String
+        let color: String
+        let bg: String
+        let shape: String
+        let done: [String]
+        let peers: Int
+    }
+
+    private struct ToggleResponse: Decodable {
+        let done: Bool
+    }
+
+    static func fetch(code rawCode: String) async throws -> VitaHabitSnapshot {
+        guard let code = VitaHabitStore.code(from: rawCode),
+              let url = URL(string: "https://vitadots.ru/api/goal/\(code)") else {
+            throw VitaHabitError.invalidCode
+        }
+        var request = URLRequest(url: url)
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.timeoutInterval = 15
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try validate(response)
+        guard let goal = try? JSONDecoder().decode(GoalResponse.self, from: data) else {
+            throw VitaHabitError.invalidResponse
+        }
+        return VitaHabitSnapshot(
+            code: code,
+            title: goal.title,
+            days: max(1, min(goal.days, 365)),
+            start: goal.start,
+            reward: goal.reward,
+            color: goal.color,
+            background: goal.bg,
+            shape: goal.shape,
+            done: Array(Set(goal.done)).sorted(),
+            peers: goal.peers,
+            updatedAt: Date().timeIntervalSince1970
+        )
+    }
+
+    @discardableResult
+    static func toggleToday(code rawCode: String, date: Date = .now) async throws -> Bool {
+        guard let code = VitaHabitStore.code(from: rawCode),
+              let url = URL(string: "https://vitadots.ru/api/goal/\(code)/toggle") else {
+            throw VitaHabitError.invalidCode
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 15
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: ["day": VitaHabitStore.isoDay(date)])
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try validate(response)
+        guard let result = try? JSONDecoder().decode(ToggleResponse.self, from: data) else {
+            throw VitaHabitError.invalidResponse
+        }
+        return result.done
+    }
+
+    private static func validate(_ response: URLResponse) throws {
+        guard let http = response as? HTTPURLResponse else { throw VitaHabitError.invalidResponse }
+        guard (200..<300).contains(http.statusCode) else { throw VitaHabitError.server(http.statusCode) }
+    }
+}
+
 // MARK: - Vita goal dots (виджет «как на vitadots.ru»)
 
 enum VitaGoalMode: String, Codable {
     case month
     case goal
+}
+
+enum VitaGoalSettingsError: LocalizedError {
+    case invalidDates
+    case endBeforeStart
+    case rangeTooLong(maxDays: Int)
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidDates:
+            return "Проверь даты начала и окончания"
+        case .endBeforeStart:
+            return "Последний день должен быть не раньше первого"
+        case .rangeTooLong(let maxDays):
+            return "Пока виджет поддерживает цели до \(maxDays) дней"
+        }
+    }
 }
 
 struct VitaGoalDots: Codable {
@@ -112,6 +406,7 @@ struct VitaDotsGrid {
 
 enum VitaGoalDotsStore {
     private static let key = "vitaGoalDots"
+    static let maxGoalDays = 42
 
     static var defaults: UserDefaults? {
         UserDefaults(suiteName: FocusAppGroup.id)
@@ -126,8 +421,10 @@ enum VitaGoalDotsStore {
     }
 
     static func save(_ model: VitaGoalDots) {
+        var normalized = model
+        normalized.markedDays = Array(Set(model.markedDays.filter { parseISO($0) != nil })).sorted()
         guard let defaults = defaults,
-              let data = try? JSONEncoder().encode(model) else { return }
+              let data = try? JSONEncoder().encode(normalized) else { return }
         defaults.set(data, forKey: key)
     }
 
@@ -145,21 +442,71 @@ enum VitaGoalDotsStore {
         return f.string(from: date)
     }
 
-    static func toggleToday() {
+    @discardableResult
+    static func configure(mode: VitaGoalMode, goalStart: String, goalEnd: String) throws -> VitaGoalDots {
+        var model = load()
+        if mode == .goal {
+            let range = try validatedGoalRange(start: goalStart, end: goalEnd)
+            model.goalStart = isoDay(range.start)
+            model.goalEnd = isoDay(range.end)
+        }
+        model.mode = mode
+        save(model)
+        return load()
+    }
+
+    static func validatedGoalRange(start rawStart: String, end rawEnd: String) throws -> (start: Date, end: Date, total: Int) {
+        guard let start = parseISO(rawStart), let end = parseISO(rawEnd) else {
+            throw VitaGoalSettingsError.invalidDates
+        }
+        let days = (Calendar.current.dateComponents(
+            [.day],
+            from: Calendar.current.startOfDay(for: start),
+            to: Calendar.current.startOfDay(for: end)
+        ).day ?? -1) + 1
+        guard days > 0 else { throw VitaGoalSettingsError.endBeforeStart }
+        guard days <= maxGoalDays else {
+            throw VitaGoalSettingsError.rangeTooLong(maxDays: maxGoalDays)
+        }
+        return (start, end, days)
+    }
+
+    static func editorDates(for model: VitaGoalDots, reference: Date = .now) -> (start: String, end: String) {
+        if let start = parseISO(model.goalStart),
+           let end = parseISO(model.goalEnd),
+           end >= start {
+            return (isoDay(start), isoDay(end))
+        }
+        let start = Calendar.current.startOfDay(for: reference)
+        let end = Calendar.current.date(byAdding: .day, value: 29, to: start) ?? start
+        return (isoDay(start), isoDay(end))
+    }
+
+    @discardableResult
+    static func toggleToday() -> Bool {
         var model = load()
         let today = isoDay()
+        if model.mode == .goal {
+            let range = goalRange(for: model, reference: .now)
+            let now = Calendar.current.startOfDay(for: .now)
+            guard now >= range.start, now <= range.end else { return false }
+        }
         if let i = model.markedDays.firstIndex(of: today) {
             model.markedDays.remove(at: i)
         } else {
             model.markedDays.append(today)
         }
         save(model)
+        return true
     }
 
     static func grid(for date: Date = .now) -> VitaDotsGrid {
         let model = load()
+        return grid(model: model, for: date)
+    }
+
+    static func grid(model: VitaGoalDots, for date: Date = .now) -> VitaDotsGrid {
         let cal = Calendar.current
-        let marked = Set(model.markedDays.compactMap { dayIndex(for: $0, reference: date) })
 
         switch model.mode {
         case .month:
@@ -168,6 +515,9 @@ enum VitaGoalDotsStore {
             let past = max(0, day - 1)
             let todayIdx = day - 1
             let monthName = monthTitle(for: date)
+            let marked = Set(model.markedDays.compactMap {
+                dayIndex(for: $0, model: model, reference: date, total: total)
+            })
             return VitaDotsGrid(
                 total: total,
                 columns: 6,
@@ -178,18 +528,32 @@ enum VitaGoalDotsStore {
                 title: monthName
             )
         case .goal:
-            let start = parseISO(model.goalStart) ?? cal.startOfDay(for: date)
-            let end = parseISO(model.goalEnd) ?? cal.date(byAdding: .day, value: 29, to: start)!
-            let total = max(1, cal.dateComponents([.day], from: start, to: end).day ?? 30)
-            let done = min(max(cal.dateComponents([.day], from: start, to: cal.startOfDay(for: date)).day ?? 0, 0), total)
-            let cols = total <= 42 ? 6 : total <= 120 ? 10 : 14
+            let range = goalRange(for: model, reference: date)
+            let offset = cal.dateComponents(
+                [.day],
+                from: range.start,
+                to: cal.startOfDay(for: date)
+            ).day ?? 0
+            let done = min(max(offset, 0), range.total)
+            let todayIndex = (0..<range.total).contains(offset) ? offset : nil
+            let marked = Set(model.markedDays.compactMap {
+                dayIndex(for: $0, model: model, reference: date, total: range.total)
+            })
+            let footer: String
+            if offset < 0 {
+                footer = "старт \(shortDate(range.start)) · через \(-offset) дн."
+            } else if offset >= range.total {
+                footer = "цель завершена · \(shortDate(range.end))"
+            } else {
+                footer = "до \(shortDate(range.end)) · осталось \(range.total - offset) дн."
+            }
             return VitaDotsGrid(
-                total: total,
-                columns: cols,
+                total: range.total,
+                columns: 6,
                 pastFilled: done,
-                todayIndex: done < total ? done : nil,
+                todayIndex: todayIndex,
                 markedIndices: marked,
-                footer: "прошло \(done) · осталось \(max(0, total - done))",
+                footer: footer,
                 title: "ДО ЦЕЛИ"
             )
         }
@@ -201,24 +565,44 @@ enum VitaGoalDotsStore {
         f.calendar = Calendar.current
         f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "yyyy-MM-dd"
-        return f.date(from: raw)
+        f.isLenient = false
+        guard let date = f.date(from: raw), f.string(from: date) == raw else { return nil }
+        return date
     }
 
-    private static func dayIndex(for iso: String, reference: Date) -> Int? {
+    private static func dayIndex(for iso: String, model: VitaGoalDots, reference: Date, total: Int) -> Int? {
         guard let d = parseISO(iso) else { return nil }
         let cal = Calendar.current
-        let model = load()
         switch model.mode {
         case .month:
             guard cal.isDate(d, equalTo: reference, toGranularity: .month) else { return nil }
-            return cal.component(.day, from: d) - 1
+            let index = cal.component(.day, from: d) - 1
+            return (0..<total).contains(index) ? index : nil
         case .goal:
-            let model = load()
-            let start = parseISO(model.goalStart) ?? cal.startOfDay(for: reference)
-            let idx = cal.dateComponents([.day], from: cal.startOfDay(for: start), to: cal.startOfDay(for: d)).day
-            guard let idx, idx >= 0 else { return nil }
-            return idx
+            let range = goalRange(for: model, reference: reference)
+            let index = cal.dateComponents(
+                [.day],
+                from: range.start,
+                to: cal.startOfDay(for: d)
+            ).day
+            guard let index, (0..<total).contains(index) else { return nil }
+            return index
         }
+    }
+
+    private static func goalRange(
+        for model: VitaGoalDots,
+        reference: Date
+    ) -> (start: Date, end: Date, total: Int) {
+        let cal = Calendar.current
+        let start = cal.startOfDay(for: parseISO(model.goalStart) ?? reference)
+        let requestedEnd = parseISO(model.goalEnd)
+            ?? cal.date(byAdding: .day, value: 29, to: start)
+            ?? start
+        let rawDays = (cal.dateComponents([.day], from: start, to: requestedEnd).day ?? 29) + 1
+        let total = min(max(rawDays, 1), maxGoalDays)
+        let end = cal.date(byAdding: .day, value: total - 1, to: start) ?? start
+        return (start, end, total)
     }
 
     private static func monthTitle(for date: Date) -> String {
@@ -226,6 +610,13 @@ enum VitaGoalDotsStore {
         f.locale = Locale(identifier: "ru_RU")
         f.dateFormat = "LLLL yyyy"
         return f.string(from: date).capitalized
+    }
+
+    private static func shortDate(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "ru_RU")
+        f.setLocalizedDateFormatFromTemplate("d MMMM")
+        return f.string(from: date)
     }
 }
 

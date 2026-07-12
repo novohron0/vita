@@ -2,6 +2,7 @@
 """Add Vita Focus Widget extension target to Xcode project (idempotent)."""
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -10,11 +11,84 @@ ROOT = Path(__file__).resolve().parents[1]
 PBX = ROOT / "safari/Vita Focus/Vita Focus.xcodeproj/project.pbxproj"
 
 MARKER = "Vita Focus Widget (iOS)"
+VERSION = json.loads((ROOT / "extension/manifest.json").read_text())["version"]
+
+
+def repair_widget_embedding(text: str) -> str:
+    """Restore app embedding if Xcode kept the target but dropped its relationships."""
+    if "4F807AD3000D9E30043AC81 /* Vita Focus Widget.appex in Embed App Extensions */" not in text:
+        text = text.replace(
+            "/* End PBXBuildFile section */",
+            '\t\t4F807AD3000D9E30043AC81 /* Vita Focus Widget.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 4F807AD2000D9E30043AC81 /* Vita Focus Widget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };\n/* End PBXBuildFile section */',
+        )
+
+    if "remoteGlobalIDString = 4F807AD1000D9E30043AC81;" not in text:
+        text = text.replace(
+            "/* End PBXContainerItemProxy section */",
+            '''\t\t4F807AD4000D9E30043AC81 /* PBXContainerItemProxy */ = {
+\t\t\tisa = PBXContainerItemProxy;
+\t\t\tcontainerPortal = 4F807A593000D9E10043AC81 /* Project object */;
+\t\t\tproxyType = 1;
+\t\t\tremoteGlobalIDString = 4F807AD1000D9E30043AC81;
+\t\t\tremoteInfo = "Vita Focus Widget (iOS)";
+\t\t};
+/* End PBXContainerItemProxy section */''',
+        )
+
+    if "4F807AD6000D9E30043AC81 /* Embed App Extensions */ =" not in text:
+        text = text.replace(
+            "/* End PBXCopyFilesBuildPhase section */",
+            '''\t\t4F807AD6000D9E30043AC81 /* Embed App Extensions */ = {
+\t\t\tisa = PBXCopyFilesBuildPhase;
+\t\t\tbuildActionMask = 2147483647;
+\t\t\tdstPath = "";
+\t\t\tdstSubfolderSpec = 13;
+\t\t\tfiles = (
+\t\t\t\t4F807AD3000D9E30043AC81 /* Vita Focus Widget.appex in Embed App Extensions */,
+\t\t\t);
+\t\t\tname = "Embed App Extensions";
+\t\t\trunOnlyForDeploymentPostprocessing = 0;
+\t\t};
+/* End PBXCopyFilesBuildPhase section */''',
+        )
+
+    app_target_start = text.index("4F807A6B3000D9E30043AC81 /* Vita Focus (iOS) */ = {")
+    app_target_end = text.index("\n\t\t};", app_target_start)
+    app_target = text[app_target_start:app_target_end]
+    if "4F807AD6000D9E30043AC81 /* Embed App Extensions */" not in app_target:
+        text = text.replace(
+            "4F807AAD3000D9E30043AC81 /* Embed Foundation Extensions */,\n\t\t\t);",
+            "4F807AAD3000D9E30043AC81 /* Embed Foundation Extensions */,\n\t\t\t\t4F807AD6000D9E30043AC81 /* Embed App Extensions */,\n\t\t\t);",
+            1,
+        )
+    if "4F807AD5000D9E30043AC81 /* PBXTargetDependency */" not in app_target:
+        text = text.replace(
+            "4F807A8D3000D9E30043AC81 /* PBXTargetDependency */,\n\t\t\t);\n\t\t\tname = \"Vita Focus (iOS)\";",
+            "4F807A8D3000D9E30043AC81 /* PBXTargetDependency */,\n\t\t\t\t4F807AD5000D9E30043AC81 /* PBXTargetDependency */,\n\t\t\t);\n\t\t\tname = \"Vita Focus (iOS)\";",
+            1,
+        )
+
+    if "4F807AD5000D9E30043AC81 /* PBXTargetDependency */ =" not in text:
+        text = text.replace(
+            "/* End PBXTargetDependency section */",
+            '''\t\t4F807AD5000D9E30043AC81 /* PBXTargetDependency */ = {
+\t\t\tisa = PBXTargetDependency;
+\t\t\ttarget = 4F807AD1000D9E30043AC81 /* Vita Focus Widget (iOS) */;
+\t\t\ttargetProxy = 4F807AD4000D9E30043AC81 /* PBXContainerItemProxy */;
+\t\t};
+/* End PBXTargetDependency section */''',
+        )
+    return text
 
 def main() -> int:
     text = PBX.read_text()
     if MARKER in text:
-        print("widget target already present")
+        repaired = repair_widget_embedding(text)
+        if repaired == text:
+            print("widget target already present and embedded")
+        else:
+            PBX.write_text(repaired)
+            print("widget target embedding repaired")
         return 0
 
     # IDs — unique within project
@@ -247,7 +321,7 @@ def main() -> int:
 \t\t\t\t\t"@executable_path/Frameworks",
 \t\t\t\t\t"@executable_path/../../Frameworks",
 \t\t\t\t);
-\t\t\t\tMARKETING_VERSION = 1.0;
+\t\t\t\tMARKETING_VERSION = {VERSION};
 \t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = ru.vitadots.focus.widget;
 \t\t\t\tPRODUCT_NAME = "Vita Focus Widget";
 \t\t\t\tSDKROOT = iphoneos;
@@ -275,7 +349,7 @@ def main() -> int:
 \t\t\t\t\t"@executable_path/Frameworks",
 \t\t\t\t\t"@executable_path/../../Frameworks",
 \t\t\t\t);
-\t\t\t\tMARKETING_VERSION = 1.0;
+\t\t\t\tMARKETING_VERSION = {VERSION};
 \t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = ru.vitadots.focus.widget;
 \t\t\t\tPRODUCT_NAME = "Vita Focus Widget";
 \t\t\t\tSDKROOT = iphoneos;
