@@ -1,5 +1,8 @@
 /* Safari iOS: classic script, без ES modules */
 'use strict';
+if (typeof globalThis.browser !== 'undefined' && typeof globalThis.chrome === 'undefined') {
+  globalThis.chrome = globalThis.browser;
+}
 
 const DEFAULT_DARK = { enabled: false, brightness: 100, contrast: 95, sepia: 8 };
 
