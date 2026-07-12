@@ -24,6 +24,7 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        VitaGoalDotsStore.ensureDefaults()
 
         self.webView.navigationDelegate = self
 
