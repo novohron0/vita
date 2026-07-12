@@ -53,7 +53,7 @@
                         <p>Кнопка ниже откроет <b>главную YouTube</b> в Safari. Нажми <b>🧩</b> → <b>Vita Focus</b> → спокойно настрой блоки.</p>
                     </li>
                     <li>
-                        <p>Для быстрого запуска добавь на домашний экран виджет <b>YouTube Focus</b> или <b>Быстрый запуск</b>. Они всегда ведут в Safari.</p>
+                        <p>Для быстрого запуска добавь на домашний экран виджет <b>YouTube Focus</b>. Он всегда ведёт на главную YouTube в Safari.</p>
                     </li>
                 </ol>
 
@@ -118,6 +118,14 @@
                     <button type="button" class="widget-theme" data-theme="violet"><i class="theme-preview violet"></i><span>Vita</span></button>
                     <button type="button" class="widget-theme" data-theme="ocean"><i class="theme-preview ocean"></i><span>Океан</span></button>
                     <button type="button" class="widget-theme" data-theme="ember"><i class="theme-preview ember"></i><span>Закат</span></button>
+                    <button type="button" class="widget-theme photo-theme" data-theme="photo"><i class="theme-preview photo">＋</i><span>Своя фотография</span></button>
+                </div>
+                <p class="appearance-label">Форма точек</p>
+                <div class="dot-style-grid" role="group" aria-label="Форма точек">
+                    <button type="button" class="dot-style" data-style="circle"><i class="dot-preview circle"></i><span>Круг</span></button>
+                    <button type="button" class="dot-style" data-style="soft"><i class="dot-preview soft"></i><span>Мягкие</span></button>
+                    <button type="button" class="dot-style" data-style="square"><i class="dot-preview square"></i><span>Квадрат</span></button>
+                    <button type="button" class="dot-style" data-style="diamond"><i class="dot-preview diamond"></i><span>Ромб</span></button>
                 </div>
                 <p id="widgetThemeStatus" class="habit-status" role="status" aria-live="polite"></p>
             </section>
@@ -125,14 +133,11 @@
 
         <p class="foot-note platform-ios">YouTube только через приложение <b>Safari</b> (видна адресная строка). Иконка с «Домой» = без Vita Focus.</p>
 
-        <section id="diag" class="step-card platform-ios" hidden>
-            <div class="step-head">
-                <span class="step-num">?</span>
-                <h2 class="step-title">Диагностика</h2>
-            </div>
+        <details id="diag" class="diag-details platform-ios" hidden>
+            <summary>Если что-то не работает</summary>
             <pre id="diagBody" class="diag-pre">Собираем…</pre>
-            <p class="step-hint">Скинь скрин этого блока — без гаданий видно, что сломано.</p>
-        </section>
+            <p class="step-hint">Здесь находится техническая диагностика для поддержки.</p>
+        </details>
 
         <button type="button" class="primary platform-mac open-preferences">Открыть настройки Safari…</button>
     </div>

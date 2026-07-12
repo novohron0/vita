@@ -1,5 +1,6 @@
 import WidgetKit
 import SwiftUI
+import UIKit
 #if canImport(AppIntents)
 import AppIntents
 #endif
@@ -13,6 +14,7 @@ struct FocusEntry: TimelineEntry {
     let habit: VitaHabitSnapshot?
     let accent: Color
     let widgetTheme: VitaWidgetTheme
+    let dotStyle: VitaDotStyle
 }
 
 struct FocusProvider: TimelineProvider {
@@ -51,7 +53,8 @@ struct FocusProvider: TimelineProvider {
             dots: VitaGoalDotsStore.grid(for: date),
             habit: habit,
             accent: Color(hex: model.accentHex) ?? Color(red: 0.66, green: 0.33, blue: 0.97),
-            widgetTheme: VitaWidgetThemeStore.load()
+            widgetTheme: VitaWidgetThemeStore.load(),
+            dotStyle: VitaDotStyleStore.load()
         )
     }
 
@@ -71,24 +74,41 @@ private struct VitaWidgetBackground: View {
 
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: baseColors,
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            RadialGradient(
-                colors: [glow.opacity(0.62), glow.opacity(0)],
-                center: .topTrailing,
-                startRadius: 0,
-                endRadius: 180
-            )
-            RadialGradient(
-                colors: [secondaryGlow.opacity(0.24), secondaryGlow.opacity(0)],
-                center: .bottomLeading,
-                startRadius: 0,
-                endRadius: 150
-            )
+            if theme == .photo, let image = photoImage {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                LinearGradient(
+                    colors: [Color.black.opacity(0.22), Color.black.opacity(0.68)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            } else {
+                LinearGradient(
+                    colors: baseColors,
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                RadialGradient(
+                    colors: [glow.opacity(0.62), glow.opacity(0)],
+                    center: .topTrailing,
+                    startRadius: 0,
+                    endRadius: 180
+                )
+                RadialGradient(
+                    colors: [secondaryGlow.opacity(0.24), secondaryGlow.opacity(0)],
+                    center: .bottomLeading,
+                    startRadius: 0,
+                    endRadius: 150
+                )
+            }
         }
+        .clipped()
+    }
+
+    private var photoImage: UIImage? {
+        guard let url = VitaWidgetThemeStore.photoURL else { return nil }
+        return UIImage(contentsOfFile: url.path)
     }
 
     private var baseColors: [Color] {
@@ -101,6 +121,8 @@ private struct VitaWidgetBackground: View {
             return [Color(red: 0.04, green: 0.22, blue: 0.31), Color(red: 0.015, green: 0.055, blue: 0.09)]
         case .ember:
             return [Color(red: 0.34, green: 0.105, blue: 0.075), Color(red: 0.08, green: 0.02, blue: 0.018)]
+        case .photo:
+            return [.black, Color(red: 0.04, green: 0.04, blue: 0.05)]
         }
     }
 
@@ -110,6 +132,7 @@ private struct VitaWidgetBackground: View {
         case .violet: return Color(red: 0.76, green: 0.36, blue: 1.0)
         case .ocean: return Color(red: 0.18, green: 0.76, blue: 0.96)
         case .ember: return Color(red: 1.0, green: 0.48, blue: 0.22)
+        case .photo: return .clear
         }
     }
 
@@ -119,6 +142,7 @@ private struct VitaWidgetBackground: View {
         case .violet: return Color(red: 0.95, green: 0.4, blue: 0.72)
         case .ocean: return Color(red: 0.24, green: 0.95, blue: 0.72)
         case .ember: return Color(red: 1.0, green: 0.78, blue: 0.35)
+        case .photo: return .clear
         }
     }
 }
@@ -146,12 +170,29 @@ private struct VitaDot: View {
     let ring: Bool
     let color: Color
     let size: CGFloat
+    let style: VitaDotStyle
 
+    @ViewBuilder
     var body: some View {
-        Circle()
+        switch style {
+        case .circle:
+            styled(Circle())
+        case .soft:
+            styled(RoundedRectangle(cornerRadius: size * 0.34, style: .continuous))
+        case .square:
+            styled(RoundedRectangle(cornerRadius: size * 0.1, style: .continuous))
+        case .diamond:
+            styled(RoundedRectangle(cornerRadius: size * 0.15, style: .continuous))
+                .rotationEffect(.degrees(45))
+                .scaleEffect(0.8)
+        }
+    }
+
+    private func styled<S: InsettableShape>(_ shape: S) -> some View {
+        shape
             .strokeBorder(ring ? color : Color.white.opacity(filled ? 0.45 : 0.22), lineWidth: ring ? max(1.5, size * 0.14) : max(1, size * 0.08))
             .background(
-                Circle().fill(filled ? color.opacity(0.95) : Color.clear)
+                shape.fill(filled ? color.opacity(0.95) : Color.clear)
             )
             .frame(width: size, height: size)
             .shadow(color: ring ? color.opacity(0.45) : .clear, radius: ring ? size * 0.25 : 0)
@@ -163,6 +204,7 @@ private struct VitaDotsGridView: View {
     let accent: Color
     let dotSize: CGFloat
     let spacing: CGFloat
+    let style: VitaDotStyle
 
     var body: some View {
         let cols = Array(repeating: GridItem(.flexible(), spacing: spacing), count: grid.columns)
@@ -170,7 +212,7 @@ private struct VitaDotsGridView: View {
             ForEach(0..<grid.total, id: \.self) { i in
                 let filled = i < grid.pastFilled || grid.markedIndices.contains(i)
                 let ring = grid.todayIndex == i && !grid.markedIndices.contains(i)
-                VitaDot(filled: filled, ring: ring, color: accent, size: dotSize)
+                VitaDot(filled: filled, ring: ring, color: accent, size: dotSize, style: style)
             }
         }
     }
@@ -198,7 +240,8 @@ struct VitaMonthDotsWidgetView: View {
                 grid: entry.dots,
                 accent: entry.accent,
                 dotSize: entry.dots.total > 31 ? 7 : 9,
-                spacing: entry.dots.total > 31 ? 2.5 : 4
+                spacing: entry.dots.total > 31 ? 2.5 : 4,
+                style: entry.dotStyle
             )
             Spacer(minLength: 0)
             Text(entry.dots.footer)
@@ -226,7 +269,7 @@ struct VitaMonthDotsWidgetView: View {
                 markTodayControl
             }
             .frame(width: 118, alignment: .leading)
-            VitaDotsGridView(grid: entry.dots, accent: entry.accent, dotSize: 11, spacing: 5)
+            VitaDotsGridView(grid: entry.dots, accent: entry.accent, dotSize: 11, spacing: 5, style: entry.dotStyle)
         }
         .padding(14)
         .vitaBackground(entry.widgetTheme)
@@ -239,7 +282,7 @@ struct VitaMonthDotsWidgetView: View {
             Text(entry.dots.footer)
                 .font(.subheadline)
                 .foregroundStyle(.white.opacity(0.72))
-            VitaDotsGridView(grid: entry.dots, accent: entry.accent, dotSize: 14, spacing: 7)
+            VitaDotsGridView(grid: entry.dots, accent: entry.accent, dotSize: 14, spacing: 7, style: entry.dotStyle)
             Spacer(minLength: 0)
             HStack {
                 markTodayControl
@@ -309,7 +352,7 @@ struct VitaHabitWidgetView: View {
             }
         }
         .vitaBackground(entry.widgetTheme)
-        .widgetURL(entry.habit.flatMap { VitaHabitStore.deepLinkURL(for: $0.code) }
+        .widgetURL(entry.habit.flatMap { VitaHabitStore.goalURL(for: $0.code) }
             ?? URL(string: "https://vitadots.ru/goals"))
     }
 
@@ -329,7 +372,7 @@ struct VitaHabitWidgetView: View {
         let grid = habit.widgetGrid(for: entry.date, maxDots: 30)
         return VStack(alignment: .leading, spacing: 7) {
             habitHeader(habit)
-            VitaDotsGridView(grid: grid, accent: habitColor(habit), dotSize: 8, spacing: 3)
+            VitaDotsGridView(grid: grid, accent: habitColor(habit), dotSize: 8, spacing: 3, style: entry.dotStyle)
             Spacer(minLength: 0)
             HStack(spacing: 6) {
                 Text(grid.footer)
@@ -357,7 +400,7 @@ struct VitaHabitWidgetView: View {
                 markHabitControl(habit)
             }
             .frame(width: 132, alignment: .leading)
-            VitaDotsGridView(grid: grid, accent: habitColor(habit), dotSize: 11, spacing: 5)
+            VitaDotsGridView(grid: grid, accent: habitColor(habit), dotSize: 11, spacing: 5, style: entry.dotStyle)
         }
         .padding(14)
     }
@@ -371,7 +414,7 @@ struct VitaHabitWidgetView: View {
                 habitStat("\(habit.currentStreak(on: entry.date))🔥", "стрик")
                 habitStat("\(habit.bestStreak())", "рекорд")
             }
-            VitaDotsGridView(grid: grid, accent: habitColor(habit), dotSize: 11, spacing: 5)
+            VitaDotsGridView(grid: grid, accent: habitColor(habit), dotSize: 11, spacing: 5, style: entry.dotStyle)
             Spacer(minLength: 0)
             HStack {
                 Text(grid.footer)
@@ -648,8 +691,6 @@ struct VitaFocusWidgetBundle: WidgetBundle {
         VitaMonthDotsWidget()
         VitaHabitWidget()
         YouTubeFocusWidget()
-        FocusStatusWidget()
-        QuickLaunchWidget()
     }
 }
 

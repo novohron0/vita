@@ -100,13 +100,23 @@ document.querySelectorAll(".open-active-habit").forEach((button) => button.addEv
 document.querySelectorAll(".refresh-habit").forEach((button) => button.addEventListener("click", () => post("refresh-habit")));
 document.querySelectorAll(".disconnect-habit").forEach((button) => button.addEventListener("click", () => post("disconnect-habit")));
 
+let widgetHasPhoto = false;
+
 function showWidgetTheme(state) {
     if (!state || typeof state !== "object") return;
+    widgetHasPhoto = Boolean(state.hasPhoto);
     document.querySelectorAll(".widget-theme").forEach((button) => {
         const active = button.dataset.theme === state.theme;
         button.classList.toggle("is-active", active);
         button.setAttribute("aria-pressed", String(active));
     });
+    document.querySelectorAll(".dot-style").forEach((button) => {
+        const active = button.dataset.style === state.dotStyle;
+        button.classList.toggle("is-active", active);
+        button.setAttribute("aria-pressed", String(active));
+    });
+    const photoLabel = document.querySelector('.widget-theme[data-theme="photo"] span');
+    if (photoLabel) photoLabel.textContent = widgetHasPhoto ? "Сменить фотографию" : "Своя фотография";
     const status = document.getElementById("widgetThemeStatus");
     if (status) {
         status.textContent = state.status || "";
@@ -117,7 +127,18 @@ function showWidgetTheme(state) {
 
 document.querySelectorAll(".widget-theme").forEach((button) => {
     button.addEventListener("click", () => {
+        if (button.dataset.theme === "photo") {
+            post({ action: "pick-widget-photo" });
+            return;
+        }
         showWidgetTheme({ theme: button.dataset.theme, status: "Применяем…" });
         post({ action: "set-widget-theme", theme: button.dataset.theme });
+    });
+});
+
+document.querySelectorAll(".dot-style").forEach((button) => {
+    button.addEventListener("click", () => {
+        document.querySelectorAll(".dot-style").forEach((item) => item.classList.toggle("is-active", item === button));
+        post({ action: "set-dot-style", style: button.dataset.style });
     });
 });

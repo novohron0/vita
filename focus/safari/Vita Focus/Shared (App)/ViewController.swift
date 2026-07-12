@@ -136,6 +136,14 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
                 saveWidgetTheme(payload["theme"] as? String ?? "", in: webView)
                 return
             }
+            if action == "set-dot-style" {
+                saveDotStyle(payload["style"] as? String ?? "", in: webView)
+                return
+            }
+            if action == "pick-widget-photo" {
+                pickWidgetPhoto()
+                return
+            }
         }
 #elseif os(macOS)
         if (message.body as! String != "open-preferences") {
@@ -259,6 +267,10 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
     }
 
     private func saveWidgetTheme(_ raw: String, in webView: WKWebView) {
+        if raw == VitaWidgetTheme.photo.rawValue && !VitaWidgetThemeStore.hasPhoto {
+            pickWidgetPhoto()
+            return
+        }
         guard let theme = VitaWidgetThemeStore.save(rawValue: raw) else {
             pushWidgetTheme(to: webView, status: "Неизвестная тема", isError: true)
             return
@@ -267,13 +279,37 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         pushWidgetTheme(to: webView, status: "Тема применена", theme: theme)
     }
 
+    private func saveDotStyle(_ raw: String, in webView: WKWebView) {
+        guard VitaDotStyleStore.save(rawValue: raw) != nil else {
+            pushWidgetTheme(to: webView, status: "Неизвестная форма точек", isError: true)
+            return
+        }
+        WidgetCenter.shared.reloadAllTimelines()
+        pushWidgetTheme(to: webView, status: "Форма точек применена")
+    }
+
+    private func pickWidgetPhoto() {
+        guard UIImagePickerController.isSourceTypeAvailable(.photoLibrary) else {
+            pushWidgetTheme(to: webView, status: "Фото недоступны", isError: true)
+            return
+        }
+        let picker = UIImagePickerController()
+        picker.sourceType = .photoLibrary
+        picker.delegate = self
+        present(picker, animated: true)
+    }
+
     private func pushWidgetTheme(
         to webView: WKWebView,
         status: String? = nil,
         isError: Bool = false,
         theme: VitaWidgetTheme? = nil
     ) {
-        var payload: [String: Any] = ["theme": (theme ?? VitaWidgetThemeStore.load()).rawValue]
+        var payload: [String: Any] = [
+            "theme": (theme ?? VitaWidgetThemeStore.load()).rawValue,
+            "dotStyle": VitaDotStyleStore.load().rawValue,
+            "hasPhoto": VitaWidgetThemeStore.hasPhoto,
+        ]
         if let status {
             payload["status"] = status
             payload["isError"] = isError
@@ -338,3 +374,41 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
 #endif
 
 }
+
+#if os(iOS)
+extension ViewController: UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+    func imagePickerController(
+        _ picker: UIImagePickerController,
+        didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
+    ) {
+        picker.dismiss(animated: true)
+        guard let image = info[.originalImage] as? UIImage,
+              let data = widgetPhotoData(image) else {
+            pushWidgetTheme(to: webView, status: "Не удалось обработать фото", isError: true)
+            return
+        }
+        do {
+            try VitaWidgetThemeStore.savePhotoData(data)
+            WidgetCenter.shared.reloadAllTimelines()
+            pushWidgetTheme(to: webView, status: "Фото установлено", theme: .photo)
+        } catch {
+            pushWidgetTheme(to: webView, status: "Не удалось сохранить фото", isError: true)
+        }
+    }
+
+    func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+        picker.dismiss(animated: true)
+    }
+
+    private func widgetPhotoData(_ image: UIImage) -> Data? {
+        let maxSide: CGFloat = 1600
+        let sourceMax = max(image.size.width, image.size.height)
+        let scale = sourceMax > maxSide ? maxSide / sourceMax : 1
+        let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+        let rendered = UIGraphicsImageRenderer(size: size).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: size))
+        }
+        return rendered.jpegData(compressionQuality: 0.84)
+    }
+}
+#endif

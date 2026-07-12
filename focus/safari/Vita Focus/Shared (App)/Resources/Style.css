@@ -106,6 +106,27 @@ body::before {
     word-break: break-word;
 }
 
+.diag-details {
+    margin-top: 14px;
+    padding: 0 18px;
+    border: 1px solid var(--glass-border);
+    border-radius: 18px;
+    background: var(--glass-bg);
+    box-shadow: var(--glass-inset);
+}
+
+.diag-details summary {
+    padding: 16px 0;
+    color: var(--text-muted);
+    font-size: 14px;
+    font-weight: 650;
+    cursor: pointer;
+}
+
+.diag-details[open] {
+    padding-bottom: 16px;
+}
+
 .step-card {
     background: var(--glass-bg);
     background-image: var(--glass-shine);
@@ -398,6 +419,60 @@ body::before {
 .theme-preview.violet { background: radial-gradient(circle at 72% 24%, #c084fc, transparent 34%), linear-gradient(145deg, #3b1768, #120821); }
 .theme-preview.ocean { background: radial-gradient(circle at 70% 20%, #5ee7f5, transparent 34%), linear-gradient(145deg, #113f57, #06141f); }
 .theme-preview.ember { background: radial-gradient(circle at 72% 22%, #ffb45e, transparent 34%), linear-gradient(145deg, #67261f, #1d0b0a); }
+.theme-preview.photo {
+    display: grid;
+    place-items: center;
+    color: #fff;
+    background: linear-gradient(145deg, rgba(255,255,255,.22), rgba(255,255,255,.06));
+    font-style: normal;
+    font-size: 19px;
+}
+.theme-grid .photo-theme { grid-column: 1 / -1; }
+
+.appearance-label {
+    margin: 14px 0 8px;
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .35px;
+}
+
+.dot-style-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+}
+
+.dot-style-grid .dot-style {
+    display: grid;
+    place-items: center;
+    gap: 6px;
+    width: auto;
+    padding: 9px 4px 8px;
+    border: 1px solid var(--glass-border);
+    border-radius: 11px;
+    color: var(--text-muted);
+    background: rgba(255,255,255,.045);
+    font-size: 10px;
+}
+
+.dot-style-grid .dot-style.is-active {
+    color: var(--text);
+    border-color: rgba(168, 85, 247, .8);
+    background: rgba(168, 85, 247, .14);
+}
+
+.dot-preview {
+    width: 16px;
+    height: 16px;
+    background: #c084fc;
+    box-shadow: 0 0 9px rgba(192,132,252,.38);
+}
+.dot-preview.circle { border-radius: 50%; }
+.dot-preview.soft { border-radius: 6px; }
+.dot-preview.square { border-radius: 2px; }
+.dot-preview.diamond { border-radius: 3px; transform: rotate(45deg) scale(.82); }
 
 button:disabled {
     opacity: 0.55;

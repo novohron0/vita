@@ -9,6 +9,14 @@ enum VitaWidgetTheme: String, Codable, CaseIterable {
     case violet
     case ocean
     case ember
+    case photo
+}
+
+enum VitaDotStyle: String, Codable, CaseIterable {
+    case circle
+    case soft
+    case square
+    case diamond
 }
 
 enum VitaWidgetThemeStore {
@@ -29,6 +37,44 @@ enum VitaWidgetThemeStore {
         guard let theme = VitaWidgetTheme(rawValue: rawValue) else { return nil }
         defaults?.set(theme.rawValue, forKey: key)
         return theme
+    }
+
+    static var photoURL: URL? {
+        FileManager.default
+            .containerURL(forSecurityApplicationGroupIdentifier: FocusAppGroup.id)?
+            .appendingPathComponent("vita-widget-background.jpg")
+    }
+
+    static func savePhotoData(_ data: Data) throws {
+        guard let photoURL else { throw CocoaError(.fileNoSuchFile) }
+        try data.write(to: photoURL, options: .atomic)
+        defaults?.set(VitaWidgetTheme.photo.rawValue, forKey: key)
+    }
+
+    static var hasPhoto: Bool {
+        guard let photoURL else { return false }
+        return FileManager.default.fileExists(atPath: photoURL.path)
+    }
+}
+
+enum VitaDotStyleStore {
+    private static let key = "vitaDotStyle"
+
+    static var defaults: UserDefaults? {
+        UserDefaults(suiteName: FocusAppGroup.id)
+    }
+
+    static func load() -> VitaDotStyle {
+        guard let raw = defaults?.string(forKey: key),
+              let style = VitaDotStyle(rawValue: raw) else { return .circle }
+        return style
+    }
+
+    @discardableResult
+    static func save(rawValue: String) -> VitaDotStyle? {
+        guard let style = VitaDotStyle(rawValue: rawValue) else { return nil }
+        defaults?.set(style.rawValue, forKey: key)
+        return style
     }
 }
 

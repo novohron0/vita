@@ -250,7 +250,6 @@ body::before {
   box-shadow: var(--glass-inset), var(--glass-shadow);
   border-radius: 16px;
   overflow: hidden;
-  contain: layout style paint;
 }
 .adv summary { padding: 12px 16px; cursor: pointer; font-size: 15px; color: var(--accent); list-style: none; }
 .adv summary::-webkit-details-marker { display: none; }
@@ -264,6 +263,10 @@ body::before {
   transition: background .12s;
   -webkit-tap-highlight-color: transparent; touch-action: manipulation;
   user-select: none;
+}
+.group-card > button.row {
+  width: 100%; border-right: 0; border-bottom: 0; border-left: 0;
+  background: transparent; color: inherit; font: inherit; text-align: left;
 }
 .row.flash { animation: rowFlash .35s ease; }
 @keyframes rowFlash {
@@ -409,6 +412,8 @@ button.wide { width: 100%; }
   .status-pill.on { transform: none; }
   .preset:active, .btn-row button:active { transform: none; }
 }
+
+[hidden] { display: none !important; }
 
 .page-status {
   font-size: 11px; margin-top: 6px; padding: 3px 0 0;

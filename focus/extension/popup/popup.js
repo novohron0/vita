@@ -204,6 +204,7 @@ async function init() {
   refreshMaster();
   renderRows();
   bindAll();
+  globalThis.VFocusFallback?.stop?.();
   refreshPageStatus();
   await refreshPauseBanner();
   requestAnimationFrame(() => moveTabIndicator($('#tabs'), active));
@@ -230,17 +231,16 @@ async function refreshPageStatus() {
     return;
   }
   try {
-    const res = await chrome.tabs.sendMessage(tabId, { type: 'vfocus:ping' });
-    if (!res?.ok) throw new Error('no-pong');
     const onYoutube = /youtube\.com/i.test(tabUrl);
-    if (onYoutube && res.site !== 'youtube') {
-      throw new Error('youtube-script-missing');
-    }
+    const res = await chrome.tabs.sendMessage(tabId, {
+      type: onYoutube ? 'vfocus:youtube-ping' : 'vfocus:ping',
+    });
+    if (!res?.ok) throw new Error('no-pong');
     el.textContent = `Работает на этой вкладке · v${res.version || '?'}`;
     el.className = 'page-status ok';
   } catch {
     el.textContent = /youtube\.com/i.test(tabUrl)
-      ? 'YouTube-скрипт не загрузился — обнови страницу (pull-to-refresh)'
+      ? 'Разреши Vita Focus доступ к YouTube и обнови страницу'
       : 'На этой вкладке не активен — обнови страницу';
     el.className = 'page-status off';
   }
@@ -709,8 +709,5 @@ function bindAll() {
 
 init().catch(err => {
   console.error('[Vita Focus popup]', err);
-  const box = $('#rows');
-  if (box) {
-    box.innerHTML = '<div class="msg err" style="padding:12px">Ошибка popup — обнови расширение в Xcode.</div>';
-  }
+  globalThis.VFocusFallback?.render?.('Быстрые настройки активны. Обнови YouTube после изменения.');
 });
