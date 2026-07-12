@@ -1,4 +1,7 @@
 /** Vita Focus — тёмная тема для любого сайта (invert, как Dark Reader lite). */
+if (typeof globalThis.browser !== 'undefined' && typeof globalThis.chrome === 'undefined') {
+  globalThis.chrome = globalThis.browser;
+}
 const STYLE_ID = 'vita-focus-dark';
 const DEFAULTS = { enabled: false, brightness: 100, contrast: 95, sepia: 8 };
 

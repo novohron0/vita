@@ -1,5 +1,9 @@
-/* Safari iOS: classic script, без ES modules */
-'use strict';
+/* auto: Safari iOS popup shim */
+"use strict";
+if (typeof globalThis.browser !== 'undefined' && typeof globalThis.chrome === 'undefined') {
+  globalThis.chrome = globalThis.browser;
+}
+/** Registry-driven popup UI — SocialFocus / UnTrap pattern. */
 
 const GROUP_ORDER = ['main', 'watch', 'feed', 'visual', 'filter'];
 
@@ -32,6 +36,39 @@ function siteCount(site, settings, toggles = null) {
   return list.filter(t => settings[t.id]).length;
 }
 
+function groupToggles(site, groupLabels = {}) {
+  const buckets = new Map();
+  site.toggles.forEach(t => {
+    const g = t.group || 'main';
+    if (!buckets.has(g)) buckets.set(g, []);
+    buckets.get(g).push(t);
+  });
+
+  const order = [...GROUP_ORDER, ...[...buckets.keys()].filter(g => !GROUP_ORDER.includes(g))];
+  const out = [];
+  for (const id of order) {
+    const toggles = buckets.get(id);
+    if (!toggles?.length) continue;
+    out.push({
+      id,
+      label: groupLabels[id] ?? null,
+      toggles,
+    });
+  }
+  return out;
+}
+
+function splitGroups(site, uiMeta) {
+  const groups = groupToggles(site, uiMeta.groupLabels || {});
+  const advancedIds = new Set(uiMeta.advancedGroups || ['watch', 'feed', 'visual', 'filter']);
+  const primary = groups.filter(g => g.id === 'main' || !advancedIds.has(g.id));
+  const advanced = groups.filter(g => advancedIds.has(g.id));
+  if (!groups.some(g => g.id === 'main') && groups.length) {
+    return { primary: [groups[0]], advanced: groups.slice(1) };
+  }
+  return { primary, advanced };
+}
+
 function el(tag, cls, html) {
   const node = document.createElement(tag);
   if (cls) node.className = cls;
@@ -48,7 +85,9 @@ function makeRow(toggle, on) {
 
 function appendGroupCard(parent, { label, toggles }, settings, filterBox) {
   const card = el('div', 'group-card');
-  if (label) card.appendChild(el('div', 'group-h', label));
+  if (label) {
+    card.appendChild(el('div', 'group-h', label));
+  }
   toggles.forEach(t => {
     card.appendChild(makeRow(t, !!settings[t.id]));
     if (filterBox && t.id === 'yt_keywords') {
@@ -80,6 +119,16 @@ function moveTabIndicator(tabsNav, activeId) {
 }
 
 globalThis.VFocusUi = {
-  GROUP_ORDER, hostMatch, siteFromUrl, featuredSites, visibleToggles, siteCount,
-  el, makeRow, appendGroupCard, moveTabIndicator,
+  GROUP_ORDER,
+  hostMatch,
+  siteFromUrl,
+  featuredSites,
+  visibleToggles,
+  siteCount,
+  groupToggles,
+  splitGroups,
+  el,
+  makeRow,
+  appendGroupCard,
+  moveTabIndicator
 };

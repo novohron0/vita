@@ -1,11 +1,11 @@
-/* Safari iOS: classic script, без ES modules */
-'use strict';
+/* auto: Safari iOS popup shim */
+"use strict";
 if (typeof globalThis.browser !== 'undefined' && typeof globalThis.chrome === 'undefined') {
   globalThis.chrome = globalThis.browser;
 }
-
 const DEFAULT_DARK = { enabled: false, brightness: 100, contrast: 95, sepia: 8 };
 
+/** Safari iOS: sync ненадёжен между popup и content script — local первичен. */
 async function readStore(keys) {
   const list = Array.isArray(keys) ? keys : [keys];
   const local = await chrome.storage.local.get(list);
@@ -25,7 +25,7 @@ async function writeStore(patch) {
     payload.settingsRev = patch.settingsRev ?? Date.now();
   }
   await chrome.storage.local.set(payload);
-  try { await chrome.storage.sync.set(payload); } catch { /* noop */ }
+  try { await chrome.storage.sync.set(payload); } catch { /* Safari sync optional */ }
   return payload.settingsRev;
 }
 
@@ -40,13 +40,31 @@ async function setDarkMode(patch) {
   return darkMode;
 }
 
+/** Vita Focus — настройки (local + sync mirror). */
 const DEFAULT_SETTINGS = {
-  yt_shorts: true, yt_recs: true, yt_comments: false, yt_related: false,
-  yt_autoplay: false, yt_thumbs: false, yt_blur: false, yt_endscreen: false,
-  yt_notifications: false, yt_search: false, yt_livechat: false, yt_home_subs: false,
-  yt_shelf: false, yt_chips: false, yt_mix: false, yt_keywords: false, yt_kw: '',
-  yt_channels: false, yt_ch: '', yt_explore: false, yt_theater: false,
-  yt_watch_clean: false, yt_upnext: false,
+  yt_shorts: true,
+  yt_recs: true,
+  yt_comments: false,
+  yt_related: false,
+  yt_autoplay: false,
+  yt_thumbs: false,
+  yt_blur: false,
+  yt_endscreen: false,
+  yt_notifications: false,
+  yt_search: false,
+  yt_livechat: false,
+  yt_home_subs: false,
+  yt_shelf: false,
+  yt_chips: false,
+  yt_mix: false,
+  yt_keywords: false,
+  yt_kw: '',
+  yt_channels: false,
+  yt_ch: '',
+  yt_explore: false,
+  yt_theater: false,
+  yt_watch_clean: false,
+  yt_upnext: false,
 };
 
 const DEFAULT_SCHEDULE = { enabled: false, start: 9, end: 22 };
@@ -54,6 +72,7 @@ const DEFAULT_SCHEDULE = { enabled: false, start: 9, end: 22 };
 async function getSettings() {
   const data = await readStore(['settings', 'migration_v290']);
   let settings = { ...DEFAULT_SETTINGS, ...(data.settings || {}) };
+
   if (!data.migration_v290) {
     if (settings.yt_home_subs) {
       settings = { ...settings, yt_home_subs: false };
@@ -103,21 +122,26 @@ function inScheduleWindow(schedule) {
 function applyPending(settings, pending) {
   const now = Date.now();
   const out = { ...settings };
+  let changed = false;
   const nextPending = { ...pending };
   for (const [id, until] of Object.entries(pending)) {
     if (until <= now) {
       out[id] = false;
       delete nextPending[id];
+      changed = true;
     }
   }
+  if (changed) writeStore({ pending: nextPending });
   return out;
 }
 
+/** Настройки с учётом расписания и отложенного выключения. */
 async function getEffectiveSettings() {
   const raw = await getSettings();
   const schedule = await getSchedule();
   const pending = await getPending();
   let settings = applyPending({ ...raw }, pending);
+
   if (schedule.enabled && !inScheduleWindow(schedule)) {
     settings = Object.fromEntries(Object.keys(settings).map(k => [k, false]));
   }
@@ -127,6 +151,7 @@ async function getEffectiveSettings() {
 async function setSetting(id, on) {
   const settings = await getSettings();
   const pending = await getPending();
+
   if (!on && settings[id]) {
     const hours = await getCooldownHours();
     if (hours > 0) {
@@ -135,10 +160,12 @@ async function setSetting(id, on) {
       return settings;
     }
   }
+
   if (on && pending[id]) {
     delete pending[id];
     await writeStore({ pending });
   }
+
   settings[id] = !!on;
   await writeStore({ settings });
   return settings;
@@ -153,7 +180,9 @@ async function setSettings(patch) {
 async function getPendingInfo() {
   const pending = await getPending();
   const now = Date.now();
-  return Object.fromEntries(Object.entries(pending).filter(([, until]) => until > now));
+  return Object.fromEntries(
+    Object.entries(pending).filter(([, until]) => until > now)
+  );
 }
 
 async function hashPin(pin) {
@@ -169,11 +198,13 @@ async function getPinState() {
 
 async function setPin(pin) {
   if (!pin || pin.length < 4) throw new Error('short');
-  await writeStore({ pinHash: await hashPin(pin), pinEnabled: true });
+  const pinHash = await hashPin(pin);
+  await writeStore({ pinHash, pinEnabled: true });
 }
 
 async function clearPin(currentPin) {
-  if (!(await verifyPin(currentPin))) throw new Error('bad');
+  const ok = await verifyPin(currentPin);
+  if (!ok) throw new Error('bad');
   await writeStore({ pinHash: '', pinEnabled: false });
 }
 
@@ -202,7 +233,21 @@ async function importBundle(raw) {
 }
 
 globalThis.VFocusStorage = {
-  getDarkMode, setDarkMode, getSettings, getSchedule, setSchedule,
-  getCooldownHours, setCooldownHours, getEffectiveSettings, setSetting, setSettings,
-  getPendingInfo, getPinState, setPin, clearPin, verifyPin, exportBundle, importBundle,
+  getDarkMode,
+  setDarkMode,
+  getSettings,
+  getSchedule,
+  setSchedule,
+  getCooldownHours,
+  setCooldownHours,
+  getEffectiveSettings,
+  setSetting,
+  setSettings,
+  getPendingInfo,
+  getPinState,
+  setPin,
+  clearPin,
+  verifyPin,
+  exportBundle,
+  importBundle
 };

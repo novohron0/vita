@@ -131,8 +131,21 @@ async function loadRegistry() {
 }
 
 async function init() {
-  $('#ver').textContent = 'v' + chrome.runtime.getManifest().version;
+  const verEl = $('#ver');
+  verEl.textContent = 'v' + chrome.runtime.getManifest().version;
   loadTheme();
+
+  // Самопроверка storage (Safari iOS: если FAIL — тумблеры не доедут до страницы).
+  try {
+    const probe = `probe-${Date.now()}`;
+    await chrome.storage.local.set({ vfocusProbe: probe });
+    const got = await chrome.storage.local.get('vfocusProbe');
+    if (got.vfocusProbe !== probe) throw new Error('mismatch');
+    await chrome.storage.local.remove('vfocusProbe');
+    verEl.textContent += ' · storage OK';
+  } catch {
+    verEl.textContent += ' · storage FAIL';
+  }
 
   // Одноразово: перенос sync → local (Safari iOS не шлёт sync в content script).
   try {
@@ -565,10 +578,6 @@ function bindAll() {
     setStatus('Сохраняю…', 'busy');
 
     try {
-      chrome.storage.local.get('settings', data => {
-        const s = { ...(data.settings || {}), [id]: next };
-        chrome.storage.local.set({ settings: s, settingsRev: Date.now() });
-      });
       await persistToggle(id, next);
       row.classList.toggle('on', next);
       refreshSiteHead();

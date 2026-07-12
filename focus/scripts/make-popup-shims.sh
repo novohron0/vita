@@ -13,7 +13,8 @@ text = open(src).read()
 text = re.sub(r'^export ', '', text, flags=re.M)
 names = re.findall(r'^(?:async )?function (\w+)', text, flags=re.M)
 names = [n for n in names if n not in ('readStore', 'writeStore', 'getPending', 'inScheduleWindow', 'applyPending', 'hashPin')]
-body = '/* auto: Safari iOS popup shim */\n"use strict";\n' + text
+poly = "if (typeof globalThis.browser !== 'undefined' && typeof globalThis.chrome === 'undefined') {\n  globalThis.chrome = globalThis.browser;\n}\n"
+body = '/* auto: Safari iOS popup shim */\n"use strict";\n' + poly + text
 body += '\nglobalThis.VFocusStorage = {\n' + ',\n'.join(f'  {n}' for n in names) + '\n};\n'
 open(out, 'w').write(body)
 print('storage-shim.js')
@@ -27,7 +28,8 @@ text = text.replace('export const GROUP_ORDER', 'const GROUP_ORDER')
 text = re.sub(r'^export ', '', text, flags=re.M)
 names = re.findall(r'^(?:async )?function (\w+)', text, flags=re.M)
 names = ['GROUP_ORDER'] + names
-body = '/* auto: Safari iOS popup shim */\n"use strict";\n' + text
+poly = "if (typeof globalThis.browser !== 'undefined' && typeof globalThis.chrome === 'undefined') {\n  globalThis.chrome = globalThis.browser;\n}\n"
+body = '/* auto: Safari iOS popup shim */\n"use strict";\n' + poly + text
 body += '\nglobalThis.VFocusUi = {\n' + ',\n'.join(f'  {n}' for n in names) + '\n};\n'
 open(out, 'w').write(body)
 print('ui-shim.js')

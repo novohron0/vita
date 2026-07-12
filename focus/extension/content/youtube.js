@@ -1,4 +1,7 @@
 /* Vita Focus — YouTube (desktop + mobile web). Селекторы с запасом. */
+if (typeof globalThis.browser !== 'undefined' && typeof globalThis.chrome === 'undefined') {
+  globalThis.chrome = globalThis.browser;
+}
 const VITA_VERSION = (() => {
   try { return chrome.runtime.getManifest().version; } catch { return 'dev'; }
 })();

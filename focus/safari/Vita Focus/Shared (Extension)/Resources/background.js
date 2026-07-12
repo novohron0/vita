@@ -1,4 +1,7 @@
 /* Classic service worker — без ES modules (Safari iOS ломает type:module). */
+if (typeof globalThis.browser !== 'undefined' && typeof globalThis.chrome === 'undefined') {
+  globalThis.chrome = globalThis.browser;
+}
 const NATIVE_APP = 'ru.vitadots.focus';
 
 const DEFAULT_SETTINGS = {
