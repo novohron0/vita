@@ -740,7 +740,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 0.30.5;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -776,7 +776,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 0.30.5;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -903,7 +903,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 10.14;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 0.30.5;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -938,7 +938,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 10.14;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 0.30.5;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -976,7 +976,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 10.14;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 0.30.5;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -1017,7 +1017,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 10.14;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 0.30.5;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -1055,7 +1055,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 0.30.5;
 				PRODUCT_BUNDLE_IDENTIFIER = ru.vitadots.focus.widget;
 				PRODUCT_NAME = "Vita Focus Widget";
 				REGISTER_APP_GROUPS = YES;
@@ -1085,7 +1085,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 0.30.5;
 				PRODUCT_BUNDLE_IDENTIFIER = ru.vitadots.focus.widget;
 				PRODUCT_NAME = "Vita Focus Widget";
 				REGISTER_APP_GROUPS = YES;
