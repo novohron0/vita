@@ -819,7 +819,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 0.30.5;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -863,7 +863,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 0.30.5;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,

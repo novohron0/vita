@@ -102,8 +102,16 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
             DispatchQueue.main.async {
                 let enabled = state?.isEnabled ?? false
                 webView.evaluateJavaScript("show('ios', \(enabled))")
+                self.pushDiagnostics(to: webView, extensionEnabled: enabled)
             }
         }
+    }
+
+    private func pushDiagnostics(to webView: WKWebView, extensionEnabled: Bool) {
+        let report = FocusDiagnostics.makeReport(extensionEnabled: extensionEnabled)
+        let lines = report.lines.map { $0.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "'", with: "\\'") }
+        let js = "showDiagnostics(['\(lines.joined(separator: "','"))'])"
+        webView.evaluateJavaScript(js, completionHandler: nil)
     }
 
     private func openSafariExtensionSettings() {

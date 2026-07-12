@@ -228,3 +228,88 @@ enum VitaGoalDotsStore {
         return f.string(from: date).capitalized
     }
 }
+
+// MARK: - Диагностика (что реально на устройстве)
+
+enum FocusDiagnostics {
+    struct Report {
+        let appVersion: String
+        let buildNumber: String
+        let extensionVersion: String
+        let extensionEmbedded: Bool
+        let widgetEmbedded: Bool
+        let appGroupOK: Bool
+        let blocksOn: Int
+        let markedDays: Int
+        let extensionEnabled: Bool
+
+        var lines: [String] {
+            var out: [String] = []
+            out.append("Приложение: v\(appVersion) (\(buildNumber))")
+            out.append("Расширение в сборке: \(extensionEmbedded ? "✅ v\(extensionVersion)" : "❌ нет .appex")")
+            out.append("Safari расширение: \(extensionEnabled ? "✅ включено" : "❌ выключено")")
+            out.append("App Group: \(appGroupOK ? "✅ OK" : "❌ FAIL")")
+            out.append("Виджет в сборке: \(widgetEmbedded ? "✅" : "❌")")
+            out.append("Блоков (из расширения): \(blocksOn)")
+            out.append("Отмечено дней (виджет): \(markedDays)")
+            if !extensionEnabled {
+                out.append("→ Сначала шаг 1: включи Vita Focus в Safari")
+            } else if extensionVersion == "?" || !extensionEmbedded {
+                out.append("→ Xcode ⇧⌘K → ⌘R — расширение не попало в сборку")
+            } else if !appGroupOK {
+                out.append("→ App Group не настроен в Apple Developer")
+            } else if blocksOn == 0 {
+                out.append("→ Открой popup 🧩 на YouTube и включи блоки")
+            }
+            return out
+        }
+    }
+
+    static func embeddedPlugInVersion(name: String) -> (embedded: Bool, version: String) {
+        guard let plugins = Bundle.main.builtInPlugInsURL else { return (false, "?") }
+        let appex = plugins.appendingPathComponent(name)
+        guard let bundle = Bundle(url: appex),
+              let url = bundle.url(forResource: "manifest", withExtension: "json")
+                ?? bundle.url(forResource: "manifest", withExtension: "json", subdirectory: "Resources"),
+              let data = try? Data(contentsOf: url),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let ver = json["version"] as? String else {
+            // Widget has no manifest — use CFBundleShortVersionString
+            if name.contains("Widget"), let bundle = Bundle(url: appex) {
+                let v = bundle.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+                return (true, v)
+            }
+            return (FileManager.default.fileExists(atPath: appex.path), "?")
+        }
+        return (true, ver)
+    }
+
+    static func appGroupWorks() -> Bool {
+        guard let defaults = UserDefaults(suiteName: FocusAppGroup.id) else { return false }
+        let key = "vfocusDiagProbe"
+        let token = UUID().uuidString
+        defaults.set(token, forKey: key)
+        let ok = defaults.string(forKey: key) == token
+        defaults.removeObject(forKey: key)
+        return ok
+    }
+
+    static func makeReport(extensionEnabled: Bool) -> Report {
+        let ext = embeddedPlugInVersion(name: "Vita Focus Extension.appex")
+        let wgt = embeddedPlugInVersion(name: "Vita Focus Widget.appex")
+        let snap = FocusSnapshotStore.load()
+        let goal = VitaGoalDotsStore.load()
+        let info = Bundle.main.infoDictionary ?? [:]
+        return Report(
+            appVersion: info["CFBundleShortVersionString"] as? String ?? "?",
+            buildNumber: info["CFBundleVersion"] as? String ?? "?",
+            extensionVersion: ext.version,
+            extensionEmbedded: ext.embedded,
+            widgetEmbedded: wgt.embedded,
+            appGroupOK: appGroupWorks(),
+            blocksOn: snap.blocksOn,
+            markedDays: goal.markedDays.count,
+            extensionEnabled: extensionEnabled
+        )
+    }
+}

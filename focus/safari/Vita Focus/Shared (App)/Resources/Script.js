@@ -28,3 +28,10 @@ function post(action) {
 document.querySelector(".open-preferences")?.addEventListener("click", () => post("open-preferences"));
 document.querySelector(".open-youtube")?.addEventListener("click", () => post("open-youtube"));
 document.querySelector(".open-settings")?.addEventListener("click", () => post("open-settings"));
+
+function showDiagnostics(lines) {
+    const box = document.getElementById("diagBody");
+    if (!box || !Array.isArray(lines)) return;
+    box.textContent = lines.join("\n");
+    document.getElementById("diag")?.removeAttribute("hidden");
+}
