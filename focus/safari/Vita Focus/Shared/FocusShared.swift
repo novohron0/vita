@@ -241,18 +241,22 @@ enum FocusDiagnostics {
         let appGroupOK: Bool
         let blocksOn: Int
         let markedDays: Int
-        let extensionEnabled: Bool
+        let extensionEnabled: Bool?
 
         var lines: [String] {
             var out: [String] = []
             out.append("Приложение: v\(appVersion) (\(buildNumber))")
             out.append("Расширение в сборке: \(extensionEmbedded ? "✅ v\(extensionVersion)" : "❌ нет .appex")")
-            out.append("Safari расширение: \(extensionEnabled ? "✅ включено" : "❌ выключено")")
+            if let extensionEnabled {
+                out.append("Safari расширение: \(extensionEnabled ? "✅ включено" : "❌ выключено")")
+            } else {
+                out.append("Safari расширение: ? (нужен iOS 26.2+ для авто-проверки)")
+            }
             out.append("App Group: \(appGroupOK ? "✅ OK" : "❌ FAIL")")
             out.append("Виджет в сборке: \(widgetEmbedded ? "✅" : "❌")")
             out.append("Блоков (из расширения): \(blocksOn)")
             out.append("Отмечено дней (виджет): \(markedDays)")
-            if !extensionEnabled {
+            if extensionEnabled == false {
                 out.append("→ Сначала шаг 1: включи Vita Focus в Safari")
             } else if extensionVersion == "?" || !extensionEmbedded {
                 out.append("→ Xcode ⇧⌘K → ⌘R — расширение не попало в сборку")
@@ -294,7 +298,7 @@ enum FocusDiagnostics {
         return ok
     }
 
-    static func makeReport(extensionEnabled: Bool) -> Report {
+    static func makeReport(extensionEnabled: Bool?) -> Report {
         let ext = embeddedPlugInVersion(name: "Vita Focus Extension.appex")
         let wgt = embeddedPlugInVersion(name: "Vita Focus Widget.appex")
         let snap = FocusSnapshotStore.load()

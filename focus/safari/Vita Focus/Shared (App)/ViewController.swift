@@ -98,16 +98,30 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
 
 #if os(iOS)
     private func refreshExtensionState(in webView: WKWebView) {
-        SFSafariExtensionManager.getStateOfSafariExtension(withIdentifier: extensionBundleIdentifier) { state, _ in
+        queryExtensionEnabled { enabled in
             DispatchQueue.main.async {
-                let enabled = state?.isEnabled ?? false
-                webView.evaluateJavaScript("show('ios', \(enabled))")
+                if let enabled {
+                    webView.evaluateJavaScript("show('ios', \(enabled))")
+                } else {
+                    webView.evaluateJavaScript("show('ios')")
+                }
                 self.pushDiagnostics(to: webView, extensionEnabled: enabled)
             }
         }
     }
 
-    private func pushDiagnostics(to webView: WKWebView, extensionEnabled: Bool) {
+    /// iOS 26.2+: `getStateOfExtension`. Старше — API нет, вернёт nil.
+    private func queryExtensionEnabled(completion: @escaping (Bool?) -> Void) {
+        if #available(iOS 26.2, *) {
+            SFSafariExtensionManager.getStateOfExtension(withIdentifier: extensionBundleIdentifier) { state, _ in
+                completion(state?.isEnabled)
+            }
+        } else {
+            completion(nil)
+        }
+    }
+
+    private func pushDiagnostics(to webView: WKWebView, extensionEnabled: Bool?) {
         let report = FocusDiagnostics.makeReport(extensionEnabled: extensionEnabled)
         let lines = report.lines.map { $0.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "'", with: "\\'") }
         let js = "showDiagnostics(['\(lines.joined(separator: "','"))'])"
