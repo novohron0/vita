@@ -1104,6 +1104,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg?.type === 'vfocus:settings') loadSettings();
   if (msg?.type === 'vfocus:ping') {
     sendResponse({ ok: true, version: VITA_VERSION, site: 'youtube' });
+    return true;
   }
 });
 

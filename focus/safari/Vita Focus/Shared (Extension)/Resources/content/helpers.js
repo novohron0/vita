@@ -1,4 +1,7 @@
 /* Общий раннер для content scripts Vita Focus */
+if (typeof globalThis.browser !== 'undefined' && typeof globalThis.chrome === 'undefined') {
+  globalThis.chrome = globalThis.browser;
+}
 function vfocusBoot({ id, defaults, rules, extraCss, beforeTick }) {
   let settings = { ...defaults };
   let styleEl = null;
