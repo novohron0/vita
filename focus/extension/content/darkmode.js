@@ -1,3 +1,4 @@
+(() => {
 /** Vita Focus — тёмная тема для любого сайта (invert, как Dark Reader lite). */
 if (typeof globalThis.browser !== 'undefined' && typeof globalThis.chrome === 'undefined') {
   globalThis.chrome = globalThis.browser;
@@ -131,3 +132,4 @@ setInterval(async () => {
     }
   } catch { /* noop */ }
 }, 500);
+})();

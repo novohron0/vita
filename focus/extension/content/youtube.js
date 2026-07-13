@@ -1,3 +1,4 @@
+(() => {
 /* Vita Focus — YouTube (desktop + mobile web). Селекторы с запасом. */
 if (typeof globalThis.browser !== 'undefined' && typeof globalThis.chrome === 'undefined') {
   globalThis.chrome = globalThis.browser;
@@ -19,6 +20,7 @@ const VITA_VERSION = (() => {
   const el = document.createElement('div');
   el.id = 'vita-focus-hud';
   el.setAttribute('aria-hidden', 'true');
+  el.hidden = true;
   el.style.cssText = [
     'position:fixed',
     'bottom:calc(10px + env(safe-area-inset-bottom,0px))',
@@ -126,6 +128,8 @@ const RULES = {
     ytm-pivot-bar-renderer [tab-id="SHORTS"],
     ytm-pivot-bar-item-renderer[tab-id="SHORTS"],
     ytm-pivot-bar-item-renderer[tab-selection="SHORTS"],
+    ytm-pivot-bar-item-renderer:has(.pivot-shorts),
+    .pivot-bar-item-tab.pivot-shorts,
     ytm-mobile-topbar-renderer .shorts-tab,
     [aria-label="Shorts"]
   `,
@@ -134,6 +138,8 @@ const RULES = {
     ytd-browse[page-subtype="home"] #contents ytd-rich-item-renderer,
     ytm-browse[page-subtype="home"] .rich-grid-renderer-contents,
     ytm-browse[page-subtype="home"] ytm-rich-grid-renderer,
+    .tab-content[tab-identifier="FEwhat_to_watch"] ytm-rich-grid-renderer,
+    .tab-content[tab-title="Home"] ytm-rich-grid-renderer,
     ytm-browse[page-subtype="home"] ytm-video-with-context-renderer,
     ytm-browse[page-subtype="home"] ytm-rich-section-renderer,
     ytm-browse[page-subtype="home"] ytm-item-section-renderer[is-shelf],
@@ -1146,3 +1152,4 @@ setInterval(async () => {
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) loadSettings();
 });
+})();
