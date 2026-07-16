@@ -63,13 +63,32 @@
                 <button type="button" class="primary open-youtube">Главная YouTube в Safari</button>
             </section>
 
-            <section class="step-card">
+            <section class="step-card goal-dots-settings">
                 <div class="step-head">
                     <span class="step-num">3</span>
-                    <h2 class="step-title">Виджет на экране</h2>
+                    <h2 class="step-title">Vita · точки</h2>
                 </div>
-                <p class="step-text">Долгое нажатие на домашний экран → <b>+</b> → <b>Vita Focus</b> → виджет <b>«Vita · точки»</b> — сетка дней как на vitadots.ru.</p>
-                <p class="step-hint">На iOS 17+ в среднем/большом виджете есть кнопка <b>«Отметить день»</b>. Расширение Safari для этого не нужно.</p>
+                <p class="step-text">Выбери, что показывать: дни текущего месяца или отсчёт до личной цели до 42 дней.</p>
+
+                <div class="goal-mode-grid" role="group" aria-label="Режим виджета Vita · точки">
+                    <button type="button" class="goal-mode" data-mode="month" aria-pressed="false">Месяц</button>
+                    <button type="button" class="goal-mode" data-mode="goal" aria-pressed="false">До цели</button>
+                </div>
+
+                <div id="goalDateFields" class="goal-date-fields" hidden>
+                    <label>
+                        <span>Начало</span>
+                        <input id="goalStart" type="date" autocomplete="off">
+                    </label>
+                    <label>
+                        <span>Конец</span>
+                        <input id="goalEnd" type="date" autocomplete="off">
+                    </label>
+                </div>
+
+                <button id="applyGoalDots" type="button" class="primary">Применить к виджету</button>
+                <p id="goalDotsStatus" class="habit-status" role="status" aria-live="polite"></p>
+                <p class="step-hint">Добавление: долгое нажатие на экран → <b>+</b> → <b>Vita Focus</b> → <b>«Vita · точки»</b>. На iOS 17+ день можно отмечать прямо в виджете.</p>
             </section>
 
             <section class="step-card habit-settings">
@@ -125,11 +144,16 @@
                 </div>
                 <p class="appearance-label">Форма точек</p>
                 <div class="dot-style-grid" role="group" aria-label="Форма точек">
+                    <button type="button" class="dot-style" data-style="goal"><i class="dot-preview goal"></i><span>Авто</span></button>
                     <button type="button" class="dot-style" data-style="circle"><i class="dot-preview circle"></i><span>Круг</span></button>
                     <button type="button" class="dot-style" data-style="soft"><i class="dot-preview soft"></i><span>Мягкие</span></button>
                     <button type="button" class="dot-style" data-style="square"><i class="dot-preview square"></i><span>Квадрат</span></button>
                     <button type="button" class="dot-style" data-style="diamond"><i class="dot-preview diamond"></i><span>Ромб</span></button>
+                    <button type="button" class="dot-style" data-style="heart"><i class="dot-preview heart"></i><span>Сердце</span></button>
+                    <button type="button" class="dot-style" data-style="star"><i class="dot-preview star"></i><span>Звезда</span></button>
+                    <button type="button" class="dot-style" data-style="hex"><i class="dot-preview hex"></i><span>Соты</span></button>
                 </div>
+                <p class="step-hint">«Авто» повторяет форму подключённой цели; календарь остаётся круглым.</p>
                 <p id="widgetThemeStatus" class="habit-status" role="status" aria-live="polite"></p>
             </section>
         </div>

@@ -271,6 +271,66 @@ body::before {
     margin-bottom: 0;
 }
 
+.goal-mode-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 7px;
+    margin-bottom: 12px;
+    padding: 4px;
+    border: 1px solid var(--glass-border);
+    border-radius: 13px;
+    background: rgba(0, 0, 0, 0.24);
+}
+
+.goal-mode-grid .goal-mode {
+    padding: 10px 8px;
+    border-radius: 10px;
+    color: var(--text-muted);
+    background: transparent;
+    font-size: 13px;
+    box-shadow: none;
+}
+
+.goal-mode-grid .goal-mode.is-active {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.12);
+    box-shadow: var(--glass-inset);
+}
+
+.goal-date-fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 11px;
+}
+
+.goal-date-fields[hidden] { display: none; }
+
+.goal-date-fields label {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.goal-date-fields input {
+    width: 100%;
+    min-width: 0;
+    border: 1px solid var(--glass-border);
+    border-radius: 11px;
+    padding: 10px 8px;
+    color: var(--text);
+    background: rgba(0, 0, 0, 0.28);
+    color-scheme: dark;
+    font: 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+    -webkit-user-select: auto;
+    cursor: pointer;
+}
+
+.goal-dots-settings > .step-hint { margin-top: 8px; }
+
 .habit-lead { margin: -2px 0 12px; }
 
 .mono {
@@ -470,9 +530,23 @@ body::before {
     box-shadow: 0 0 9px rgba(192,132,252,.38);
 }
 .dot-preview.circle { border-radius: 50%; }
+.dot-preview.goal {
+    border-radius: 50%;
+    outline: 1px dashed rgba(255,255,255,.72);
+    outline-offset: 3px;
+}
 .dot-preview.soft { border-radius: 6px; }
 .dot-preview.square { border-radius: 2px; }
 .dot-preview.diamond { border-radius: 3px; transform: rotate(45deg) scale(.82); }
+.dot-preview.heart {
+    clip-path: polygon(50% 92%, 8% 49%, 8% 27%, 21% 10%, 39% 10%, 50% 23%, 61% 10%, 79% 10%, 92% 27%, 92% 49%);
+}
+.dot-preview.star {
+    clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 94%, 50% 72%, 21% 94%, 32% 57%, 2% 35%, 39% 35%);
+}
+.dot-preview.hex {
+    clip-path: polygon(25% 7%, 75% 7%, 100% 50%, 75% 93%, 25% 93%, 0% 50%);
+}
 
 button:disabled {
     opacity: 0.55;

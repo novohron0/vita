@@ -71,6 +71,7 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
 #if os(iOS)
         refreshExtensionState(in: webView)
         pushHabitState(to: webView, isRefreshing: VitaHabitStore.activeCode != nil)
+        pushGoalDotsState(to: webView)
         pushWidgetTheme(to: webView)
         refreshActiveHabit(in: webView)
 #elseif os(macOS)
@@ -130,6 +131,15 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
            let action = payload["action"] as? String {
             if action == "connect-habit" {
                 connectHabit(payload["value"] as? String ?? "", in: webView)
+                return
+            }
+            if action == "configure-goal-dots" {
+                saveGoalDots(
+                    modeRaw: payload["mode"] as? String ?? "",
+                    start: payload["goalStart"] as? String ?? "",
+                    end: payload["goalEnd"] as? String ?? "",
+                    in: webView
+                )
                 return
             }
             if action == "set-widget-theme" {
@@ -213,15 +223,18 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         Task { [weak self, weak webView] in
             do {
                 let snapshot = try await VitaHabitClient.fetch(code: code)
+                guard VitaHabitStore.activeCode == code else { return }
                 VitaHabitStore.save(snapshot)
                 await MainActor.run {
-                    guard let self, let webView else { return }
+                    guard let self, let webView,
+                          VitaHabitStore.activeCode == code else { return }
                     WidgetCenter.shared.reloadTimelines(ofKind: "VitaHabitWidget")
                     self.pushHabitState(to: webView, status: successStatus)
                 }
             } catch {
                 await MainActor.run {
-                    guard let self, let webView else { return }
+                    guard let self, let webView,
+                          VitaHabitStore.activeCode == code else { return }
                     let cached = VitaHabitStore.loadSnapshot() != nil
                     self.pushHabitState(
                         to: webView,
@@ -264,6 +277,48 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
               let data = try? JSONSerialization.data(withJSONObject: payload),
               let json = String(data: data, encoding: .utf8) else { return }
         webView.evaluateJavaScript("showHabitState(\(json))", completionHandler: nil)
+    }
+
+    private func saveGoalDots(modeRaw: String, start: String, end: String, in webView: WKWebView) {
+        guard let mode = VitaGoalMode(rawValue: modeRaw) else {
+            pushGoalDotsState(to: webView, status: "Неизвестный режим", isError: true)
+            return
+        }
+        do {
+            _ = try VitaGoalDotsStore.configure(mode: mode, goalStart: start, goalEnd: end)
+            WidgetCenter.shared.reloadTimelines(ofKind: "VitaMonthDotsWidget")
+            pushGoalDotsState(to: webView, status: "Виджет обновлён")
+        } catch {
+            pushGoalDotsState(
+                to: webView,
+                status: error.localizedDescription,
+                isError: true,
+                draft: (mode.rawValue, start, end)
+            )
+        }
+    }
+
+    private func pushGoalDotsState(
+        to webView: WKWebView,
+        status: String? = nil,
+        isError: Bool = false,
+        draft: (mode: String, start: String, end: String)? = nil
+    ) {
+        let model = VitaGoalDotsStore.load()
+        let dates = VitaGoalDotsStore.editorDates(for: model)
+        var payload: [String: Any] = [
+            "mode": draft?.mode ?? model.mode.rawValue,
+            "start": draft?.start ?? dates.start,
+            "end": draft?.end ?? dates.end,
+        ]
+        if let status {
+            payload["status"] = status
+            payload["isError"] = isError
+        }
+        guard JSONSerialization.isValidJSONObject(payload),
+              let data = try? JSONSerialization.data(withJSONObject: payload),
+              let json = String(data: data, encoding: .utf8) else { return }
+        webView.evaluateJavaScript("showGoalDotsState(\(json))", completionHandler: nil)
     }
 
     private func saveWidgetTheme(_ raw: String, in webView: WKWebView) {

@@ -13,10 +13,26 @@ enum VitaWidgetTheme: String, Codable, CaseIterable {
 }
 
 enum VitaDotStyle: String, Codable, CaseIterable {
+    case goal
     case circle
     case soft
     case square
     case diamond
+    case heart
+    case star
+    case hex
+
+    init(goalShape raw: String) {
+        switch raw.lowercased() {
+        case "rounded": self = .soft
+        case "square": self = .square
+        case "diamond": self = .diamond
+        case "heart": self = .heart
+        case "star": self = .star
+        case "hex": self = .hex
+        default: self = .circle
+        }
+    }
 }
 
 enum VitaWidgetThemeStore {
@@ -66,7 +82,7 @@ enum VitaDotStyleStore {
 
     static func load() -> VitaDotStyle {
         guard let raw = defaults?.string(forKey: key),
-              let style = VitaDotStyle(rawValue: raw) else { return .circle }
+              let style = VitaDotStyle(rawValue: raw) else { return .goal }
         return style
     }
 
@@ -342,8 +358,8 @@ enum VitaHabitStore {
 
     static func save(_ snapshot: VitaHabitSnapshot) {
         guard let code = code(from: snapshot.code), code == snapshot.code,
+              activeCode == code,
               let data = try? JSONEncoder().encode(snapshot) else { return }
-        defaults?.set(code, forKey: activeCodeKey)
         defaults?.set(data, forKey: snapshotKey)
     }
 

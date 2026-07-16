@@ -13,6 +13,7 @@ struct FocusSharedGoalTests {
         try testHabitDeepLinks()
         try testFocusLaunchLinks()
         try testHabitStreaksAndGrid()
+        testGoalDotStyles()
         print("FocusSharedGoalTests: \(checks) checks passed")
     }
 
@@ -156,6 +157,17 @@ struct FocusSharedGoalTests {
         let laterWindow = habit.widgetGrid(for: try date("2026-08-29"), maxDots: 42)
         expect(laterWindow.todayIndex == 35, "a long habit must use a rolling 35+7 day window")
         expect(laterWindow.markedIndices.isEmpty, "old marks outside the rolling window must not leak in")
+    }
+
+    private static func testGoalDotStyles() {
+        expect(VitaDotStyle(goalShape: "circle") == .circle, "circle goals must keep circular dots")
+        expect(VitaDotStyle(goalShape: "rounded") == .soft, "rounded goals must map to soft dots")
+        expect(VitaDotStyle(goalShape: "square") == .square, "square goals must keep square dots")
+        expect(VitaDotStyle(goalShape: "diamond") == .diamond, "diamond goals must keep diamond dots")
+        expect(VitaDotStyle(goalShape: "heart") == .heart, "heart goals must keep heart dots")
+        expect(VitaDotStyle(goalShape: "star") == .star, "star goals must keep star dots")
+        expect(VitaDotStyle(goalShape: "hex") == .hex, "hex goals must keep hexagonal dots")
+        expect(VitaDotStyle(goalShape: "unknown") == .circle, "unknown goal shapes must fall back safely")
     }
 
     private static func goalModel() -> VitaGoalDots {
