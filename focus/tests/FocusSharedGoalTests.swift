@@ -11,6 +11,7 @@ struct FocusSharedGoalTests {
         try testValidation()
         try testHabitCodes()
         try testHabitDeepLinks()
+        try testFocusLaunchLinks()
         try testHabitStreaksAndGrid()
         print("FocusSharedGoalTests: \(checks) checks passed")
     }
@@ -116,6 +117,15 @@ struct FocusSharedGoalTests {
         let malformed = URL(string: "vita://goal/abc234/extra")!
         expect(FocusDeepLinks.goalCode(from: malformed) == nil, "extra path components must not activate a habit")
         expect(FocusDeepLinks.fallbackURL(for: malformed) == FocusDeepLinks.goalsHome, "a malformed habit link must fall back to Vita goals")
+    }
+
+    private static func testFocusLaunchLinks() throws {
+        let launch = URL(string: "vita://youtube")!
+        expect(FocusDeepLinks.fallbackURL(for: launch) == FocusDeepLinks.youtubeHome, "the native YouTube launcher must resolve to YouTube home")
+
+        let components = URLComponents(url: FocusDeepLinks.youtubeHome, resolvingAgainstBaseURL: false)
+        let noApp = components?.queryItems?.first(where: { $0.name == "noapp" })?.value
+        expect(noApp == "1", "YouTube launches must opt out of the native-app Universal Link")
     }
 
     private static func testHabitStreaksAndGrid() throws {

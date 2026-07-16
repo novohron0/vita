@@ -1,4 +1,7 @@
 import UIKit
+#if canImport(AppIntents)
+import AppIntents
+#endif
 
 extension Notification.Name {
     static let vitaActiveHabitChanged = Notification.Name("vitaActiveHabitChanged")
@@ -26,3 +29,36 @@ extension FocusDeepLinks {
         openURL(fallbackURL(for: incoming))
     }
 }
+
+#if canImport(AppIntents)
+@available(iOS 16.0, *)
+struct OpenYouTubeFocusIntent: AppIntent {
+    static var title: LocalizedStringResource = "Открыть YouTube Focus"
+    static var description = IntentDescription("Открывает главную YouTube в браузере по умолчанию. Для фильтров выберите Safari.")
+    static var openAppWhenRun = true
+
+    @available(iOS 26.0, *)
+    static var supportedModes: IntentModes { .foreground(.immediate) }
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        await UIApplication.shared.open(FocusDeepLinks.youtubeHome)
+        return .result()
+    }
+}
+
+@available(iOS 16.0, *)
+struct VitaFocusAppShortcuts: AppShortcutsProvider {
+    static var appShortcuts: [AppShortcut] {
+        AppShortcut(
+            intent: OpenYouTubeFocusIntent(),
+            phrases: [
+                "Открыть YouTube через \(.applicationName)",
+                "Запустить YouTube Focus в \(.applicationName)",
+            ],
+            shortTitle: "YouTube Focus",
+            systemImageName: "play.rectangle.fill"
+        )
+    }
+}
+#endif

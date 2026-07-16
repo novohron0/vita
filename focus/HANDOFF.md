@@ -15,8 +15,8 @@ Vita — не набор отдельных демо, а одна система
 
 ## Текущее состояние (16.07.2026)
 
-- Extension manifest: **0.30.6**.
-- Все Xcode targets: `MARKETING_VERSION = 0.30.6`, build `2`.
+- Extension manifest: **0.30.7**.
+- Все Xcode targets: `MARKETING_VERSION = 0.30.7`, build `3`.
 - iOS app bundle: `ru.vitadots.focus`.
 - Safari extension: `ru.vitadots.focus.Extension`.
 - Widget: `ru.vitadots.focus.widget`.
@@ -55,14 +55,17 @@ youtube.js / site content scripts
 - YouTube: 21 фильтр, в мобильном popup показаны 5 основных.
 - Остальные сайты берутся из `focus/shared/registry.json`.
 - Popup и runtime-скрипты Safari не используют ES modules.
-- YouTube HUD: `VF 0.30.6 · storage OK/FAIL · …`.
-- Popup: `v0.30.6 · storage OK/FAIL` + ping текущей вкладки.
+- YouTube HUD: `VF 0.30.7 · storage OK/FAIL · …`.
+- Popup: `v0.30.7 · storage OK/FAIL` + ping текущей вкладки.
 
-Не обещать, что extension работает на iPhone, пока нет device-диагностики.
-PWA «На экран Домой» не поддерживает Safari extensions — нужен Safari.
-Для домашнего запуска использовать виджет **YouTube Focus**: он открывает
-главную `https://www.youtube.com/` в Safari. Обычная иконка
-сайта «На экран Домой» запускает web-app без extension.
+Extension физически проверен на iPhone 11 / iOS 26.3.1: popup, storage и
+text-only DOM-фильтрация работают. PWA «На экран Домой» не поддерживает Safari
+extensions — нужен Safari. Для домашнего запуска использовать виджет
+**YouTube Focus** или системную команду **YouTube Focus**: URL
+`https://www.youtube.com/?noapp=1` исключён из Universal Links приложения
+YouTube и на проверенном устройстве открывает браузер по умолчанию. Для работы
+extension браузером по умолчанию должен быть Safari. Для обычной закладки
+«На экран Домой» нужно выключить «Открыть как веб-приложение».
 
 Popup UI (`uiTheme`, `activeSite`) тоже local-first; `storage.sync` для этих
 полей — только необязательное зеркало и не должен ронять инициализацию popup.
@@ -118,16 +121,16 @@ plutil -lint "focus/safari/Vita Focus/Vita Focus.xcodeproj/project.pbxproj"
 
 Проверено на текущей ветке:
 
-- 37 pure Swift checks для inclusive goal ranges, habit/deep-link parsing,
+- 39 pure Swift checks для inclusive goal ranges, habit/deep-link parsing,
   streak и rolling widget grid;
-- 5 extension regression checks для text-only CSS, cooldown, manifest и sync;
+- 6 extension regression checks для text-only CSS, cooldown, manifest и sync;
 - iOS app target без signing: build success;
 - standalone widget target: build success;
 - macOS app target без signing: build success;
 - `git diff --check`, JS syntax, plist/pbx syntax: clean.
 
-Device signing, App Group provisioning и реальное поведение Safari на iPhone
-подтверждаются только запуском через Xcode на устройстве.
+Device signing, App Group provisioning, запуск Safari без передачи в приложение
+YouTube и text-only режим подтверждены на физическом iPhone 11 / iOS 26.3.1.
 
 ## Приоритет дальше
 

@@ -138,7 +138,9 @@ enum FocusSnapshotStore {
 enum FocusDeepLinks {
     static let appHome = URL(string: "vita://home")!
     static let goalsHome = URL(string: "https://vitadots.ru/goals")!
-    static let youtubeHome = URL(string: "https://www.youtube.com/")!
+    // YouTube excludes URLs with `noapp` from its Universal Links, so iOS keeps
+    // this launch in the browser instead of handing it to the YouTube app.
+    static let youtubeHome = URL(string: "https://www.youtube.com/?noapp=1")!
     static let youtubeSubs = URL(string: "https://m.youtube.com/feed/subscriptions")!
     static let instagram = URL(string: "https://www.instagram.com/")!
     static let x = URL(string: "https://x.com/")!
