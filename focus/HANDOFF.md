@@ -13,10 +13,10 @@ Vita — не набор отдельных демо, а одна система
 Настройки блокировок Focus остаются локальными: историю браузинга и список
 включённых фильтров не нужно отправлять на сервер.
 
-## Текущее состояние (12.07.2026)
+## Текущее состояние (16.07.2026)
 
-- Extension manifest: **0.30.5**.
-- Все Xcode targets: `MARKETING_VERSION = 0.30.5`.
+- Extension manifest: **0.30.6**.
+- Все Xcode targets: `MARKETING_VERSION = 0.30.6`, build `2`.
 - iOS app bundle: `ru.vitadots.focus`.
 - Safari extension: `ru.vitadots.focus.Extension`.
 - Widget: `ru.vitadots.focus.widget`.
@@ -35,8 +35,9 @@ Vita — не набор отдельных демо, а одна система
 6. App Intent «Отметить сегодня» вызывает `/api/goal/{code}/toggle`, обновляет
    кэш и WidgetKit. `/gw/{code}.png` автоматически отражает ту же отметку.
 
-Все виджеты используют общую тему из App Group: `graphite`, `violet`, `ocean`
-или `ember`. Тема выбирается в native app и применяется через
+Все виджеты используют общую тему из App Group: `graphite`, `violet`, `ocean`,
+`ember` или пользовательское фото. Для точек есть четыре формы. Оформление
+выбирается в native app и применяется через
 `WidgetCenter.reloadAllTimelines()`.
 
 Пока активная привычка одна. Следующий продуктовый шаг — несколько привычек и
@@ -51,16 +52,16 @@ youtube.js / site content scripts
     ↓ CSS + DOM filters
 ```
 
-- YouTube: 21 фильтр, в мобильном popup показаны 4 основных.
+- YouTube: 21 фильтр, в мобильном popup показаны 5 основных.
 - Остальные сайты берутся из `focus/shared/registry.json`.
 - Popup и runtime-скрипты Safari не используют ES modules.
-- YouTube HUD: `VF 0.30.5 · storage OK/FAIL · …`.
-- Popup: `v0.30.5 · storage OK/FAIL` + ping текущей вкладки.
+- YouTube HUD: `VF 0.30.6 · storage OK/FAIL · …`.
+- Popup: `v0.30.6 · storage OK/FAIL` + ping текущей вкладки.
 
 Не обещать, что extension работает на iPhone, пока нет device-диагностики.
 PWA «На экран Домой» не поддерживает Safari extensions — нужен Safari.
-Для домашнего запуска использовать виджеты **YouTube Focus** / **Быстрый запуск**:
-они открывают главную `https://www.youtube.com/` именно в Safari. Обычная иконка
+Для домашнего запуска использовать виджет **YouTube Focus**: он открывает
+главную `https://www.youtube.com/` в Safari. Обычная иконка
 сайта «На экран Домой» запускает web-app без extension.
 
 Popup UI (`uiTheme`, `activeSite`) тоже local-first; `storage.sync` для этих
@@ -110,14 +111,16 @@ Site/API:    app/main.py + static/
 
 ```bash
 ./focus/tests/run-goal-tests.sh
+node focus/tests/run-extension-regression-tests.mjs
 node --check "focus/safari/Vita Focus/Shared (App)/Resources/Script.js"
 plutil -lint "focus/safari/Vita Focus/Vita Focus.xcodeproj/project.pbxproj"
 ```
 
 Проверено на текущей ветке:
 
-- 28 pure Swift checks для inclusive goal ranges, habit code parsing, streak и
-  rolling widget grid;
+- 37 pure Swift checks для inclusive goal ranges, habit/deep-link parsing,
+  streak и rolling widget grid;
+- 5 extension regression checks для text-only CSS, cooldown, manifest и sync;
 - iOS app target без signing: build success;
 - standalone widget target: build success;
 - macOS app target без signing: build success;

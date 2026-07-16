@@ -1,5 +1,5 @@
 {
-  "version": 13,
+  "version": 14,
   "ui": {
     "featuredSiteIds": ["youtube", "instagram", "gmail", "telegram", "vk"],
     "settingsPresetIds": ["app", "work", "youtube", "social", "ru", "shop", "streams", "off"],
@@ -23,7 +23,7 @@
         "yt_thumbs": true,
         "yt_related": true,
         "yt_blur": false,
-        "yt_recs": true,
+        "yt_recs": false,
         "yt_comments": true,
         "yt_autoplay": true,
         "yt_endscreen": true,
@@ -40,7 +40,7 @@
       "glyph": "💼",
       "settings": {
         "yt_shorts": true,
-        "yt_recs": true,
+        "yt_recs": false,
         "yt_comments": true,
         "yt_related": true,
         "yt_autoplay": true,
@@ -65,7 +65,7 @@
       "glyph": "▶",
       "settings": {
         "yt_shorts": true,
-        "yt_recs": true,
+        "yt_recs": false,
         "yt_comments": true,
         "yt_related": true,
         "yt_autoplay": true,
@@ -160,11 +160,11 @@
       "glyph": "▶",
       "hosts": ["www.youtube.com", "m.youtube.com", "youtube.com"],
       "toggles": [
-        { "id": "yt_blur", "label": "Размыть превью", "desc": "Серый blur вместо картинок", "group": "main" },
         { "id": "yt_shorts", "label": "Убрать Shorts", "desc": "Вкладка, полки, /shorts", "group": "main" },
+        { "id": "yt_recs", "label": "Убрать рекомендации", "desc": "Очистить главную и лишние подборки", "group": "main" },
         { "id": "yt_thumbs", "label": "Только текст", "desc": "Без превью — только названия", "group": "main" },
         { "id": "yt_related", "label": "Похожие видео", "desc": "Скрыть под плеером", "group": "main" },
-        { "id": "yt_recs", "label": "Рекомендации", "desc": "Home и полки на ленте", "group": "extra" },
+        { "id": "yt_blur", "label": "Размыть превью", "desc": "Серый blur вместо картинок", "group": "main" },
         { "id": "yt_comments", "label": "Комментарии", "desc": "Блок под видео", "group": "extra" },
         { "id": "yt_autoplay", "label": "Автовоспроизведение", "desc": "Автоплей следующего", "group": "extra" },
         { "id": "yt_watch_clean", "label": "Только плеер", "desc": "Скрыть всё под видео", "group": "extra" },

@@ -5,7 +5,7 @@ if (typeof globalThis.browser !== 'undefined' && typeof globalThis.chrome === 'u
 const NATIVE_APP = 'ru.vitadots.focus';
 
 const DEFAULT_SETTINGS = {
-  yt_shorts: true, yt_recs: true, yt_comments: false, yt_related: false,
+  yt_shorts: false, yt_recs: false, yt_comments: false, yt_related: false,
   yt_autoplay: false, yt_thumbs: false, yt_blur: false, yt_endscreen: false,
   yt_notifications: false, yt_search: false, yt_livechat: false, yt_home_subs: false,
   yt_shelf: false, yt_chips: false, yt_mix: false, yt_keywords: false, yt_kw: '',
@@ -37,10 +37,20 @@ function inScheduleWindow(schedule) {
 async function getEffectiveSettingsBg() {
   const data = await readStore(['settings', 'schedule', 'pending']);
   let settings = { ...DEFAULT_SETTINGS, ...(data.settings || {}) };
-  const pending = data.pending || {};
+  const pending = { ...(data.pending || {}) };
   const now = Date.now();
+  let pendingChanged = false;
   for (const [id, until] of Object.entries(pending)) {
-    if (until <= now) settings[id] = false;
+    if (until <= now) {
+      settings[id] = false;
+      delete pending[id];
+      pendingChanged = true;
+    }
+  }
+  if (pendingChanged) {
+    const patch = { settings, pending, settingsRev: Date.now() };
+    await chrome.storage.local.set(patch);
+    try { await chrome.storage.sync.set(patch); } catch { /* local is authoritative */ }
   }
   const schedule = { enabled: false, start: 9, end: 22, ...(data.schedule || {}) };
   if (schedule.enabled && !inScheduleWindow(schedule)) {
@@ -107,24 +117,26 @@ chrome.runtime.onInstalled.addListener(() => {
   pushWidgetSnapshot();
 });
 
-async function broadcastTab(tabId) {
+async function broadcastTab(tabId, settings = null) {
   if (!tabId) return;
   try {
-    await chrome.tabs.sendMessage(tabId, { type: 'vfocus:settings' });
+    const effective = settings || await getEffectiveSettingsBg();
+    await chrome.tabs.sendMessage(tabId, { type: 'vfocus:settings', settings: effective });
     await chrome.tabs.sendMessage(tabId, { type: 'vfocus:dark' });
   } catch { /* no content script */ }
 }
 
 async function broadcastAll(activeFirst = false) {
   const tabs = await chrome.tabs.query({});
+  const settings = await getEffectiveSettingsBg();
   let activeId = null;
   if (activeFirst) {
     const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
     activeId = active?.id ?? null;
-    if (activeId) await broadcastTab(activeId);
+    if (activeId) await broadcastTab(activeId, settings);
   }
   for (const tab of tabs) {
-    if (tab.id && tab.id !== activeId) await broadcastTab(tab.id);
+    if (tab.id && tab.id !== activeId) await broadcastTab(tab.id, settings);
   }
 }
 

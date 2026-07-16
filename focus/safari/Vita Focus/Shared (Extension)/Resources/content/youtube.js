@@ -284,8 +284,8 @@ const RULES = {
 };
 
 const DEFAULTS = {
-  yt_shorts: true,
-  yt_recs: true,
+  yt_shorts: false,
+  yt_recs: false,
   yt_comments: false,
   yt_related: false,
   yt_autoplay: false,
@@ -327,6 +327,7 @@ const ROW_SEL = `
   ytm-video-with-context-renderer,
   ytm-compact-video-renderer,
   ytm-rich-item-renderer,
+  yt-lockup-view-model,
   ytd-rich-item-renderer,
   ytd-video-renderer,
   ytd-compact-video-renderer,
@@ -344,6 +345,8 @@ const THUMB_HIDE_SEL = `
   yt-thumbnail-view-model,
   yt-thumbnail-view-model-v2,
   ytd-thumbnail,
+  a.ytLockupViewModelContentImage,
+  .ytThumbnailViewModelImage,
   a.media-item-thumbnail,
   .media-item-thumbnail-container,
   .compact-media-item-image,
@@ -387,6 +390,9 @@ const THUMB_SEL = `
   ytm-thumbnail-view-model,
   ytm-compact-thumbnail,
   ytm-item-thumbnail-renderer,
+  yt-lockup-view-model a.ytLockupViewModelContentImage,
+  yt-lockup-view-model yt-thumbnail-view-model,
+  yt-lockup-view-model .ytThumbnailViewModelImage,
   ytm-browse a.media-item-thumbnail,
   ytm-browse .media-item-thumbnail-container,
   ytm-browse .compact-media-item-image,
@@ -550,23 +556,33 @@ const FEED_EMPTY_CSS = `
   }
 `;
 
+function scopedRowDescendants(descendants) {
+  const rows = ROW_SEL.split(/\s*,\s*/).filter(Boolean);
+  const children = descendants.split(/\s*,\s*/).filter(Boolean);
+  return rows.flatMap(row => children.map(child => `ytm-browse ${row} ${child}`)).join(',\n');
+}
+
 const TEXT_ONLY_MOBILE_CSS = `
-  ytm-browse ${ROW_SEL} .media-item,
-  ytm-browse ${ROW_SEL} .compact-media-item {
+  ${scopedRowDescendants('.media-item, .compact-media-item')} {
     display: flex !important;
     flex-direction: column !important;
     align-items: stretch !important;
     gap: 6px !important;
   }
-  ytm-browse ${ROW_SEL} .media-item-thumbnail-container,
-  ytm-browse ${ROW_SEL} a.media-item-thumbnail,
-  ytm-browse ${ROW_SEL} .compact-media-item-image,
-  ytm-browse ${ROW_SEL} ytm-thumbnail-cover,
-  ytm-browse ${ROW_SEL} ytm-media-item-thumbnail-renderer,
-  ytm-browse ${ROW_SEL} ytm-thumbnail-view-model,
-  ytm-browse ${ROW_SEL} ytm-thumbnail-view-model-v2,
-  ytm-browse ${ROW_SEL} yt-image,
-  ytm-browse ${ROW_SEL} img.ytCoreImageHost {
+  ${scopedRowDescendants(`
+    .media-item-thumbnail-container,
+    a.media-item-thumbnail,
+    .compact-media-item-image,
+    a.ytLockupViewModelContentImage,
+    ytm-thumbnail-cover,
+    ytm-media-item-thumbnail-renderer,
+    ytm-thumbnail-view-model,
+    ytm-thumbnail-view-model-v2,
+    yt-thumbnail-view-model,
+    .ytThumbnailViewModelImage,
+    yt-image,
+    img.ytCoreImageHost
+  `)} {
     display: none !important;
     width: 0 !important;
     height: 0 !important;
@@ -577,14 +593,21 @@ const TEXT_ONLY_MOBILE_CSS = `
     opacity: 0 !important;
     pointer-events: none !important;
   }
-  ytm-browse ${ROW_SEL} .media-item-metadata,
-  ytm-browse ${ROW_SEL} .compact-media-item-metadata {
+  ${scopedRowDescendants(`
+    .media-item-metadata,
+    .compact-media-item-metadata,
+    .ytLockupViewModelTextContent,
+    .ytLockupMetadataViewModelHost
+  `)} {
     width: 100% !important;
     padding-left: 0 !important;
     margin-left: 0 !important;
   }
-  ytm-browse ${ROW_SEL} #video-title,
-  ytm-browse ${ROW_SEL} .compact-media-item-headline {
+  ${scopedRowDescendants(`
+    #video-title,
+    .compact-media-item-headline,
+    .ytLockupMetadataViewModelTitle
+  `)} {
     font-size: 15px !important;
     line-height: 1.35 !important;
     -webkit-line-clamp: unset !important;
@@ -777,10 +800,9 @@ function inPlayer(el) {
   return !!el?.closest?.('ytm-player, #player, .html5-video-player, ytd-player, ytm-player-controls, .html5-video-container, #movie_player');
 }
 
-function clearThumbOverrides(root) {
-  queryDeep(root, '[data-vita-thumb-hidden], [data-vita-blur]').forEach(el => {
+function clearHiddenThumbnailOverrides(root) {
+  queryDeep(root, '[data-vita-thumb-hidden]').forEach(el => {
     delete el.dataset.vitaThumbHidden;
-    delete el.dataset.vitaBlur;
     el.style.removeProperty('display');
     el.style.removeProperty('width');
     el.style.removeProperty('height');
@@ -790,9 +812,21 @@ function clearThumbOverrides(root) {
     el.style.removeProperty('overflow');
     el.style.removeProperty('opacity');
     el.style.removeProperty('pointer-events');
+  });
+}
+
+function clearBlurThumbnailOverrides(root) {
+  queryDeep(root, '[data-vita-blur]').forEach(el => {
+    delete el.dataset.vitaBlur;
     el.style.removeProperty('filter');
+    el.style.removeProperty('opacity');
     el.style.removeProperty('transform');
   });
+}
+
+function clearThumbOverrides(root) {
+  clearHiddenThumbnailOverrides(root);
+  clearBlurThumbnailOverrides(root);
 }
 
 function applyBlurThumbnails() {
@@ -996,7 +1030,8 @@ function tickFast() {
 }
 
 function tickHeavy() {
-  if (!settings.yt_thumbs && !settings.yt_blur) clearThumbOverrides(document);
+  if (!settings.yt_thumbs) clearHiddenThumbnailOverrides(document);
+  if (!settings.yt_blur || settings.yt_thumbs) clearBlurThumbnailOverrides(document);
   hideListThumbnails();
   applyBlurThumbnails();
   hideRelatedOnWatch();
@@ -1045,15 +1080,22 @@ function inScheduleWindowCS(schedule) {
 // Safari iOS: local storage — единственный надёжный канал popup → content script.
 async function vfocusReadStore(keys) {
   const list = Array.isArray(keys) ? keys : [keys];
-  const local = await chrome.storage.local.get(list);
+  const local = await withTimeout(chrome.storage.local.get(list), 900, 'local storage timeout');
   const needSync = list.filter(k => local[k] === undefined);
   if (!needSync.length) return local;
   try {
-    const sync = await chrome.storage.sync.get(needSync);
+    const sync = await withTimeout(chrome.storage.sync.get(needSync), 900, 'sync storage timeout');
     return { ...sync, ...local };
   } catch {
     return local;
   }
+}
+
+function withTimeout(promise, ms, message) {
+  return Promise.race([
+    Promise.resolve(promise),
+    new Promise((_, reject) => setTimeout(() => reject(new Error(message)), ms)),
+  ]);
 }
 
 async function readSettingsDirect() {
@@ -1072,31 +1114,43 @@ async function readSettingsDirect() {
   return raw;
 }
 
-async function loadSettings() {
+function applySettingsSnapshot(nextSettings, source = 'storage') {
   const prev = JSON.stringify(settings);
-  let storageOk = true;
-  try {
-    settings = await readSettingsDirect();
-  } catch (e) {
-    storageOk = false;
-    try {
-      const res = await chrome.runtime.sendMessage({ type: 'vfocus:get' });
-      if (res) settings = { ...DEFAULTS, ...res };
-    } catch {
-      settings = { ...DEFAULTS };
-    }
-  }
+  const firstLoad = !settingsLoaded;
+  settings = { ...DEFAULTS, ...(nextSettings || {}) };
   const on = Object.entries(settings).filter(([k, v]) => v && k.startsWith('yt_')).map(([k]) => k.replace('yt_', '')).slice(0, 4);
   if (typeof window.__vitaHudUpdate === 'function') {
-    window.__vitaHudUpdate(`VF ${VITA_VERSION} · ${storageOk ? 'storage OK' : 'storage FAIL'} · ${on.length ? on.join(',') : 'off'}`);
+    window.__vitaHudUpdate(`VF ${VITA_VERSION} · ${source} · ${on.length ? on.join(',') : 'off'}`);
   }
   const next = JSON.stringify(settings);
-  if (prev === next) return;
-  if (!settings.yt_thumbs && !settings.yt_blur) {
-    clearThumbOverrides(document);
-  }
-  tick();
   settingsLoaded = true;
+  if (prev === next && !firstLoad) return;
+  if (!settings.yt_thumbs) clearHiddenThumbnailOverrides(document);
+  if (!settings.yt_blur || settings.yt_thumbs) clearBlurThumbnailOverrides(document);
+  tick();
+}
+
+async function loadSettings() {
+  try {
+    applySettingsSnapshot(await readSettingsDirect(), 'storage OK');
+    return;
+  } catch (e) {
+    try {
+      const res = await withTimeout(
+        chrome.runtime.sendMessage({ type: 'vfocus:get' }),
+        900,
+        'background timeout'
+      );
+      if (res) {
+        applySettingsSnapshot(res, 'background OK');
+        return;
+      }
+    } catch {
+      // Popup передаёт настройки прямо в content script; до этого безопаснее
+      // ничего не скрывать, чем оставлять YouTube пустым из-за зависшего API.
+    }
+  }
+  applySettingsSnapshot(DEFAULTS, 'safe fallback');
 }
 
 try {
@@ -1107,7 +1161,10 @@ try {
 } catch { /* нет chrome.storage — останется поллинг */ }
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  if (msg?.type === 'vfocus:settings') loadSettings();
+  if (msg?.type === 'vfocus:settings') {
+    if (msg.settings) applySettingsSnapshot(msg.settings, 'popup push');
+    else loadSettings();
+  }
   if (msg?.type === 'vfocus:youtube-ping') {
     sendResponse({ ok: true, version: VITA_VERSION, site: 'youtube' });
     return true;

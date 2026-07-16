@@ -1,7 +1,7 @@
 const {
   getSettings, setSetting, setSettings, getPinState, setPin, clearPin, verifyPin,
   getSchedule, setSchedule, getCooldownHours, setCooldownHours, getPendingInfo,
-  exportBundle, importBundle, getDarkMode, setDarkMode,
+  getEffectiveSettings, exportBundle, importBundle, getDarkMode, setDarkMode,
 } = globalThis.VFocusStorage || {};
 const {
   siteFromUrl, featuredSites, siteCount, visibleToggles,
@@ -88,8 +88,17 @@ async function refreshPauseBanner() {
   banner.hidden = true;
 }
 
-function pushApply() {
-  const msg = { type: 'vfocus:settings' };
+async function pushApply() {
+  let effective = null;
+  try {
+    effective = await Promise.race([
+      getEffectiveSettings(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('effective settings timeout')), 900)),
+    ]);
+  } catch { /* background broadcast remains as a safe fallback */ }
+  const msg = effective
+    ? { type: 'vfocus:settings', settings: effective }
+    : { type: 'vfocus:settings' };
   const tid = tabId;
   if (tid != null) {
     chrome.tabs.sendMessage(tid, msg).catch(() => {});
@@ -291,25 +300,30 @@ function currentSite() {
   return sites.find(s => s.id === active);
 }
 
+function conflictingYouTubeModes(id) {
+  if (id === 'yt_thumbs') return ['yt_blur', 'yt_recs'];
+  if (id === 'yt_blur' || id === 'yt_recs') return ['yt_thumbs'];
+  return [];
+}
+
 function refreshMaster() {
   const site = currentSite();
   const btn = $('#siteMaster');
   if (!site || !btn) return;
-  const toggles = visibleToggles(site);
-  const n = siteCount(site, settings, toggles);
-  const total = toggles.length;
+  const n = siteCount(site, settings, site.toggles);
+  const total = site.toggles.length;
   btn.classList.toggle('on', n > 0);
   btn.classList.toggle('part', n > 0 && n < total);
   const lbl = $('#masterLabel');
   if (lbl) {
-    lbl.textContent = n === total ? 'Фокус вкл' : n ? `${n}/${total}` : 'Фокус выкл';
+    lbl.textContent = n ? `Фокус вкл · ${n}` : 'Фокус выкл';
   }
 }
 
 async function setSiteMaster(on) {
   const site = currentSite();
   if (!site) return;
-  const toggles = visibleToggles(site);
+  const toggles = on ? visibleToggles(site) : site.toggles;
   if (!on) {
     const turningOff = toggles.filter(t => settings[t.id]);
     if (turningOff.length && pinEnabled) {
@@ -319,7 +333,20 @@ async function setSiteMaster(on) {
   }
   setStatus('Сохраняю…', 'busy');
   const patch = Object.fromEntries(toggles.map(t => [t.id, on]));
-  settings = await setSettings(patch);
+  if (on && site.id === 'youtube') {
+    // «Только текст» — самостоятельный режим ленты: картинки и полное
+    // скрытие рекомендаций одновременно пользователю ничего не показывают.
+    patch.yt_recs = false;
+    patch.yt_blur = false;
+  }
+  if (!on && await getCooldownHours() > 0) {
+    for (const toggle of toggles) {
+      if (settings[toggle.id]) await setSetting(toggle.id, false);
+    }
+    settings = await getSettings();
+  } else {
+    settings = await setSettings(patch);
+  }
   renderRows();
   refreshSiteHead();
   refreshTabs();
@@ -333,8 +360,7 @@ async function setSiteMaster(on) {
 function refreshSiteHead() {
   const site = currentSite();
   if (!site) return;
-  const toggles = visibleToggles(site);
-  const n = siteCount(site, settings, toggles);
+  const n = siteCount(site, settings, site.toggles);
   $('#siteTitle').textContent = site.name;
   $('#siteMeta').textContent = n
     ? `${n} ${n === 1 ? 'блок включён' : n < 5 ? 'блока включено' : 'блоков включено'}`
@@ -436,15 +462,25 @@ function renderRows() {
 }
 
 async function persistToggle(id, on) {
-  const hours = await getCooldownHours();
-  if (!on && hours > 0 && settings[id]) {
-    settings = await setSetting(id, false);
-  } else {
-    settings = await setSetting(id, on);
+  const conflicts = on
+    ? conflictingYouTubeModes(id).filter(conflictId => settings[conflictId])
+    : [];
+
+  // При активной задержке смена взаимоисключающего режима не должна создавать
+  // невозможное состояние (например, одновременно скрыть всю ленту и оставить
+  // в ней только текст). Сначала ставим снятие старого режима в очередь.
+  if (conflicts.length && await getCooldownHours() > 0) {
+    for (const conflictId of conflicts) await setSetting(conflictId, false);
+    return getSettings();
   }
-  if (on && id === 'yt_thumbs') settings = await setSetting('yt_blur', false);
-  if (on && id === 'yt_blur') settings = await setSetting('yt_thumbs', false);
-  return settings;
+
+  if (conflicts.length) {
+    const patch = { [id]: true };
+    conflicts.forEach(conflictId => { patch[conflictId] = false; });
+    return setSettings(patch);
+  }
+
+  return setSetting(id, on);
 }
 
 function buildPresets() {
@@ -462,15 +498,24 @@ function buildPresets() {
 
 async function applyPreset(preset) {
   const ids = allToggles().map(t => t.id);
-  const turningOff = ids.filter(id => settings[id] && !(preset.settings[id]));
+  const patch = Object.fromEntries(ids.map(id => [id, false]));
+  Object.assign(patch, preset.settings);
+  if (patch.yt_thumbs) {
+    patch.yt_blur = false;
+    patch.yt_recs = false;
+  }
+  const turningOff = ids.filter(id => settings[id] && !patch[id]);
   if (turningOff.length && pinEnabled) {
     const pin = await askPin('Пароль для смены профиля');
     if (!pin || !(await verifyPin(pin))) return;
   }
   setStatus('Сохраняю…', 'busy');
-  const patch = Object.fromEntries(ids.map(id => [id, false]));
-  Object.assign(patch, preset.settings);
-  settings = await setSettings(patch);
+  if (turningOff.length && await getCooldownHours() > 0) {
+    for (const id of turningOff) await setSetting(id, false);
+    settings = await getSettings();
+  } else {
+    settings = await setSettings(patch);
+  }
   refreshTabs();
   refreshSiteHead();
   refreshMaster();
@@ -534,9 +579,8 @@ function bindAll() {
   $('#siteMaster').addEventListener('click', async () => {
     const site = currentSite();
     if (!site) return;
-    const toggles = visibleToggles(site);
-    const allOn = toggles.every(t => settings[t.id]);
-    await setSiteMaster(!allOn);
+    const anyOn = site.toggles.some(t => settings[t.id]);
+    await setSiteMaster(!anyOn);
   });
   $('#closeSheet').addEventListener('click', closeSheet);
   $('#siteSheet .overlay-bg').addEventListener('click', closeSheet);
@@ -583,6 +627,11 @@ function bindAll() {
     const on = !!settings[id];
     const next = !on;
     if (!(await needPinToDisable(on, next))) return;
+    const conflicts = next ? conflictingYouTubeModes(id) : [];
+    if (pinEnabled && conflicts.some(conflictId => settings[conflictId])) {
+      const pin = await askPin('Пароль для смены режима');
+      if (!pin || !(await verifyPin(pin))) return;
+    }
 
     const prev = { ...settings };
     settings[id] = next;
@@ -593,8 +642,8 @@ function bindAll() {
     setStatus('Сохраняю…', 'busy');
 
     try {
-      await persistToggle(id, next);
-      row.classList.toggle('on', next);
+      settings = await persistToggle(id, next);
+      renderRows();
       refreshSiteHead();
       refreshMaster();
       refreshTabs();

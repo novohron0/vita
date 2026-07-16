@@ -13,7 +13,7 @@
     { id: 'yt_thumbs', label: 'Только текст', desc: 'Без превью — только названия' },
     { id: 'yt_related', label: 'Похожие видео', desc: 'Скрыть рекомендации под плеером' },
   ];
-  const DEFAULTS = { yt_shorts: true, yt_recs: true };
+  const DEFAULTS = { yt_shorts: false, yt_recs: false };
   let settings = { ...DEFAULTS };
   let running = true;
   let masterBound = false;
@@ -38,10 +38,46 @@
     try { await api.storage.sync.set(patch); } catch { /* local — источник истины */ }
   }
 
-  function notifyPage() {
+  async function commitSettings(next) {
+    const changed = Object.keys(next).filter(id => next[id] !== settings[id]);
+    const turningOff = changed.filter(id => settings[id] && !next[id]);
+    const store = globalThis.VFocusStorage;
+
+    if (store && turningOff.length) {
+      const pin = await store.getPinState();
+      if (pin.enabled && pin.hash) {
+        showStatus('Защита включена — открой полную панель и введи пароль', true);
+        return false;
+      }
+      if (await store.getCooldownHours() > 0) {
+        for (const id of turningOff) await store.setSetting(id, false);
+        settings = await store.getSettings();
+        showStatus('Старый режим снимется после задержки', false);
+        return false;
+      }
+    }
+
+    if (store) {
+      const patch = Object.fromEntries(changed.map(id => [id, next[id]]));
+      settings = await store.setSettings(patch);
+    } else {
+      await writeSettings(next);
+    }
+    return true;
+  }
+
+  async function notifyPage() {
     try {
+      const store = globalThis.VFocusStorage;
+      let effective = null;
+      if (store) {
+        try { effective = await store.getEffectiveSettings(); } catch { /* background will retry */ }
+      }
+      const message = effective
+        ? { type: 'vfocus:settings', settings: effective }
+        : { type: 'vfocus:settings' };
       api.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
-        if (tab?.id != null) api.tabs.sendMessage(tab.id, { type: 'vfocus:settings' }).catch(() => {});
+        if (tab?.id != null) api.tabs.sendMessage(tab.id, message).catch(() => {});
       }).catch(() => {});
       api.runtime.sendMessage({ type: 'vfocus:broadcast' }).catch(() => {});
     } catch { /* страница применит настройки при обновлении */ }
@@ -63,10 +99,15 @@
   async function toggleOne(row) {
     const id = row.dataset.id;
     const next = { ...settings, [id]: !settings[id] };
+    if (next[id] && id === 'yt_thumbs') {
+      next.yt_blur = false;
+      next.yt_recs = false;
+    }
+    if (next[id] && id === 'yt_blur') next.yt_thumbs = false;
+    if (next[id] && id === 'yt_recs') next.yt_thumbs = false;
     try {
-      await writeSettings(next);
-      row.classList.toggle('on', !!settings[id]);
-      updateHeader();
+      await commitSettings(next);
+      render();
       notifyPage();
     } catch {
       showStatus('Не удалось сохранить настройку', true);
@@ -100,8 +141,12 @@
     const on = !TOGGLES.some(t => settings[t.id]);
     const next = { ...settings };
     TOGGLES.forEach(t => { next[t.id] = on; });
+    if (on) {
+      next.yt_recs = false;
+      next.yt_blur = false;
+    }
     try {
-      await writeSettings(next);
+      await commitSettings(next);
       render();
       notifyPage();
     } catch {

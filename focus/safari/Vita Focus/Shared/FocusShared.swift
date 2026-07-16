@@ -137,6 +137,7 @@ enum FocusSnapshotStore {
 
 enum FocusDeepLinks {
     static let appHome = URL(string: "vita://home")!
+    static let goalsHome = URL(string: "https://vitadots.ru/goals")!
     static let youtubeHome = URL(string: "https://www.youtube.com/")!
     static let youtubeSubs = URL(string: "https://m.youtube.com/feed/subscriptions")!
     static let instagram = URL(string: "https://www.instagram.com/")!
@@ -149,6 +150,24 @@ enum FocusDeepLinks {
         case "x", "twitter": return x
         default: return youtubeHome
         }
+    }
+
+    static func isGoalDeepLink(_ incoming: URL) -> Bool {
+        ["vita", "vitafocus"].contains(incoming.scheme?.lowercased() ?? "")
+            && incoming.host?.lowercased() == "goal"
+    }
+
+    static func goalCode(from incoming: URL) -> String? {
+        guard isGoalDeepLink(incoming),
+              incoming.query == nil,
+              incoming.fragment == nil else { return nil }
+        let parts = incoming.path.split(separator: "/", omittingEmptySubsequences: true)
+        guard parts.count == 1 else { return nil }
+        return VitaHabitStore.code(from: String(parts[0]))
+    }
+
+    static func fallbackURL(for incoming: URL) -> URL {
+        isGoalDeepLink(incoming) ? goalsHome : url(for: incoming.host)
     }
 }
 

@@ -14,13 +14,15 @@ extension FocusDeepLinks {
            incoming.host?.lowercased() == "home" {
             return
         }
-        if ["vita", "vitafocus"].contains(incoming.scheme?.lowercased() ?? ""),
-           incoming.host?.lowercased() == "goal",
-           let code = VitaHabitStore.code(from: incoming.absoluteString),
-           (try? VitaHabitStore.activate(code)) != nil {
-            NotificationCenter.default.post(name: .vitaActiveHabitChanged, object: code)
+        if isGoalDeepLink(incoming) {
+            if let code = goalCode(from: incoming),
+               (try? VitaHabitStore.activate(code)) != nil {
+                NotificationCenter.default.post(name: .vitaActiveHabitChanged, object: code)
+                return
+            }
+            openURL(fallbackURL(for: incoming))
             return
         }
-        openURL(url(for: incoming.host))
+        openURL(fallbackURL(for: incoming))
     }
 }

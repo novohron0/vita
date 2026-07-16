@@ -10,6 +10,7 @@ struct FocusSharedGoalTests {
         try testMarkedDayBounds()
         try testValidation()
         try testHabitCodes()
+        try testHabitDeepLinks()
         try testHabitStreaksAndGrid()
         print("FocusSharedGoalTests: \(checks) checks passed")
     }
@@ -96,6 +97,25 @@ struct FocusSharedGoalTests {
             "a Vita deep link must yield its goal code"
         )
         expect(VitaHabitStore.code(from: "abc123") == nil, "ambiguous digits excluded by the server must be rejected")
+    }
+
+    private static func testHabitDeepLinks() throws {
+        let valid = URL(string: "vita://goal/ABC234")!
+        expect(FocusDeepLinks.isGoalDeepLink(valid), "a Vita goal URL must be recognized as a habit deep link")
+        expect(FocusDeepLinks.goalCode(from: valid) == "abc234", "a valid habit deep link must yield its code")
+
+        let missing = URL(string: "vita://goal")!
+        expect(FocusDeepLinks.isGoalDeepLink(missing), "a goal deep link without a code must still use goal routing")
+        expect(FocusDeepLinks.goalCode(from: missing) == nil, "a missing habit code must be rejected")
+        expect(FocusDeepLinks.fallbackURL(for: missing) == FocusDeepLinks.goalsHome, "a missing habit code must fall back to Vita goals")
+
+        let invalid = URL(string: "vita://goal/abc123")!
+        expect(FocusDeepLinks.goalCode(from: invalid) == nil, "an invalid habit code must be rejected")
+        expect(FocusDeepLinks.fallbackURL(for: invalid) != FocusDeepLinks.youtubeHome, "an invalid habit code must never fall back to YouTube")
+
+        let malformed = URL(string: "vita://goal/abc234/extra")!
+        expect(FocusDeepLinks.goalCode(from: malformed) == nil, "extra path components must not activate a habit")
+        expect(FocusDeepLinks.fallbackURL(for: malformed) == FocusDeepLinks.goalsHome, "a malformed habit link must fall back to Vita goals")
     }
 
     private static func testHabitStreaksAndGrid() throws {

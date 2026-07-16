@@ -273,6 +273,18 @@ const all = () => SITES.flatMap(s=>s.toggles);
 const siteN = s => s.toggles.filter(t=>settings[t.id]).length;
 const save = () => localStorage.vfocus = JSON.stringify({ settings, active });
 
+function normalizeYouTubeModes(changedId = '') {
+  if ((changedId === 'yt_blur' || changedId === 'yt_recs') && settings[changedId]) {
+    settings.yt_thumbs = false;
+    return;
+  }
+  if (settings.yt_thumbs) {
+    settings.yt_blur = false;
+    settings.yt_recs = false;
+    return;
+  }
+}
+
 function buildPresets() {
   const nav = $('#fpresets');
   if (!nav) return;
@@ -288,6 +300,7 @@ function applyPreset(p) {
   const ids = all().map(t => t.id);
   ids.forEach(id => { settings[id] = false; });
   Object.assign(settings, p.settings || {});
+  normalizeYouTubeModes();
   save(); renderRows(); updateScore(); refreshTabs();
 }
 
@@ -327,10 +340,11 @@ function renderRows() {
 }
 function toggle(id,row,e) {
   const on = !settings[id]; settings[id]=on; row.classList.toggle('on',on);
+  if (on) normalizeYouTubeModes(id);
   if(on){ const rp=el('span','ripple'); const b=row.getBoundingClientRect(); const sz=Math.max(b.width,b.height);
     rp.style.width=rp.style.height=sz+'px'; rp.style.left=(e.clientX-b.left-sz/2)+'px'; rp.style.top=(e.clientY-b.top-sz/2)+'px';
     row.appendChild(rp); setTimeout(()=>rp.remove(),600); }
-  save(); updateScore(); refreshTabs();
+  save(); renderRows(); updateScore(); refreshTabs();
 }
 function select(id){ active=id; save(); renderRows(); refreshTabs(); requestAnimationFrame(moveInd); }
 

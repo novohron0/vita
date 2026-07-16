@@ -37,8 +37,8 @@ export async function setDarkMode(patch) {
 
 /** Vita Focus — настройки (local + sync mirror). */
 const DEFAULT_SETTINGS = {
-  yt_shorts: true,
-  yt_recs: true,
+  yt_shorts: false,
+  yt_recs: false,
   yt_comments: false,
   yt_related: false,
   yt_autoplay: false,
@@ -65,7 +65,7 @@ const DEFAULT_SETTINGS = {
 const DEFAULT_SCHEDULE = { enabled: false, start: 9, end: 22 };
 
 export async function getSettings() {
-  const data = await readStore(['settings', 'migration_v290']);
+  const data = await readStore(['settings', 'migration_v290', 'pending']);
   let settings = { ...DEFAULT_SETTINGS, ...(data.settings || {}) };
 
   if (!data.migration_v290) {
@@ -76,7 +76,7 @@ export async function getSettings() {
       await writeStore({ migration_v290: true });
     }
   }
-  return settings;
+  return applyPending(settings, data.pending || {});
 }
 
 export async function getSchedule() {
@@ -114,7 +114,7 @@ function inScheduleWindow(schedule) {
   return h >= start || h < end;
 }
 
-function applyPending(settings, pending) {
+async function applyPending(settings, pending) {
   const now = Date.now();
   const out = { ...settings };
   let changed = false;
@@ -126,7 +126,7 @@ function applyPending(settings, pending) {
       changed = true;
     }
   }
-  if (changed) writeStore({ pending: nextPending });
+  if (changed) await writeStore({ settings: out, pending: nextPending });
   return out;
 }
 
@@ -135,7 +135,7 @@ export async function getEffectiveSettings() {
   const raw = await getSettings();
   const schedule = await getSchedule();
   const pending = await getPending();
-  let settings = applyPending({ ...raw }, pending);
+  let settings = await applyPending({ ...raw }, pending);
 
   if (schedule.enabled && !inScheduleWindow(schedule)) {
     settings = Object.fromEntries(Object.keys(settings).map(k => [k, false]));
@@ -168,7 +168,15 @@ export async function setSetting(id, on) {
 
 export async function setSettings(patch) {
   const settings = { ...(await getSettings()), ...patch };
-  await writeStore({ settings });
+  const pending = await getPending();
+  let pendingChanged = false;
+  for (const id of Object.keys(patch)) {
+    if (pending[id]) {
+      delete pending[id];
+      pendingChanged = true;
+    }
+  }
+  await writeStore(pendingChanged ? { settings, pending } : { settings });
   return settings;
 }
 
