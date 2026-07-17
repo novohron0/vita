@@ -15,6 +15,7 @@ struct FocusSharedGoalTests {
         try testHabitStreaksAndGrid()
         testGoalDotStyles()
         testDotColors()
+        try testImpulseValidation()
         print("FocusSharedGoalTests: \(checks) checks passed")
     }
 
@@ -178,6 +179,32 @@ struct FocusSharedGoalTests {
         expect(VitaDotColorStore.normalizedSelection("#fff") == nil, "short hex colors must be rejected")
         expect(VitaDotColorStore.normalizedSelection("#GG55F7") == nil, "invalid hex colors must be rejected")
         expect(VitaDotColorStore.normalizedSelection("+00001") == nil, "signed values must not be accepted as hex colors")
+    }
+
+    private static func testImpulseValidation() throws {
+        let now = try date("2026-07-17")
+        let fireDate = now.addingTimeInterval(60)
+        let impulse = try VitaImpulseStore.save(
+            title: "  Тренировка ",
+            reason: " Больше энергии ",
+            firstStep: " Надеть кроссовки ",
+            fireDate: fireDate,
+            now: now
+        )
+        expect(impulse.title == "Тренировка", "impulse title must be trimmed")
+        expect(impulse.notificationBody.contains("Первый шаг: Надеть кроссовки"), "notification must make starting explicit")
+        do {
+            _ = try VitaImpulseStore.save(title: "Читать", reason: "", firstStep: "", fireDate: fireDate, now: now)
+            fail("an impulse without a first step must be rejected")
+        } catch VitaImpulseError.missingFirstStep {
+            checks += 1
+        }
+        do {
+            _ = try VitaImpulseStore.save(title: "Читать", reason: "", firstStep: "Открыть книгу", fireDate: now, now: now)
+            fail("an impulse in the past must be rejected")
+        } catch VitaImpulseError.invalidDate {
+            checks += 1
+        }
     }
 
     private static func goalModel() -> VitaGoalDots {

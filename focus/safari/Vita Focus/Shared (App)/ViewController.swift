@@ -47,6 +47,7 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
             guard let self else { return }
             self.refreshExtensionState(in: self.webView)
             self.refreshActiveHabit(in: self.webView)
+            self.pushImpulseState(to: self.webView)
         }
 #endif
 
@@ -86,6 +87,7 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         pushHabitState(to: webView, isRefreshing: VitaHabitStore.activeCode != nil)
         pushGoalDotsState(to: webView)
         pushWidgetTheme(to: webView)
+        pushImpulseState(to: webView)
         refreshActiveHabit(in: webView)
 #elseif os(macOS)
         webView.evaluateJavaScript("show('mac')")
@@ -173,6 +175,22 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
             }
             if action == "pick-widget-photo" {
                 pickWidgetPhoto()
+                return
+            }
+            if action == "save-impulse" {
+                saveImpulse(
+                    title: payload["title"] as? String ?? "",
+                    reason: payload["reason"] as? String ?? "",
+                    firstStep: payload["firstStep"] as? String ?? "",
+                    fireDateRaw: payload["fireDate"] as? String ?? "",
+                    in: webView
+                )
+                return
+            }
+            if action == "disable-impulse" {
+                VitaImpulseStore.disable()
+                VitaImpulseNotifications.cancel()
+                pushImpulseState(to: webView, status: "Импульс выключен")
                 return
             }
         }
@@ -427,6 +445,59 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         guard let data = try? JSONSerialization.data(withJSONObject: payload),
               let json = String(data: data, encoding: .utf8) else { return }
         webView.evaluateJavaScript("showWidgetTheme(\(json))", completionHandler: nil)
+    }
+
+    private func saveImpulse(title: String, reason: String, firstStep: String, fireDateRaw: String, in webView: WKWebView) {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let fireDate = formatter.date(from: fireDateRaw) else {
+            pushImpulseState(to: webView, status: VitaImpulseError.invalidDate.localizedDescription, isError: true)
+            return
+        }
+        do {
+            let impulse = try VitaImpulseStore.save(title: title, reason: reason, firstStep: firstStep, fireDate: fireDate)
+            VitaImpulseNotifications.requestAccess { [weak self, weak webView] granted in
+                guard let self, let webView else { return }
+                guard granted else {
+                    VitaImpulseStore.disable()
+                    DispatchQueue.main.async {
+                        self.pushImpulseState(to: webView, status: "Разреши уведомления Vita Focus в настройках", isError: true)
+                    }
+                    return
+                }
+                VitaImpulseNotifications.schedule(impulse) { error in
+                    DispatchQueue.main.async {
+                        if let error {
+                            self.pushImpulseState(to: webView, status: error.localizedDescription, isError: true)
+                        } else {
+                            self.pushImpulseState(to: webView, status: "Импульс готов")
+                        }
+                    }
+                }
+            }
+        } catch {
+            pushImpulseState(to: webView, status: error.localizedDescription, isError: true)
+        }
+    }
+
+    private func pushImpulseState(to webView: WKWebView, status: String? = nil, isError: Bool = false) {
+        let impulse = VitaImpulseStore.load()
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        var payload: [String: Any] = ["configured": impulse != nil, "enabled": impulse?.isEnabled == true]
+        if let impulse {
+            payload["title"] = impulse.title
+            payload["reason"] = impulse.reason
+            payload["firstStep"] = impulse.firstStep
+            payload["fireDate"] = formatter.string(from: impulse.fireDate)
+        }
+        if let status {
+            payload["status"] = status
+            payload["isError"] = isError
+        }
+        guard let data = try? JSONSerialization.data(withJSONObject: payload),
+              let json = String(data: data, encoding: .utf8) else { return }
+        webView.evaluateJavaScript("showImpulseState(\(json))", completionHandler: nil)
     }
 
     private func openSafariExtensionSettings() {

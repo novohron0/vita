@@ -82,6 +82,23 @@
                 <p id="habitStatus" class="habit-status" role="status" aria-live="polite"></p>
             </section>
 
+            <section class="step-card impulse-card">
+                <div class="step-head">
+                    <h2 class="step-title">Vita Импульс</h2>
+                    <span id="impulsePill" class="status-pill"><i></i><span>Не задан</span></span>
+                </div>
+                <p class="step-text">Не просто напомнит — вернёт твоё «зачем» и подскажет первый шаг.</p>
+                <div class="impulse-fields">
+                    <label><span>Что начать</span><input id="impulseTitle" type="text" maxlength="80" placeholder="Например, тренировка"></label>
+                    <label><span>Зачем это важно</span><input id="impulseReason" type="text" maxlength="120" placeholder="Хочу больше энергии"></label>
+                    <label><span>Самый маленький шаг</span><input id="impulseStep" type="text" maxlength="120" placeholder="Надеть кроссовки"></label>
+                    <label><span>Когда</span><input id="impulseDate" type="datetime-local"></label>
+                </div>
+                <button id="saveImpulse" type="button" class="primary">Создать импульс</button>
+                <button id="disableImpulse" type="button" class="text-action" hidden>Выключить</button>
+                <p id="impulseStatus" class="habit-status" role="status" aria-live="polite"></p>
+            </section>
+
             <section class="step-card add-widget-card">
                 <div class="step-head">
                     <h2 class="step-title">Добавь виджет</h2>

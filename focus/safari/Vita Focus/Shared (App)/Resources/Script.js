@@ -266,6 +266,72 @@ document.querySelectorAll(".cancel-habit-edit").forEach((button) => {
 document.querySelectorAll(".open-goals").forEach((button) => button.addEventListener("click", () => post("open-goals")));
 document.querySelectorAll(".open-active-habit").forEach((button) => button.addEventListener("click", () => post("open-active-habit")));
 
+function impulseLocalDate(iso) {
+    const date = iso ? new Date(iso) : new Date(Date.now() + 60 * 60 * 1000);
+    if (Number.isNaN(date.getTime())) return "";
+    const shifted = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+    return shifted.toISOString().slice(0, 16);
+}
+
+function showImpulseState(state) {
+    if (!state || typeof state !== "object") return;
+    const fields = {
+        impulseTitle: state.title,
+        impulseReason: state.reason,
+        impulseStep: state.firstStep,
+        impulseDate: state.fireDate ? impulseLocalDate(state.fireDate) : null
+    };
+    Object.entries(fields).forEach(([id, value]) => {
+        const input = document.getElementById(id);
+        if (input && value != null && document.activeElement !== input) input.value = value;
+    });
+    const dateInput = document.getElementById("impulseDate");
+    if (dateInput && !dateInput.value) dateInput.value = impulseLocalDate();
+    const pill = document.getElementById("impulsePill");
+    if (pill) {
+        pill.classList.toggle("is-active", Boolean(state.enabled));
+        const label = pill.querySelector("span");
+        if (label) label.textContent = state.enabled ? "Готов" : "Не задан";
+    }
+    const save = document.getElementById("saveImpulse");
+    if (save) {
+        save.disabled = false;
+        save.textContent = state.configured ? "Обновить импульс" : "Создать импульс";
+    }
+    const disable = document.getElementById("disableImpulse");
+    if (disable) disable.hidden = !state.enabled;
+    const status = document.getElementById("impulseStatus");
+    if (status) {
+        status.textContent = state.status || (state.enabled && state.fireDate
+            ? `Сработает ${new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(state.fireDate))}`
+            : "");
+        status.classList.toggle("is-error", Boolean(state.isError));
+        status.classList.toggle("is-success", Boolean(state.status) && !state.isError);
+    }
+}
+
+document.getElementById("saveImpulse")?.addEventListener("click", () => {
+    const title = document.getElementById("impulseTitle")?.value.trim() || "";
+    const reason = document.getElementById("impulseReason")?.value.trim() || "";
+    const firstStep = document.getElementById("impulseStep")?.value.trim() || "";
+    const localDate = document.getElementById("impulseDate")?.value || "";
+    const date = new Date(localDate);
+    const status = document.getElementById("impulseStatus");
+    if (!title || !firstStep || !localDate || Number.isNaN(date.getTime()) || date.getTime() < Date.now() + 5000) {
+        if (status) {
+            status.textContent = !title ? "Напиши, что хочешь начать" : !firstStep ? "Добавь первый шаг" : "Выбери время в будущем";
+            status.classList.add("is-error");
+        }
+        return;
+    }
+    const button = document.getElementById("saveImpulse");
+    if (button) button.disabled = true;
+    if (status) { status.textContent = "Создаём…"; status.classList.remove("is-error", "is-success"); }
+    post({ action: "save-impulse", title, reason, firstStep, fireDate: date.toISOString() });
+});
+
+document.getElementById("disableImpulse")?.addEventListener("click", () => post({ action: "disable-impulse" }));
+
 let widgetHasPhoto = false;
 let widgetThemeState = {
     theme: "graphite",

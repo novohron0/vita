@@ -4,6 +4,70 @@ enum FocusAppGroup {
     static let id = "group.ru.vitadots.focus"
 }
 
+struct VitaImpulse: Codable, Equatable {
+    var title: String
+    var reason: String
+    var firstStep: String
+    var fireDate: Date
+    var isEnabled: Bool
+
+    var notificationBody: String {
+        let step = "Первый шаг: \(firstStep)"
+        return reason.isEmpty ? step : "\(reason) · \(step)"
+    }
+}
+
+enum VitaImpulseError: LocalizedError {
+    case missingTitle, missingFirstStep, invalidDate
+
+    var errorDescription: String? {
+        switch self {
+        case .missingTitle: return "Напиши, что хочешь начать"
+        case .missingFirstStep: return "Добавь самый маленький первый шаг"
+        case .invalidDate: return "Выбери время в будущем"
+        }
+    }
+}
+
+enum VitaImpulseStore {
+    static let notificationID = "vita.impulse.active"
+    static let categoryID = "VITA_IMPULSE"
+    static let startActionID = "VITA_IMPULSE_START"
+    static let postponeActionID = "VITA_IMPULSE_POSTPONE"
+    private static let key = "vitaImpulse"
+
+    static var defaults: UserDefaults? { UserDefaults(suiteName: FocusAppGroup.id) }
+
+    static func load() -> VitaImpulse? {
+        guard let data = defaults?.data(forKey: key) else { return nil }
+        return try? JSONDecoder().decode(VitaImpulse.self, from: data)
+    }
+
+    @discardableResult
+    static func save(title: String, reason: String, firstStep: String, fireDate: Date, now: Date = .now) throws -> VitaImpulse {
+        let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let reason = reason.trimmingCharacters(in: .whitespacesAndNewlines)
+        let firstStep = firstStep.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty else { throw VitaImpulseError.missingTitle }
+        guard !firstStep.isEmpty else { throw VitaImpulseError.missingFirstStep }
+        guard fireDate.timeIntervalSince(now) >= 5 else { throw VitaImpulseError.invalidDate }
+        let impulse = VitaImpulse(title: title, reason: reason, firstStep: firstStep, fireDate: fireDate, isEnabled: true)
+        update(impulse)
+        return impulse
+    }
+
+    static func update(_ impulse: VitaImpulse) {
+        guard let data = try? JSONEncoder().encode(impulse) else { return }
+        defaults?.set(data, forKey: key)
+    }
+
+    static func disable() {
+        guard var impulse = load() else { return }
+        impulse.isEnabled = false
+        update(impulse)
+    }
+}
+
 enum VitaWidgetTheme: String, Codable, CaseIterable {
     case graphite
     case violet
