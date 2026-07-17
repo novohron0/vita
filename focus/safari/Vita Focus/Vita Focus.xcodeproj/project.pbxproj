@@ -46,6 +46,9 @@
 		4F807AE7000D9E30043AC81 /* FocusShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F807ADD000D9E30043AC81 /* FocusShared.swift */; };
 		4F807AE8000D9E30043AC81 /* VitaFocusWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F807ADE000D9E30043AC81 /* VitaFocusWidgets.swift */; };
 		4F807AE9000D9E30043AC81 /* FocusDeepLinks+App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F807AEA000D9E30043AC81 /* FocusDeepLinks+App.swift */; };
+		4F807AEC000D9E30043AC81 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 4F807AEB000D9E30043AC81 /* PrivacyInfo.xcprivacy */; };
+		4F807AED000D9E30043AC81 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 4F807AEB000D9E30043AC81 /* PrivacyInfo.xcprivacy */; };
+		4F807AEE000D9E30043AC81 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 4F807AEB000D9E30043AC81 /* PrivacyInfo.xcprivacy */; };
 		4F807AD3000D9E30043AC81 /* Vita Focus Widget.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 4F807AD2000D9E30043AC81 /* Vita Focus Widget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
@@ -145,6 +148,7 @@
 		4F807AE1000D9E30043AC81 /* VitaFocus.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = VitaFocus.entitlements; sourceTree = "<group>"; };
 		4F807AE2000D9E30043AC81 /* VitaFocusExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = VitaFocusExtension.entitlements; sourceTree = "<group>"; };
 		4F807AEA000D9E30043AC81 /* FocusDeepLinks+App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FocusDeepLinks+App.swift"; sourceTree = "<group>"; };
+		4F807AEB000D9E30043AC81 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -302,6 +306,7 @@
 			isa = PBXGroup;
 			children = (
 				4F807ADD000D9E30043AC81 /* FocusShared.swift */,
+				4F807AEB000D9E30043AC81 /* PrivacyInfo.xcprivacy */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -473,6 +478,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				4F807AEC000D9E30043AC81 /* PrivacyInfo.xcprivacy in Resources */,
 				4F807A9C3000D9E30043AC81 /* Icon.png in Resources */,
 				4F807A753000D9E30043AC81 /* LaunchScreen.storyboard in Resources */,
 				4F807A9A3000D9E30043AC81 /* Main.html in Resources */,
@@ -500,6 +506,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				4F807AED000D9E30043AC81 /* PrivacyInfo.xcprivacy in Resources */,
 				4F807AC73000D9E30043AC81 /* content in Resources */,
 				4F807AC83000D9E30043AC81 /* shared in Resources */,
 				4F807AC63000D9E30043AC81 /* background.js in Resources */,
@@ -526,6 +533,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				4F807AEE000D9E30043AC81 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -835,6 +843,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "iOS (App)/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Vita Focus";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIMainStoryboardFile = Main;
@@ -872,13 +881,13 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "iOS (App)/VitaFocus.entitlements";
-				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = 655542C66J;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "iOS (App)/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Vita Focus";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIMainStoryboardFile = Main;
@@ -1097,7 +1106,6 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = "iOS (Widget)/VitaFocusWidget.entitlements";
-				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = 655542C66J;

@@ -22,6 +22,11 @@ Vita — не набор отдельных демо, а одна система
 - Widget: `ru.vitadots.focus.widget`.
 - App Group: `group.ru.vitadots.focus`.
 - Team: `655542C66J`.
+- Release archive `0.30.9 (5)` собирается. App Store export пока блокирует
+  бесплатная `Personal Team`: для TestFlight нужна активная Apple Developer
+  Program и App Store Connect provider.
+- `PrivacyInfo.xcprivacy` встроен в app, Safari extension и Widget с App Group
+  UserDefaults reason `1C8F.1`; `ITSAppUsesNonExemptEncryption = NO`.
 
 ## Что уже связано
 
