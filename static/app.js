@@ -787,6 +787,7 @@ $('ideaSend').addEventListener('click', async () => {
         title: state.title, footer: state.footer, brand: state.brand, birth: state.birth,
         start: state.start, end: state.end,
         idea: $('idea').value, contact: $('contact').value,
+        ownerToken: window.VitaID?.token() || '',
       }),
     });
     const data = await res.json();

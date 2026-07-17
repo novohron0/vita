@@ -358,6 +358,11 @@ body::before {
 }
 
 .habit-settings button + button { margin-top: 6px; }
+.habit-settings.is-deep-link-target { animation: vitaGoalTarget 2.1s ease-out; }
+@keyframes vitaGoalTarget {
+    0%, 25% { border-color: rgba(168,85,247,.86); box-shadow: var(--glass-inset), 0 0 0 3px rgba(168,85,247,.22), 0 14px 48px rgba(0,0,0,.38); }
+    100% { border-color: var(--glass-border); box-shadow: var(--glass-inset), var(--glass-shadow); }
+}
 
 .impulse-card .step-head { justify-content: space-between; }
 .impulse-card .status-pill.is-active { color: #d8b4fe; background: rgba(168,85,247,.14); }
@@ -374,6 +379,9 @@ body::before {
 .impulse-fields input[type="datetime-local"] { cursor: pointer; }
 .impulse-card .text-action { margin-top: 6px; }
 .impulse-card .text-action[hidden] { display: none; }
+.vita-id-settings .settings-content { padding-top: 14px; }
+.vita-id-settings .text-action { margin-top: 6px; }
+.vita-id-settings .text-action[hidden] { display: none; }
 
 .habit-connected[hidden],
 .habit-connect-form[hidden],

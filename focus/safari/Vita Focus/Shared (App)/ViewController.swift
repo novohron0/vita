@@ -38,6 +38,8 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         ) { [weak self] _ in
             guard let self else { return }
             self.refreshActiveHabit(in: self.webView, successStatus: "Цель подключена")
+            _ = FocusDeepLinks.consumeGoalHighlight()
+            self.highlightGoals(in: self.webView)
         }
         appActiveObserver = NotificationCenter.default.addObserver(
             forName: UIApplication.didBecomeActiveNotification,
@@ -48,6 +50,7 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
             self.refreshExtensionState(in: self.webView)
             self.refreshActiveHabit(in: self.webView)
             self.pushImpulseState(to: self.webView)
+            self.pushProfileState(to: self.webView)
         }
 #endif
 
@@ -89,7 +92,11 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         pushGoalDotsState(to: webView)
         pushWidgetTheme(to: webView)
         pushImpulseState(to: webView)
+        pushProfileState(to: webView)
         refreshActiveHabit(in: webView)
+        if FocusDeepLinks.consumeGoalHighlight() {
+            highlightGoals(in: webView)
+        }
 #elseif os(macOS)
         webView.evaluateJavaScript("show('mac')")
 
@@ -201,6 +208,15 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
                 VitaImpulseStore.disable()
                 VitaImpulseNotifications.cancel()
                 pushImpulseState(to: webView, status: "Импульс выключен")
+                return
+            }
+            if action == "connect-profile" {
+                connectProfile(payload["code"] as? String ?? "", in: webView)
+                return
+            }
+            if action == "disconnect-profile" {
+                VitaProfileStore.disconnect()
+                pushProfileState(to: webView, status: "Vita ID отключён")
                 return
             }
         }
@@ -403,6 +419,7 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
             return
         }
         WidgetCenter.shared.reloadAllTimelines()
+        Task { await VitaProfileClient.saveCurrentSettings() }
         pushWidgetTheme(to: webView, status: "Готово", theme: theme)
     }
 
@@ -412,6 +429,7 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
             return
         }
         WidgetCenter.shared.reloadAllTimelines()
+        Task { await VitaProfileClient.saveCurrentSettings() }
         pushWidgetTheme(to: webView, status: "Готово")
     }
 
@@ -421,6 +439,7 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
             return
         }
         WidgetCenter.shared.reloadAllTimelines()
+        Task { await VitaProfileClient.saveCurrentSettings() }
         pushWidgetTheme(to: webView, status: "Готово")
     }
 
@@ -455,6 +474,57 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         guard let data = try? JSONSerialization.data(withJSONObject: payload),
               let json = String(data: data, encoding: .utf8) else { return }
         webView.evaluateJavaScript("showWidgetTheme(\(json))", completionHandler: nil)
+    }
+
+    private func connectProfile(_ raw: String, in webView: WKWebView) {
+        guard let code = VitaProfileStore.normalized(raw) else {
+            pushProfileState(to: webView, status: VitaProfileError.invalidCode.localizedDescription, isError: true)
+            return
+        }
+        Task { [weak self, weak webView] in
+            do {
+                let bundle = try await VitaProfileClient.fetch(code: code)
+                var snapshot: VitaHabitSnapshot?
+                if let goal = bundle.goals.first {
+                    _ = try VitaHabitStore.activate(goal.code)
+                    snapshot = try? await VitaHabitClient.fetch(code: goal.code)
+                }
+                await MainActor.run {
+                    guard let self, let webView else { return }
+                    _ = VitaProfileStore.save(code: bundle.code)
+                    VitaProfileStore.apply(bundle.settings)
+                    if let snapshot { VitaHabitStore.save(snapshot) }
+                    WidgetCenter.shared.reloadAllTimelines()
+                    self.pushProfileState(to: webView, status: "Vita ID подключён", goalCount: bundle.goals.count)
+                    self.pushHabitState(to: webView)
+                    self.pushWidgetTheme(to: webView)
+                    self.highlightGoals(in: webView)
+                }
+            } catch {
+                await MainActor.run {
+                    guard let self, let webView else { return }
+                    self.pushProfileState(to: webView, status: error.localizedDescription, isError: true)
+                }
+            }
+        }
+    }
+
+    private func pushProfileState(
+        to webView: WKWebView,
+        status: String? = nil,
+        isError: Bool = false,
+        goalCount: Int? = nil
+    ) {
+        let code = VitaProfileStore.code
+        var payload: [String: Any] = [
+            "connected": code != nil,
+            "code": code ?? "",
+            "goals": goalCount ?? (VitaHabitStore.activeCode == nil ? 0 : 1),
+        ]
+        if let status { payload["status"] = status; payload["isError"] = isError }
+        guard let data = try? JSONSerialization.data(withJSONObject: payload),
+              let json = String(data: data, encoding: .utf8) else { return }
+        webView.evaluateJavaScript("showVitaProfileState(\(json))", completionHandler: nil)
     }
 
     private func saveImpulse(title: String, reason: String, firstStep: String, fireDateRaw: String, in webView: WKWebView) {
@@ -508,6 +578,10 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         guard let data = try? JSONSerialization.data(withJSONObject: payload),
               let json = String(data: data, encoding: .utf8) else { return }
         webView.evaluateJavaScript("showImpulseState(\(json))", completionHandler: nil)
+    }
+
+    private func highlightGoals(in webView: WKWebView) {
+        webView.evaluateJavaScript("showGoalsSection()", completionHandler: nil)
     }
 
     private func openSafariExtensionSettings() {
@@ -581,6 +655,7 @@ extension ViewController: UIImagePickerControllerDelegate, UINavigationControlle
         do {
             try VitaWidgetThemeStore.savePhotoData(data)
             WidgetCenter.shared.reloadAllTimelines()
+            Task { await VitaProfileClient.saveCurrentSettings() }
             pushWidgetTheme(to: webView, status: "Фото установлено", theme: .photo)
         } catch {
             pushWidgetTheme(to: webView, status: "Не удалось сохранить фото", isError: true)

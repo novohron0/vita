@@ -8,6 +8,14 @@ extension Notification.Name {
 }
 
 extension FocusDeepLinks {
+    private static let pendingGoalHighlightKey = "vitaPendingGoalHighlight"
+
+    static func consumeGoalHighlight() -> Bool {
+        let pending = UserDefaults.standard.bool(forKey: pendingGoalHighlightKey)
+        UserDefaults.standard.removeObject(forKey: pendingGoalHighlightKey)
+        return pending
+    }
+
     static func openURL(_ url: URL) {
         UIApplication.shared.open(url)
     }
@@ -20,6 +28,7 @@ extension FocusDeepLinks {
         if isGoalDeepLink(incoming) {
             if let code = goalCode(from: incoming),
                (try? VitaHabitStore.activate(code)) != nil {
+                UserDefaults.standard.set(true, forKey: pendingGoalHighlightKey)
                 NotificationCenter.default.post(name: .vitaActiveHabitChanged, object: code)
                 return
             }

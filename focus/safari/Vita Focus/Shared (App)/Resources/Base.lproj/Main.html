@@ -43,7 +43,7 @@
                 </div>
             </section>
 
-            <section class="step-card habit-settings">
+            <section id="goalsSection" class="step-card habit-settings">
                 <div class="step-head">
                     <h2 class="step-title">Цель Vita</h2>
                 </div>
@@ -82,6 +82,22 @@
                 <p id="habitStatus" class="habit-status" role="status" aria-live="polite"></p>
             </section>
 
+            <details id="vitaIDDetails" class="step-card settings-card vita-id-settings">
+                <summary>
+                    <span><strong>Vita ID</strong><small id="vitaIDSummary">Подключи личный кабинет</small></span>
+                    <i class="chevron" aria-hidden="true">›</i>
+                </summary>
+                <div class="settings-content">
+                    <p class="step-text">Один код подключает цели и настройки с vitadots.ru.</p>
+                    <label class="habit-code-field"><span>Приватный Vita ID</span>
+                        <input id="vitaIDCode" type="text" maxlength="10" autocomplete="off" autocapitalize="none" placeholder="abcdefgh23">
+                    </label>
+                    <button id="connectVitaID" type="button" class="primary">Подключить всё</button>
+                    <button id="disconnectVitaID" type="button" class="text-action" hidden>Отключить Vita ID</button>
+                    <p id="vitaIDStatus" class="habit-status" role="status" aria-live="polite"></p>
+                </div>
+            </details>
+
             <section class="step-card impulse-card">
                 <div class="step-head">
                     <h2 class="step-title">Vita Импульс</h2>
@@ -106,36 +122,8 @@
                 <div class="widget-path" aria-label="Как добавить виджет">
                     <span>Зажми экран Домой</span><i>→</i><span>＋</span><i>→</i><span>Vita Focus</span>
                 </div>
-                <p class="step-hint">Выбери <b>YouTube Focus</b>, <b>Vita · точки</b> или <b>Vita · привычка</b>.</p>
+                <p class="step-hint">Выбери единственный виджет <b>Vita · цель</b>.</p>
             </section>
-
-            <details id="goalDotsDetails" class="step-card settings-card goal-dots-settings">
-                <summary>
-                    <span><strong>Vita · точки</strong><small id="goalDotsSummary">Месяц</small></span>
-                    <i class="chevron" aria-hidden="true">›</i>
-                </summary>
-                <div class="settings-content">
-                    <p class="appearance-label first">Что показывать</p>
-                    <div class="goal-mode-grid" role="group" aria-label="Режим виджета Vita · точки">
-                        <button type="button" class="goal-mode" data-mode="month" aria-pressed="false">Месяц</button>
-                        <button type="button" class="goal-mode" data-mode="goal" aria-pressed="false">До цели</button>
-                    </div>
-
-                    <div id="goalDateFields" class="goal-date-fields" hidden>
-                        <label>
-                            <span>Начало</span>
-                            <input id="goalStart" type="date" autocomplete="off">
-                        </label>
-                        <label>
-                            <span>Конец</span>
-                            <input id="goalEnd" type="date" autocomplete="off">
-                        </label>
-                    </div>
-
-                    <button id="applyGoalDots" type="button" class="primary">Сохранить</button>
-                    <p id="goalDotsStatus" class="habit-status" role="status" aria-live="polite"></p>
-                </div>
-            </details>
 
             <details id="appearanceDetails" class="step-card settings-card widget-themes">
                 <summary>

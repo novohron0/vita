@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/png" href="/static/img/favicon.png">
+<link rel="apple-touch-icon" href="/static/img/apple-touch.png">
+<title>Моя Vita</title>
+<script src="/static/theme.js?v=2"></script>
+<script src="/static/vita-id.js?v=1"></script>
+<link rel="stylesheet" href="/static/style.css?v=24">
+</head>
+<body>
+<header>
+  <a class="logo" href="/">⠿ vita</a>
+  <nav class="nav">
+    <a href="/">Обои</a><a href="/goals">Цели</a><a href="/feed">Лента</a>
+    <a href="/me" class="on">Моя Vita</a><a href="/focus">Фокус</a>
+  </nav>
+</header>
+
+<main>
+  <div class="field"><span class="goal-title" style="text-transform:none">Моя Vita</span></div>
+  <p class="hint" style="margin-top:-8px">Все созданные цели, обои и настройки — в одном месте.</p>
+
+  <section class="library-card vita-id-card">
+    <span class="library-label">Твой приватный Vita ID</span>
+    <div class="vita-code-row"><b id="profileCode">создаём…</b><button id="copyProfile" class="secondary">Скопировать</button></div>
+    <p class="hint">Вставь этот код в Vita Focus, чтобы подключить цели и настройки. Не публикуй его в ленте.</p>
+    <details class="profile-connect"><summary>Уже есть Vita ID?</summary>
+      <div class="profile-connect-row"><input id="existingProfileCode" maxlength="10" placeholder="abcdefgh23"><button id="connectExisting" class="secondary">Войти</button></div>
+      <p class="hint" id="connectStatus"></p>
+    </details>
+  </section>
+
+  <section class="library-card">
+    <div class="library-head"><h2>Цели</h2><a class="btn secondary" href="/goals">＋ Новая</a></div>
+    <div id="goalsList"><p class="page-foot">Загружаю…</p></div>
+  </section>
+
+  <section class="library-card">
+    <div class="library-head"><h2>Обои</h2><a class="btn secondary" href="/">＋ Новые</a></div>
+    <div id="wallpapersList"><p class="page-foot">Загружаю…</p></div>
+  </section>
+
+  <section class="library-card">
+    <div class="library-head"><h2>Виджет цели</h2></div>
+    <label class="field">Тема
+      <select id="widgetTheme"><option value="graphite">Графит</option><option value="violet">Vita</option><option value="ocean">Океан</option><option value="ember">Закат</option></select>
+    </label>
+    <label class="field">Форма точек
+      <select id="dotStyle"><option value="goal">Как у цели</option><option value="circle">Круг</option><option value="soft">Мягкие</option><option value="square">Квадрат</option><option value="diamond">Ромб</option><option value="heart">Сердце</option><option value="star">Звезда</option><option value="hex">Соты</option></select>
+    </label>
+    <label class="field">Цвет<input id="dotColor" type="color" value="#A855F7"></label>
+    <button class="primary" id="saveSettings">Сохранить настройки</button>
+    <p class="hint" id="settingsStatus"></p>
+  </section>
+
+  <section class="library-card" id="publishCard" hidden>
+    <div class="library-head"><h2>Опубликовать в ленте</h2><button class="library-x" id="closePublish">✕</button></div>
+    <input id="publishKind" type="hidden"><input id="publishSource" type="hidden">
+    <label class="field">Название<input id="publishTitle" maxlength="80"></label>
+    <label class="field">Описание<textarea id="publishDescription" maxlength="500" rows="3" placeholder="Расскажи, как идёт путь или почему выбрал такой дизайн"></textarea></label>
+    <label class="field">Фото — необязательно<input id="publishImage" type="file" accept="image/*"></label>
+    <button class="primary" id="publish">Выложить</button>
+    <p class="err" id="publishError"></p>
+  </section>
+
+  <section class="library-card" id="postsCard" hidden>
+    <div class="library-head"><h2>Мои публикации</h2><a class="btn secondary" href="/feed">Открыть ленту</a></div>
+    <div id="postsList"></div>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = value => { const node = document.createElement('div'); node.textContent = value ?? ''; return node.innerHTML; };
+let profile = null;
+
+function libraryItem(item, kind) {
+  const isGoal = kind === 'goal';
+  const href = isGoal ? `/g/${item.code}` : `/s/${item.code}`;
+  const meta = isGoal ? `${item.done}/${item.days} дней` : `${item.mode} · ${item.shape}`;
+  return `<div class="library-item">
+    <i style="background:${item.color || '#a855f7'}"></i>
+    <div><b>${esc(item.title)}</b><span>${esc(meta)} · ${item.code}</span></div>
+    <a href="${href}">Открыть</a>
+    <button class="publish-item" data-kind="${kind}" data-code="${item.code}" data-title="${encodeURIComponent(item.title)}">В ленту</button>
+  </div>`;
+}
+
+function render(data) {
+  profile = data;
+  $('profileCode').textContent = data.code;
+  $('goalsList').innerHTML = data.goals.length ? data.goals.map(item => libraryItem(item, 'goal')).join('') : '<p class="hint">Пока нет целей.</p>';
+  $('wallpapersList').innerHTML = data.wallpapers.length ? data.wallpapers.map(item => libraryItem(item, 'wallpaper')).join('') : '<p class="hint">Пока нет сохранённых обоев.</p>';
+  const settings = data.settings || {};
+  $('widgetTheme').value = settings.theme || 'graphite';
+  $('dotStyle').value = settings.dotStyle || 'goal';
+  if (/^#[0-9a-f]{6}$/i.test(settings.dotColor || '')) $('dotColor').value = settings.dotColor;
+  $('postsCard').hidden = !data.posts.length;
+  $('postsList').innerHTML = data.posts.map(post => `<div class="library-item"><div><b>${esc(post.title)}</b><span>${post.kind} · код ${post.sourceCode}</span></div><a href="/feed#post-${post.code}">Открыть</a></div>`).join('');
+  document.querySelectorAll('.publish-item').forEach(button => button.addEventListener('click', () => openPublish(button)));
+}
+
+function openPublish(button) {
+  $('publishKind').value = button.dataset.kind;
+  $('publishSource').value = button.dataset.code;
+  $('publishTitle').value = decodeURIComponent(button.dataset.title);
+  $('publishDescription').value = '';
+  $('publishImage').value = '';
+  $('publishError').textContent = '';
+  $('publishCard').hidden = false;
+  $('publishCard').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+$('closePublish').addEventListener('click', () => { $('publishCard').hidden = true; });
+$('copyProfile').addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText(profile.code); } catch { window.prompt('Скопируй Vita ID', profile.code); }
+  $('copyProfile').textContent = '✓ Скопировано';
+  setTimeout(() => { $('copyProfile').textContent = 'Скопировать'; }, 1400);
+});
+
+$('connectExisting').addEventListener('click', async () => {
+  const button = $('connectExisting'); button.disabled = true; $('connectStatus').textContent = 'Подключаю…';
+  try {
+    const data = await VitaID.connect($('existingProfileCode').value.trim());
+    render(data); $('connectStatus').textContent = '✓ Этот Vita ID подключён';
+  } catch (error) { $('connectStatus').textContent = error.message; }
+  button.disabled = false;
+});
+
+$('saveSettings').addEventListener('click', async () => {
+  const button = $('saveSettings'); button.disabled = true; $('settingsStatus').textContent = 'Сохраняю…';
+  try {
+    const response = await fetch('/api/profile/settings', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ownerToken: VitaID.token(), settings: { theme: $('widgetTheme').value, dotStyle: $('dotStyle').value, dotColor: $('dotColor').value } })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || 'Ошибка');
+    $('settingsStatus').textContent = '✓ Настройки сохранены';
+  } catch (error) { $('settingsStatus').textContent = error.message; }
+  button.disabled = false;
+});
+
+$('publish').addEventListener('click', async () => {
+  const button = $('publish'); button.disabled = true; $('publishError').textContent = '';
+  try {
+    let imageId = '';
+    const file = $('publishImage').files[0];
+    if (file) {
+      const form = new FormData(); form.append('file', file);
+      const upload = await fetch('/api/upload-post-image', { method: 'POST', body: form });
+      const image = await upload.json();
+      if (!upload.ok) throw new Error(image.detail || 'Не удалось загрузить фото');
+      imageId = image.id;
+    }
+    const response = await fetch('/api/feed-post', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ownerToken: VitaID.token(), kind: $('publishKind').value, sourceCode: $('publishSource').value, title: $('publishTitle').value, description: $('publishDescription').value, imageId })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || 'Не удалось опубликовать');
+    location.href = data.url;
+  } catch (error) { $('publishError').textContent = error.message; button.disabled = false; }
+});
+
+(async () => {
+  try { render(await VitaID.ensure()); }
+  catch (error) { document.querySelector('main').innerHTML = `<p class="err">${esc(error.message)}</p>`; }
+})();
+</script>
+</body>
+</html>

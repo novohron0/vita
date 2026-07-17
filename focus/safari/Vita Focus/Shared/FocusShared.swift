@@ -580,6 +580,107 @@ enum VitaHabitClient {
     }
 }
 
+struct VitaProfileBundle: Decodable {
+    struct Settings: Decodable {
+        let theme: String?
+        let dotStyle: String?
+        let dotColor: String?
+    }
+
+    struct Goal: Decodable {
+        let code: String
+        let title: String
+    }
+
+    let code: String
+    let settings: Settings
+    let goals: [Goal]
+}
+
+enum VitaProfileError: LocalizedError {
+    case invalidCode, notFound, invalidResponse
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidCode: return "Вставь десятизначный Vita ID из личного кабинета"
+        case .notFound: return "Vita ID не найден"
+        case .invalidResponse: return "Не удалось загрузить данные Vita ID"
+        }
+    }
+}
+
+enum VitaProfileStore {
+    private static let codeKey = "vitaProfileCode"
+    private static let alphabet = CharacterSet(charactersIn: "abcdefghjkmnpqrstuvwxyz23456789")
+
+    static var defaults: UserDefaults? { UserDefaults(suiteName: FocusAppGroup.id) }
+
+    static var code: String? {
+        guard let raw = defaults?.string(forKey: codeKey) else { return nil }
+        return normalized(raw)
+    }
+
+    static func normalized(_ raw: String) -> String? {
+        let value = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard value.count == 10, value.unicodeScalars.allSatisfy(alphabet.contains) else { return nil }
+        return value
+    }
+
+    static func save(code raw: String) -> String? {
+        guard let code = normalized(raw) else { return nil }
+        defaults?.set(code, forKey: codeKey)
+        return code
+    }
+
+    static func disconnect() { defaults?.removeObject(forKey: codeKey) }
+
+    static func apply(_ settings: VitaProfileBundle.Settings) {
+        if let theme = settings.theme,
+           theme != VitaWidgetTheme.photo.rawValue || VitaWidgetThemeStore.hasPhoto {
+            _ = VitaWidgetThemeStore.save(rawValue: theme)
+        }
+        if let style = settings.dotStyle { _ = VitaDotStyleStore.save(rawValue: style) }
+        if let color = settings.dotColor { _ = VitaDotColorStore.save(rawValue: color) }
+    }
+}
+
+enum VitaProfileClient {
+    static func fetch(code raw: String) async throws -> VitaProfileBundle {
+        guard let code = VitaProfileStore.normalized(raw),
+              let url = URL(string: "https://vitadots.ru/api/profile/\(code)/bundle") else {
+            throw VitaProfileError.invalidCode
+        }
+        var request = URLRequest(url: url)
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.timeoutInterval = 15
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw VitaProfileError.invalidResponse }
+        guard (200..<300).contains(http.statusCode) else {
+            throw http.statusCode == 404 ? VitaProfileError.notFound : VitaProfileError.invalidResponse
+        }
+        guard let bundle = try? JSONDecoder().decode(VitaProfileBundle.self, from: data) else {
+            throw VitaProfileError.invalidResponse
+        }
+        return bundle
+    }
+
+    static func saveCurrentSettings() async {
+        guard let code = VitaProfileStore.code,
+              let url = URL(string: "https://vitadots.ru/api/profile/\(code)/settings") else { return }
+        let settings: [String: String] = [
+            "theme": VitaWidgetThemeStore.load().rawValue,
+            "dotStyle": VitaDotStyleStore.load().rawValue,
+            "dotColor": VitaDotColorStore.load(),
+        ]
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
+        request.timeoutInterval = 15
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: ["settings": settings])
+        _ = try? await URLSession.shared.data(for: request)
+    }
+}
+
 // MARK: - Vita goal dots (виджет «как на vitadots.ru»)
 
 enum VitaGoalMode: String, Codable {

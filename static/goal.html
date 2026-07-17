@@ -7,7 +7,8 @@
   <link rel="apple-touch-icon" href="/static/img/apple-touch.png">
 <title>Vita — цель</title>
 <script src="/static/theme.js?v=2"></script>
-<link rel="stylesheet" href="/static/style.css?v=22">
+<script src="/static/vita-id.js?v=1"></script>
+<link rel="stylesheet" href="/static/style.css?v=24">
 </head>
 <body>
 <header>
@@ -16,6 +17,7 @@
     <a href="/">Обои</a>
     <a href="/goals" class="on">Цели</a>
     <a href="/feed">Лента</a>
+    <a href="/me">Моя Vita</a>
     <a href="/focus">Фокус</a>
   </nav>
 </header>
@@ -114,6 +116,20 @@ function render(anim) {
     </div>
     <a class="btn primary" href="vita://goal/${CODE}" style="display:block;text-align:center;text-decoration:none;margin-top:10px">Открыть в Vita</a>
     <button class="btn secondary" id="join" style="margin-top:10px">🔥 Начать эту цель у себя →</button>
+    ${G.editable ? `<details class="screen" id="editGoal">
+      <summary>✏️ Редактировать цель</summary>
+      <div class="screen-body">
+        <label class="field">Название<input id="editTitle" maxlength="80" value="${escapeAttr(G.title)}"></label>
+        <label class="field">Дней<input id="editDays" type="number" min="1" max="365" value="${G.days}"></label>
+        <label class="field">Награда<input id="editReward" maxlength="200" value="${escapeAttr(G.reward || '')}"></label>
+        <label class="field">Цвет<input id="editColor" type="color" value="${G.color}"></label>
+        <label class="field">Форма<select id="editShape">
+          ${[['circle','Круг'],['square','Квадрат'],['rounded','Мягкие'],['heart','Сердце'],['star','Звезда'],['diamond','Ромб'],['hex','Соты']].map(([v,n]) => `<option value="${v}"${G.shape === v ? ' selected' : ''}>${n}</option>`).join('')}
+        </select></label>
+        <button class="primary" id="saveGoalEdit">Сохранить изменения</button>
+        <p class="err" id="editError"></p>
+      </div>
+    </details>` : ''}
     <details class="screen">
       <summary>📲 Поставить цель на экран айфона</summary>
       <div class="screen-body">
@@ -149,6 +165,31 @@ function render(anim) {
   });
   document.getElementById('share').addEventListener('click', shareLink);
   document.getElementById('join').addEventListener('click', join);
+  document.getElementById('saveGoalEdit')?.addEventListener('click', saveGoalEdit);
+}
+
+async function saveGoalEdit() {
+  const button = document.getElementById('saveGoalEdit');
+  const error = document.getElementById('editError');
+  button.disabled = true; error.textContent = '';
+  try {
+    const response = await fetch(`/api/goal/${CODE}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ownerToken: VitaID.token(), title: document.getElementById('editTitle').value,
+        days: Number(document.getElementById('editDays').value),
+        reward: document.getElementById('editReward').value,
+        color: document.getElementById('editColor').value,
+        shape: document.getElementById('editShape').value
+      })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || 'Не удалось сохранить');
+    await loadGoal();
+  } catch (e) {
+    error.textContent = e.message || 'Не удалось сохранить';
+    button.disabled = false;
+  }
 }
 
 // брызги из тапнутой точки
@@ -221,7 +262,10 @@ async function join() {
   const btn = document.getElementById('join');
   btn.disabled = true; btn.textContent = 'Создаю…';
   try {
-    const r = await fetch(`/api/goal/${CODE}/join`, { method: 'POST' });
+    const r = await fetch(`/api/goal/${CODE}/join`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ownerToken: VitaID.token() })
+    });
     const j = await r.json();
     if (r.ok) { location.href = j.url; return; }
   } catch {}
@@ -243,19 +287,21 @@ async function shareLink() {
 }
 
 function escapeHtml(s) { const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; }
+function escapeAttr(s) { return escapeHtml(s).replaceAll('"', '&quot;').replaceAll("'", '&#39;'); }
 
-(async () => {
+async function loadGoal(initial = false) {
   try {
-    const r = await fetch(`/api/goal/${CODE}`);
+    const r = await fetch(`/api/goal/${CODE}`, { headers: { 'X-Vita-Token': VitaID.token() } });
     if (!r.ok) { app.innerHTML = '<p class="err">Цель не найдена</p>'; return; }
     G = await r.json();
     done = new Set(G.done);
     if (DEMO) { demoLoop(); return; }
-    render('in');
+    render(initial ? 'in' : null);
   } catch {
     app.innerHTML = '<p class="err">Нет связи с сервером — обнови страницу</p>';
   }
-})();
+}
+loadGoal(true);
 </script>
 </body>
 </html>

@@ -663,8 +663,8 @@ struct VitaHabitWidgetView: View {
             }
         }
         .vitaBackground(entry.widgetTheme, accent: activeAccent)
-        .widgetURL(entry.habit.flatMap { VitaHabitStore.goalURL(for: $0.code) }
-            ?? URL(string: "https://vitadots.ru/goals"))
+        .widgetURL(entry.habit.flatMap { VitaHabitStore.deepLinkURL(for: $0.code) }
+            ?? FocusDeepLinks.appHome)
     }
 
     @ViewBuilder
@@ -948,8 +948,8 @@ struct VitaHabitWidget: Widget {
         StaticConfiguration(kind: kind, provider: HabitFocusProvider()) { entry in
             VitaHabitWidgetView(entry: entry)
         }
-        .configurationDisplayName("Vita · привычка")
-        .description("Та же цель, стрик и отметки, что на vitadots.ru и в живых обоях.")
+        .configurationDisplayName("Vita · цель")
+        .description("Твоя цель, стрик и отметки из Vita — прямо на экране.")
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
         .contentMarginsDisabled()
     }
@@ -1081,9 +1081,7 @@ struct ToggleVitaHabitTodayIntent: AppIntent {
 @main
 struct VitaFocusWidgetBundle: WidgetBundle {
     var body: some Widget {
-        VitaMonthDotsWidget()
         VitaHabitWidget()
-        YouTubeFocusWidget()
     }
 }
 

@@ -16,6 +16,7 @@ struct FocusSharedGoalTests {
         testGoalDotStyles()
         testDotColors()
         try testImpulseValidation()
+        testVitaProfileCodes()
         print("FocusSharedGoalTests: \(checks) checks passed")
     }
 
@@ -205,6 +206,12 @@ struct FocusSharedGoalTests {
         } catch VitaImpulseError.invalidDate {
             checks += 1
         }
+    }
+
+    private static func testVitaProfileCodes() {
+        expect(VitaProfileStore.normalized(" abcdefgh23 ") == "abcdefgh23", "Vita ID must normalize valid private codes")
+        expect(VitaProfileStore.normalized("abc123") == nil, "a goal code must not be confused with a Vita ID")
+        expect(VitaHabitStore.deepLinkURL(for: "abc234")?.absoluteString == "vita://goal/abc234", "goal widgets must open the Vita app")
     }
 
     private static func goalModel() -> VitaGoalDots {

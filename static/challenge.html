@@ -7,7 +7,8 @@
   <link rel="apple-touch-icon" href="/static/img/apple-touch.png">
 <title>Vita — челлендж</title>
 <script src="/static/theme.js?v=2"></script>
-<link rel="stylesheet" href="/static/style.css?v=22">
+<script src="/static/vita-id.js?v=1"></script>
+<link rel="stylesheet" href="/static/style.css?v=24">
 </head>
 <body>
 <header>
@@ -16,6 +17,7 @@
     <a href="/">Обои</a>
     <a href="/goals">Цели</a>
     <a href="/feed" class="on">Лента</a>
+    <a href="/me">Моя Vita</a>
     <a href="/focus">Фокус</a>
   </nav>
 </header>
@@ -88,7 +90,10 @@ async function join() {
   const btn = document.getElementById('join');
   btn.disabled = true; btn.textContent = 'Создаю…';
   try {
-    const r = await fetch(`/api/goal/${CODE}/join`, { method: 'POST' });
+    const r = await fetch(`/api/goal/${CODE}/join`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ownerToken: VitaID.token() })
+    });
     const j = await r.json();
     if (r.ok) { location.href = j.url; return; }
   } catch {}

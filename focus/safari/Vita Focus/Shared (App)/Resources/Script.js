@@ -40,6 +40,15 @@ function showDiagnostics(lines) {
     box.textContent = lines.join("\n");
 }
 
+function showGoalsSection() {
+    const section = document.getElementById("goalsSection");
+    if (!section) return;
+    section.scrollIntoView({ behavior: "smooth", block: "center" });
+    section.classList.remove("is-deep-link-target");
+    requestAnimationFrame(() => section.classList.add("is-deep-link-target"));
+    setTimeout(() => section.classList.remove("is-deep-link-target"), 2200);
+}
+
 let goalDotsState = { mode: "month", start: "", end: "" };
 let goalDotsSavedState = { mode: "month", start: "", end: "" };
 
@@ -270,6 +279,42 @@ document.querySelectorAll(".cancel-habit-edit").forEach((button) => {
 });
 document.querySelectorAll(".open-goals").forEach((button) => button.addEventListener("click", () => post("open-goals")));
 document.querySelectorAll(".open-active-habit").forEach((button) => button.addEventListener("click", () => post("open-active-habit")));
+
+function showVitaProfileState(state) {
+    if (!state || typeof state !== "object") return;
+    const code = document.getElementById("vitaIDCode");
+    if (code && state.code && document.activeElement !== code) code.value = state.code;
+    const summary = document.getElementById("vitaIDSummary");
+    if (summary) summary.textContent = state.connected
+        ? `${state.code} · ${Number(state.goals) || 0} целей`
+        : "Подключи личный кабинет";
+    const disconnect = document.getElementById("disconnectVitaID");
+    if (disconnect) disconnect.hidden = !state.connected;
+    const connect = document.getElementById("connectVitaID");
+    if (connect) { connect.disabled = false; connect.textContent = state.connected ? "Обновить данные" : "Подключить всё"; }
+    const status = document.getElementById("vitaIDStatus");
+    if (status) {
+        status.textContent = state.status || "";
+        status.classList.toggle("is-error", Boolean(state.isError));
+        status.classList.toggle("is-success", Boolean(state.status) && !state.isError);
+    }
+    if (state.isError) document.getElementById("vitaIDDetails")?.setAttribute("open", "");
+}
+
+document.getElementById("connectVitaID")?.addEventListener("click", () => {
+    const code = document.getElementById("vitaIDCode")?.value.trim() || "";
+    const button = document.getElementById("connectVitaID");
+    const status = document.getElementById("vitaIDStatus");
+    if (code.length !== 10) {
+        if (status) { status.textContent = "Вставь 10-значный Vita ID"; status.classList.add("is-error"); }
+        return;
+    }
+    if (button) button.disabled = true;
+    if (status) { status.textContent = "Подключаем…"; status.classList.remove("is-error", "is-success"); }
+    post({ action: "connect-profile", code });
+});
+
+document.getElementById("disconnectVitaID")?.addEventListener("click", () => post({ action: "disconnect-profile" }));
 
 function impulseLocalDate(iso) {
     const date = iso ? new Date(iso) : new Date(Date.now() + 60 * 60 * 1000);

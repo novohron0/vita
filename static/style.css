@@ -1017,6 +1017,44 @@ main   { animation: fadeUp .7s cubic-bezier(.22,1,.36,1) both; }
   animation: feBlink 2.6s ease-in-out infinite; animation-delay: calc(var(--n) * .3s); }
 @keyframes feBlink { 0%, 100% { opacity: .12; } 35% { opacity: .5; } }
 
+/* личный кабинет и публикации */
+.library-card, .showcase-card {
+  margin: 12px 0; padding: 14px; border: 1px solid var(--glass-border); border-radius: 18px;
+  background: var(--glass-bg); box-shadow: var(--glass-inset), var(--glass-shadow);
+}
+.library-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.library-head h2 { margin: 0; font-size: 17px; }
+.library-head .btn { width: auto; margin: 0; padding: 8px 11px; font-size: 12px; }
+.library-label, .showcase-kind { color: var(--text-muted); font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: .55px; }
+.vita-code-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.vita-code-row b { flex: 1; font: 700 19px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 1.2px; }
+.vita-code-row button { width: auto; padding: 9px 11px; font-size: 12px; }
+.profile-connect { margin-top: 10px; color: var(--text-muted); font-size: 12px; }
+.profile-connect summary { cursor: pointer; font-weight: 650; }
+.profile-connect-row { display: flex; gap: 8px; margin-top: 9px; }
+.profile-connect-row input { min-width: 0; flex: 1; border: 1px solid var(--glass-border); border-radius: 11px; padding: 9px 10px; color: var(--text); background: var(--glass-bg-soft); font: 13px ui-monospace, monospace; }
+.profile-connect-row button { width: auto; padding: 9px 12px; font-size: 12px; }
+.library-item { display: flex; align-items: center; gap: 9px; padding: 10px 0; border-top: 1px solid var(--glass-border); }
+.library-item:first-child { border-top: 0; }
+.library-item > i { flex: none; width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 10px currentColor; }
+.library-item > div { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.library-item b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.library-item span { color: var(--text-muted); font-size: 11px; }
+.library-item a, .library-item button { width: auto; padding: 7px 8px; border: 0; color: var(--accent); background: transparent; font-size: 11px; text-decoration: none; }
+.library-x { width: auto; padding: 4px 7px; color: var(--text-muted); background: transparent; }
+.field select {
+  width: 100%; border: 1px solid var(--glass-border); border-radius: 12px; padding: 11px 12px;
+  color: var(--text); background: var(--glass-bg-soft); font: inherit; color-scheme: dark;
+}
+.showcase-list { display: grid; gap: 12px; margin-bottom: 18px; }
+.showcase-card { padding: 0; overflow: hidden; }
+.showcase-card > img { display: block; width: 100%; max-height: 360px; object-fit: cover; }
+.showcase-body { padding: 14px; }
+.showcase-body h2 { margin: 5px 0; font-size: 19px; }
+.showcase-body p { margin: 7px 0 12px; color: var(--text-muted); font-size: 14px; line-height: 1.45; white-space: pre-wrap; }
+.showcase-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.showcase-actions .btn { margin: 0; padding: 10px 8px; font-size: 12px; text-align: center; text-decoration: none; }
+
 /* fallback без backdrop-filter */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   :root {

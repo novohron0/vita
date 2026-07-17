@@ -1,5 +1,6 @@
 """Vita — сайт-генератор обоев «жизнь в точках» + персональные ссылки для автообоев."""
 import io
+import hashlib
 import json
 import os
 import re
@@ -12,7 +13,7 @@ from pathlib import Path
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from PIL import Image
 
 from .render import SHAPES, render_goal, render_wallpaper
@@ -48,6 +49,18 @@ def db() -> sqlite3.Connection:
         "CREATE TABLE IF NOT EXISTS links("
         "code TEXT PRIMARY KEY, config TEXT NOT NULL, "
         "created TEXT NOT NULL DEFAULT (datetime('now')))"
+    )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS profiles("
+        "code TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE, "
+        "name TEXT NOT NULL DEFAULT '', settings TEXT NOT NULL DEFAULT '{}', "
+        "created TEXT NOT NULL DEFAULT (datetime('now')))"
+    )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS profile_devices("
+        "profile_code TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE, "
+        "created TEXT NOT NULL DEFAULT (datetime('now')), "
+        "PRIMARY KEY(profile_code, token_hash))"
     )
     for col in (
         "fetches INTEGER NOT NULL DEFAULT 0",
@@ -92,6 +105,18 @@ def db() -> sqlite3.Connection:
         conn.execute("ALTER TABLE goals ADD COLUMN feed_hidden INTEGER NOT NULL DEFAULT 0")
     except sqlite3.OperationalError:
         pass
+    for table in ("goals", "links"):
+        try:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN owner_code TEXT")
+        except sqlite3.OperationalError:
+            pass
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS feed_posts("
+        "code TEXT PRIMARY KEY, owner_code TEXT NOT NULL, kind TEXT NOT NULL, "
+        "source_code TEXT NOT NULL, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', "
+        "image_id TEXT NOT NULL DEFAULT '', hidden INTEGER NOT NULL DEFAULT 0, "
+        "created TEXT NOT NULL DEFAULT (datetime('now')))"
+    )
     # вейтлист беты Vita Focus (contact = телега/инста, PRIMARY KEY даёт дедуп)
     conn.execute(
         "CREATE TABLE IF NOT EXISTS focus_wait("
@@ -116,6 +141,7 @@ class LinkIn(BaseModel):
     end: str = ""
     idea: str = ""
     contact: str = ""
+    ownerToken: str = ""
 
 
 class ReviewIn(BaseModel):
@@ -131,6 +157,48 @@ class GoalIn(BaseModel):
     bg: str = "black"
     shape: str = "circle"
     start: str = ""
+    ownerToken: str = ""
+
+
+class ProfileIn(BaseModel):
+    ownerToken: str = ""
+    name: str = ""
+
+
+class ProfileConnectIn(BaseModel):
+    ownerToken: str = ""
+    profileCode: str = ""
+
+
+class GoalEditIn(BaseModel):
+    ownerToken: str = ""
+    title: str = ""
+    days: int = 30
+    reward: str = ""
+    color: str = "#34c759"
+    shape: str = "circle"
+
+
+class OwnerIn(BaseModel):
+    ownerToken: str = ""
+
+
+class FeedPostIn(BaseModel):
+    ownerToken: str = ""
+    kind: str = "goal"
+    sourceCode: str = ""
+    title: str = ""
+    description: str = ""
+    imageId: str = ""
+
+
+class ProfileSettingsIn(BaseModel):
+    ownerToken: str = ""
+    settings: dict = Field(default_factory=dict)
+
+
+class ProfileCodeSettingsIn(BaseModel):
+    settings: dict = Field(default_factory=dict)
 
 
 class CheckIn(BaseModel):
@@ -143,6 +211,58 @@ class FocusWaitIn(BaseModel):
 
 def _gen_code() -> str:
     return "".join(secrets.choice(CODE_ALPHABET) for _ in range(6))
+
+
+def _gen_profile_code() -> str:
+    return "".join(secrets.choice(CODE_ALPHABET) for _ in range(10))
+
+
+def _token_hash(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _profile_for_token(conn: sqlite3.Connection, token: str, create: bool = False) -> str | None:
+    token = token.strip()
+    if not (20 <= len(token) <= 200):
+        if create:
+            raise HTTPException(422, "Не удалось создать Vita ID — обнови страницу")
+        return None
+    digest = _token_hash(token)
+    row = conn.execute(
+        "SELECT profile_code FROM profile_devices WHERE token_hash = ?", (digest,)
+    ).fetchone()
+    if not row:
+        row = conn.execute("SELECT code FROM profiles WHERE token_hash = ?", (digest,)).fetchone()
+    if row:
+        return row[0]
+    if not create:
+        return None
+    for _ in range(8):
+        code = _gen_profile_code()
+        try:
+            conn.execute("INSERT INTO profiles(code, token_hash) VALUES(?, ?)", (code, digest))
+            conn.execute(
+                "INSERT INTO profile_devices(profile_code, token_hash) VALUES(?, ?)",
+                (code, digest),
+            )
+            return code
+        except sqlite3.IntegrityError:
+            continue
+    raise HTTPException(503, "Не удалось создать Vita ID — попробуй ещё раз")
+
+
+def _clean_profile_settings(value: dict) -> dict:
+    allowed = {}
+    theme = value.get("theme")
+    if theme in ("graphite", "violet", "ocean", "ember", "photo"):
+        allowed["theme"] = theme
+    style = value.get("dotStyle")
+    if style in ("goal", "circle", "soft", "square", "diamond", "heart", "star", "hex"):
+        allowed["dotStyle"] = style
+    color = value.get("dotColor")
+    if color == "auto" or _valid_color(color):
+        allowed["dotColor"] = color.upper() if color != "auto" else color
+    return allowed
 
 
 def _valid_color(c: str) -> bool:
@@ -192,6 +312,25 @@ def _feed_items(conn: sqlite3.Connection, limit: int = 60) -> list[dict]:
     return items
 
 
+def _feed_posts(conn: sqlite3.Connection, limit: int = 60) -> list[dict]:
+    rows = conn.execute(
+        "SELECT code, kind, source_code, title, description, image_id, created "
+        "FROM feed_posts WHERE hidden = 0 ORDER BY created DESC LIMIT ?",
+        (min(max(limit, 1), 100),),
+    ).fetchall()
+    posts = []
+    for code, kind, source, title, description, image_id, created in rows:
+        if not _feed_title_ok(title):
+            continue
+        target = f"/c/{source}" if kind in ("goal", "widget") else f"/s/{source}"
+        posts.append({
+            "code": code, "kind": kind, "sourceCode": source, "title": title,
+            "description": description, "image": f"/media/post/{image_id}.jpg" if image_id else "",
+            "target": target, "created": created,
+        })
+    return posts
+
+
 def _completed_for_challenge(conn: sqlite3.Connection, code: str, root: str | None) -> int:
     key = _challenge_root(code, root)
     return conn.execute(
@@ -200,6 +339,62 @@ def _completed_for_challenge(conn: sqlite3.Connection, code: str, root: str | No
         "AND (SELECT COUNT(*) FROM checkins c WHERE c.code = g.code) >= g.days",
         (key,),
     ).fetchone()[0]
+
+
+def _profile_payload(conn: sqlite3.Connection, profile_code: str) -> dict:
+    row = conn.execute(
+        "SELECT name, settings, created FROM profiles WHERE code = ?", (profile_code,)
+    ).fetchone()
+    if row is None:
+        raise HTTPException(404, "Vita ID не найден")
+    goals = [
+        {
+            "code": code, "title": title, "days": days, "start": start,
+            "color": color, "shape": shape, "done": done, "created": created,
+        }
+        for code, title, days, start, color, shape, done, created in conn.execute(
+            "SELECT g.code, g.title, g.days, g.start, g.color, g.shape, "
+            "(SELECT COUNT(*) FROM checkins c WHERE c.code = g.code), g.created "
+            "FROM goals g WHERE g.owner_code = ? ORDER BY g.created DESC",
+            (profile_code,),
+        )
+    ]
+    wallpapers = []
+    for code, raw, created in conn.execute(
+        "SELECT code, config, created FROM links WHERE owner_code = ? ORDER BY created DESC",
+        (profile_code,),
+    ):
+        try:
+            cfg = json.loads(raw)
+        except (TypeError, json.JSONDecodeError):
+            cfg = {}
+        wallpapers.append({
+            "code": code,
+            "title": cfg.get("title") or "Обои Vita",
+            "mode": cfg.get("mode", "month"),
+            "color": cfg.get("color", "#f2f2f2"),
+            "shape": cfg.get("shape", "circle"),
+            "created": created,
+        })
+    posts = [
+        {
+            "code": code, "kind": kind, "sourceCode": source, "title": title,
+            "description": description, "imageId": image_id, "created": created,
+        }
+        for code, kind, source, title, description, image_id, created in conn.execute(
+            "SELECT code, kind, source_code, title, description, image_id, created "
+            "FROM feed_posts WHERE owner_code = ? ORDER BY created DESC",
+            (profile_code,),
+        )
+    ]
+    try:
+        settings = json.loads(row[1] or "{}")
+    except json.JSONDecodeError:
+        settings = {}
+    return {
+        "code": profile_code, "name": row[0], "settings": settings,
+        "goals": goals, "wallpapers": wallpapers, "posts": posts, "created": row[2],
+    }
 
 
 app = FastAPI(title="vita")
@@ -216,7 +411,7 @@ def robots():
     # персональные ссылки (обои/установка/цели) поисковикам не нужны
     return Response(
         "User-agent: *\nAllow: /\n"
-        "Disallow: /s/\nDisallow: /w/\nDisallow: /g/\nDisallow: /gw/\nDisallow: /c/\nDisallow: /admin\n"
+        "Disallow: /s/\nDisallow: /w/\nDisallow: /g/\nDisallow: /gw/\nDisallow: /c/\nDisallow: /me\nDisallow: /admin\n"
         "Sitemap: https://vitadots.ru/sitemap.xml\n",
         media_type="text/plain",
     )
@@ -256,6 +451,35 @@ async def upload_bg(file: UploadFile = File(...)):
     return {"id": img_id}
 
 
+@app.post("/api/upload-post-image")
+async def upload_post_image(file: UploadFile = File(...)):
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(422, "Нужна картинка")
+    raw = await file.read()
+    if len(raw) > 12 * 1024 * 1024:
+        raise HTTPException(422, "Слишком большой файл — до 12 МБ")
+    try:
+        img = Image.open(io.BytesIO(raw)).convert("RGB")
+        img.thumbnail((1600, 1600), Image.Resampling.LANCZOS)
+    except Exception:
+        raise HTTPException(422, "Не получилось прочитать картинку")
+    image_id = _gen_code()
+    post_dir = DATA / "posts"
+    post_dir.mkdir(parents=True, exist_ok=True)
+    img.save(post_dir / f"{image_id}.jpg", "JPEG", quality=88, optimize=True)
+    return {"id": image_id}
+
+
+@app.get("/media/post/{image_id}.jpg")
+def post_image(image_id: str):
+    if not re.fullmatch(r"[a-z0-9]{6}", image_id):
+        raise HTTPException(404, "Картинка не найдена")
+    path = DATA / "posts" / f"{image_id}.jpg"
+    if not path.exists():
+        raise HTTPException(404, "Картинка не найдена")
+    return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
+
+
 @app.post("/api/link")
 def create_link(cfg: LinkIn, request: Request):
     idea, contact = cfg.idea.strip(), cfg.contact.strip()
@@ -270,11 +494,12 @@ def create_link(cfg: LinkIn, request: Request):
             raise HTTPException(422, "Фото не найдено — выбери снова")
     code = "".join(secrets.choice(CODE_ALPHABET) for _ in range(6))
     until = (date.today() + timedelta(days=TRIAL_DAYS)).isoformat()
-    config = json.dumps(cfg.model_dump(exclude={"idea", "contact"}), ensure_ascii=False)
+    config = json.dumps(cfg.model_dump(exclude={"idea", "contact", "ownerToken"}), ensure_ascii=False)
     with db() as conn:
+        owner_code = _profile_for_token(conn, cfg.ownerToken, create=bool(cfg.ownerToken.strip()))
         conn.execute(
-            "INSERT INTO links(code, config, access_until) VALUES(?, ?, ?)",
-            (code, config, until),
+            "INSERT INTO links(code, config, access_until, owner_code) VALUES(?, ?, ?, ?)",
+            (code, config, until, owner_code),
         )
         conn.execute(
             "INSERT INTO ideas(code, idea, contact) VALUES(?, ?, ?)",
@@ -428,6 +653,94 @@ def privacy_page():
     return FileResponse(ROOT / "static" / "privacy.html", headers={"Cache-Control": "no-cache"})
 
 
+@app.get("/me")
+def cabinet_page():
+    return FileResponse(ROOT / "static" / "me.html", headers={"Cache-Control": "no-cache"})
+
+
+@app.post("/api/profile")
+def ensure_profile(profile: ProfileIn):
+    with db() as conn:
+        code = _profile_for_token(conn, profile.ownerToken, create=True)
+        name = profile.name.strip()[:40]
+        if name:
+            conn.execute("UPDATE profiles SET name = ? WHERE code = ?", (name, code))
+        return _profile_payload(conn, code)
+
+
+@app.post("/api/profile/connect")
+def connect_profile(profile: ProfileConnectIn):
+    code = profile.profileCode.strip().lower()
+    token = profile.ownerToken.strip()
+    if len(code) != 10 or any(ch not in CODE_ALPHABET for ch in code):
+        raise HTTPException(422, "Проверь десятизначный Vita ID")
+    if not (20 <= len(token) <= 200):
+        raise HTTPException(422, "Не удалось подключить это устройство")
+    digest = _token_hash(token)
+    with db() as conn:
+        if conn.execute("SELECT 1 FROM profiles WHERE code = ?", (code,)).fetchone() is None:
+            raise HTTPException(404, "Vita ID не найден")
+        current = conn.execute(
+            "SELECT profile_code FROM profile_devices WHERE token_hash = ?", (digest,)
+        ).fetchone()
+        if current and current[0] != code:
+            raise HTTPException(409, "Это устройство уже связано с другим Vita ID")
+        conn.execute(
+            "INSERT OR IGNORE INTO profile_devices(profile_code, token_hash) VALUES(?, ?)",
+            (code, digest),
+        )
+        return _profile_payload(conn, code)
+
+
+@app.post("/api/me")
+def profile_library(owner: OwnerIn):
+    with db() as conn:
+        code = _profile_for_token(conn, owner.ownerToken)
+        if code is None:
+            raise HTTPException(401, "Vita ID не найден на этом устройстве")
+        return _profile_payload(conn, code)
+
+
+@app.get("/api/profile/{code}/bundle")
+def profile_bundle(code: str):
+    """Read-only bundle for pairing Vita Focus with a private Vita ID."""
+    with db() as conn:
+        payload = _profile_payload(conn, code.lower())
+    return {
+        "code": payload["code"], "settings": payload["settings"],
+        "goals": payload["goals"],
+    }
+
+
+@app.put("/api/profile/settings")
+def save_profile_settings(update: ProfileSettingsIn):
+    settings = _clean_profile_settings(update.settings)
+    with db() as conn:
+        code = _profile_for_token(conn, update.ownerToken)
+        if code is None:
+            raise HTTPException(401, "Нет доступа к Vita ID")
+        conn.execute(
+            "UPDATE profiles SET settings = ? WHERE code = ?",
+            (json.dumps(settings, ensure_ascii=False), code),
+        )
+    return {"code": code, "settings": settings}
+
+
+@app.put("/api/profile/{code}/settings")
+def sync_profile_settings(code: str, update: ProfileCodeSettingsIn):
+    """A Vita ID is a private pairing code; it may update only the small widget settings bundle."""
+    settings = _clean_profile_settings(update.settings)
+    with db() as conn:
+        exists = conn.execute("SELECT 1 FROM profiles WHERE code = ?", (code.lower(),)).fetchone()
+        if exists is None:
+            raise HTTPException(404, "Vita ID не найден")
+        conn.execute(
+            "UPDATE profiles SET settings = ? WHERE code = ?",
+            (json.dumps(settings, ensure_ascii=False), code.lower()),
+        )
+    return {"code": code.lower(), "settings": settings}
+
+
 @app.get("/.well-known/security.txt")
 def security_txt():
     return FileResponse(ROOT / "static" / ".well-known/security.txt", media_type="text/plain")
@@ -451,10 +764,50 @@ def feed_page():
 
 @app.get("/api/feed")
 def feed_list():
-    """Лента челленджей: peers >= 2, без скрытых и спама в названии. top — топ-3 по участникам."""
+    """Публикации людей + челленджи, которые уже подхватили другие."""
     with db() as conn:
         items = _feed_items(conn, 60)
-    return {"top": items[:3], "items": items}
+        posts = _feed_posts(conn, 60)
+    return {"posts": posts, "top": items[:3], "items": items}
+
+
+@app.post("/api/feed-post")
+def create_feed_post(post: FeedPostIn):
+    kind = post.kind if post.kind in ("goal", "wallpaper", "widget") else "goal"
+    source = post.sourceCode.strip().lower()
+    title = post.title.strip()
+    description = post.description.strip()[:500]
+    if len(title) < 2 or not _feed_title_ok(title):
+        raise HTTPException(422, "Добавь короткое название без ссылок")
+    if FEED_TITLE_BLOCK.search(description):
+        raise HTTPException(422, "В описании не должно быть ссылок или рекламы")
+    image_id = post.imageId.strip().lower()
+    if image_id and not (DATA / "posts" / f"{image_id}.jpg").exists():
+        raise HTTPException(422, "Фото не найдено")
+    with db() as conn:
+        owner_code = _profile_for_token(conn, post.ownerToken)
+        if owner_code is None:
+            raise HTTPException(401, "Открой «Моя Vita» и попробуй снова")
+        table = "goals" if kind in ("goal", "widget") else "links"
+        owned = conn.execute(
+            f"SELECT 1 FROM {table} WHERE code = ? AND owner_code = ?", (source, owner_code)
+        ).fetchone()
+        if owned is None:
+            raise HTTPException(403, "Можно публиковать только свои работы")
+        for _ in range(8):
+            code = _gen_code()
+            try:
+                conn.execute(
+                    "INSERT INTO feed_posts(code, owner_code, kind, source_code, title, description, image_id) "
+                    "VALUES(?, ?, ?, ?, ?, ?, ?)",
+                    (code, owner_code, kind, source, title[:80], description, image_id),
+                )
+                break
+            except sqlite3.IntegrityError:
+                continue
+        else:
+            raise HTTPException(503, "Не удалось опубликовать — попробуй ещё раз")
+    return {"code": code, "url": f"/feed#post-{code}", "sourceCode": source}
 
 
 @app.post("/api/goal")
@@ -471,10 +824,11 @@ def create_goal(g: GoalIn, request: Request):
     shape = g.shape if g.shape in SHAPES else "circle"
     code = _gen_code()
     with db() as conn:
+        owner_code = _profile_for_token(conn, g.ownerToken, create=bool(g.ownerToken.strip()))
         conn.execute(
-            "INSERT INTO goals(code, title, days, start, reward, color, bg, shape) "
-            "VALUES(?, ?, ?, ?, ?, ?, ?, ?)",
-            (code, title[:80], days, start, g.reward.strip()[:200], color, bg, shape),
+            "INSERT INTO goals(code, title, days, start, reward, color, bg, shape, owner_code) "
+            "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (code, title[:80], days, start, g.reward.strip()[:200], color, bg, shape, owner_code),
         )
     base = str(request.base_url).rstrip("/")
     return {"code": code, "url": f"{base}/g/{code}"}
@@ -530,18 +884,52 @@ def challenge_page(code: str):
 
 
 @app.get("/api/goal/{code}")
-def goal_state(code: str):
+def goal_state(code: str, request: Request):
     g, done = _goal_row(code)
     if g is None:
         raise HTTPException(404, "Нет такой цели")
     _, title, days, start, reward, color, bg, shape, root = g
     with db() as conn:
         completed = _completed_for_challenge(conn, code, root)
+        owner_row = conn.execute("SELECT owner_code FROM goals WHERE code = ?", (code,)).fetchone()
+        viewer = _profile_for_token(conn, request.headers.get("x-vita-token", ""))
     return {
-        "title": title, "days": days, "start": start, "reward": reward,
+        "code": code, "title": title, "days": days, "start": start, "reward": reward,
         "color": color, "bg": bg, "shape": shape, "done": done,
         "peers": _peers(code, root), "completed": completed,
+        "editable": bool(viewer and owner_row and viewer == owner_row[0]),
     }
+
+
+@app.patch("/api/goal/{code}")
+def goal_edit(code: str, update: GoalEditIn):
+    title = update.title.strip()
+    if len(title) < 2:
+        raise HTTPException(422, "Назови цель — хотя бы пару слов")
+    if not _feed_title_ok(title):
+        raise HTTPException(422, "В названии не должно быть ссылок и рекламы")
+    days = min(max(int(update.days), 1), 365)
+    color = update.color if _valid_color(update.color) else "#34c759"
+    shape = update.shape if update.shape in SHAPES else "circle"
+    with db() as conn:
+        viewer = _profile_for_token(conn, update.ownerToken)
+        row = conn.execute(
+            "SELECT owner_code, start FROM goals WHERE code = ?", (code,)
+        ).fetchone()
+        if row is None:
+            raise HTTPException(404, "Нет такой цели")
+        if viewer is None or row[0] != viewer:
+            raise HTTPException(403, "Эту цель может редактировать только её владелец")
+        last_done = conn.execute(
+            "SELECT MAX(day) FROM checkins WHERE code = ?", (code,)
+        ).fetchone()[0]
+        if last_done and date.fromisoformat(last_done) > date.fromisoformat(row[1]) + timedelta(days=days - 1):
+            raise HTTPException(422, "Нельзя убрать уже отмеченные дни — увеличь длительность")
+        conn.execute(
+            "UPDATE goals SET title = ?, days = ?, reward = ?, color = ?, shape = ? WHERE code = ?",
+            (title[:80], days, update.reward.strip()[:200], color, shape, code),
+        )
+    return {"ok": True, "code": code}
 
 
 @app.post("/api/goal/{code}/toggle")
@@ -572,7 +960,7 @@ def goal_toggle(code: str, ci: CheckIn):
 
 
 @app.post("/api/goal/{code}/join")
-def goal_join(code: str, request: Request):
+def goal_join(code: str, request: Request, owner: OwnerIn | None = None):
     with db() as conn:
         row = conn.execute(
             "SELECT title, days, color, bg, shape, root FROM goals WHERE code = ?", (code,)
@@ -581,10 +969,13 @@ def goal_join(code: str, request: Request):
             raise HTTPException(404, "Нет такой цели")
         title, days, color, bg, shape, root = row
         newcode = _gen_code()
+        owner_code = _profile_for_token(
+            conn, owner.ownerToken if owner else "", create=bool(owner and owner.ownerToken.strip())
+        )
         conn.execute(
-            "INSERT INTO goals(code, title, days, start, reward, color, bg, shape, root) "
-            "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (newcode, title, days, date.today().isoformat(), "", color, bg, shape, root or code),
+            "INSERT INTO goals(code, title, days, start, reward, color, bg, shape, root, owner_code) "
+            "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (newcode, title, days, date.today().isoformat(), "", color, bg, shape, root or code, owner_code),
         )
     base = str(request.base_url).rstrip("/")
     return {"code": newcode, "url": f"{base}/g/{newcode}"}
