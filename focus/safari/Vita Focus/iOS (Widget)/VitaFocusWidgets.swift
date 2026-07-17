@@ -15,6 +15,7 @@ struct FocusEntry: TimelineEntry {
     let accent: Color
     let widgetTheme: VitaWidgetTheme
     let dotStyle: VitaDotStyle
+    let dotColorHex: String?
 }
 
 private enum FocusEntryFactory {
@@ -30,7 +31,8 @@ private enum FocusEntryFactory {
             habit: habit,
             accent: accent(for: theme, fallback: configuredAccent),
             widgetTheme: theme,
-            dotStyle: VitaDotStyleStore.load()
+            dotStyle: VitaDotStyleStore.load(),
+            dotColorHex: VitaDotColorStore.overrideHex
         )
     }
 
@@ -310,11 +312,18 @@ private struct VitaDot: View {
                         ))
                         : AnyShapeStyle(Color.black.opacity(0.16))
                 )
-            shape
-                .stroke(
-                    ring ? color : Color.white.opacity(filled ? 0.24 : 0.17),
-                    lineWidth: ring ? max(1.5, size * 0.15) : max(0.75, size * 0.07)
-                )
+            if ring {
+                shape
+                    .stroke(Color.white.opacity(0.72), lineWidth: max(2.3, size * 0.23))
+                shape
+                    .stroke(color, lineWidth: max(1.25, size * 0.12))
+            } else {
+                shape
+                    .stroke(
+                        Color.white.opacity(filled ? 0.34 : 0.17),
+                        lineWidth: max(0.75, size * 0.07)
+                    )
+            }
             if filled {
                 shape
                     .fill(
@@ -329,7 +338,8 @@ private struct VitaDot: View {
             }
         }
             .frame(width: size, height: size)
-            .shadow(color: ring ? color.opacity(0.62) : (filled ? color.opacity(0.16) : .clear), radius: ring ? size * 0.34 : size * 0.14)
+            .shadow(color: ring ? Color.white.opacity(0.30) : .clear, radius: ring ? size * 0.34 : 0)
+            .shadow(color: ring ? color.opacity(0.52) : (filled ? color.opacity(0.16) : .clear), radius: ring ? size * 0.28 : size * 0.14)
     }
 }
 
@@ -457,7 +467,7 @@ struct VitaMonthDotsWidgetView: View {
             VitaProgressBar(value: progress, accent: entry.accent)
             VitaDotsGridView(
                 grid: entry.dots,
-                accent: entry.accent,
+                accent: dotAccent,
                 dotSize: entry.dots.total > 36 ? 6 : 6.8,
                 spacing: 2,
                 style: resolvedDotStyle
@@ -505,7 +515,7 @@ struct VitaMonthDotsWidgetView: View {
                     .lineLimit(1)
                 VitaDotsGridView(
                     grid: entry.dots,
-                    accent: entry.accent,
+                    accent: dotAccent,
                     dotSize: 9,
                     spacing: 2.8,
                     style: resolvedDotStyle
@@ -547,7 +557,7 @@ struct VitaMonthDotsWidgetView: View {
             VitaProgressBar(value: progress, accent: entry.accent)
             VitaDotsGridView(
                 grid: entry.dots,
-                accent: entry.accent,
+                accent: dotAccent,
                 dotSize: 14,
                 spacing: 6,
                 style: resolvedDotStyle
@@ -582,15 +592,21 @@ struct VitaMonthDotsWidgetView: View {
         entry.dotStyle == .goal ? .circle : entry.dotStyle
     }
 
+    private var dotAccent: Color {
+        guard let hex = entry.dotColorHex, let color = Color(hex: hex) else { return entry.accent }
+        return color
+    }
+
     private var shortFooter: String {
         entry.dots.footer.replacingOccurrences(of: "день ", with: "")
     }
 
     private var todayIndicator: some View {
         Circle()
-            .fill(entry.accent)
+            .fill(dotAccent)
             .frame(width: 6, height: 6)
-            .shadow(color: entry.accent.opacity(0.65), radius: 3)
+            .overlay(Circle().stroke(Color.white.opacity(0.55), lineWidth: 0.7))
+            .shadow(color: dotAccent.opacity(0.65), radius: 3)
     }
 
     @ViewBuilder
@@ -682,7 +698,7 @@ struct VitaHabitWidgetView: View {
             }
             VitaDotsGridView(
                 grid: grid,
-                accent: color,
+                accent: dotsColor(habit),
                 dotSize: 5.5,
                 spacing: 1.8,
                 style: dotStyle(for: habit)
@@ -735,7 +751,7 @@ struct VitaHabitWidgetView: View {
                 }
                 VitaDotsGridView(
                     grid: grid,
-                    accent: color,
+                    accent: dotsColor(habit),
                     dotSize: 8.5,
                     spacing: 2.5,
                     style: dotStyle(for: habit)
@@ -785,7 +801,7 @@ struct VitaHabitWidgetView: View {
             }
             VitaDotsGridView(
                 grid: grid,
-                accent: color,
+                accent: dotsColor(habit),
                 dotSize: 8.5,
                 spacing: 3,
                 style: dotStyle(for: habit)
@@ -852,6 +868,11 @@ struct VitaHabitWidgetView: View {
 
     private func habitColor(_ habit: VitaHabitSnapshot) -> Color {
         Color(hex: habit.color) ?? Color(red: 0.66, green: 0.33, blue: 0.97)
+    }
+
+    private func dotsColor(_ habit: VitaHabitSnapshot) -> Color {
+        guard let hex = entry.dotColorHex, let color = Color(hex: hex) else { return habitColor(habit) }
+        return color
     }
 
     private func dotStyle(for habit: VitaHabitSnapshot) -> VitaDotStyle {

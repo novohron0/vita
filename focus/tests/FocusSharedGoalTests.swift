@@ -14,6 +14,7 @@ struct FocusSharedGoalTests {
         try testFocusLaunchLinks()
         try testHabitStreaksAndGrid()
         testGoalDotStyles()
+        testDotColors()
         print("FocusSharedGoalTests: \(checks) checks passed")
     }
 
@@ -168,6 +169,15 @@ struct FocusSharedGoalTests {
         expect(VitaDotStyle(goalShape: "star") == .star, "star goals must keep star dots")
         expect(VitaDotStyle(goalShape: "hex") == .hex, "hex goals must keep hexagonal dots")
         expect(VitaDotStyle(goalShape: "unknown") == .circle, "unknown goal shapes must fall back safely")
+    }
+
+    private static func testDotColors() {
+        expect(VitaDotColorStore.normalizedSelection("auto") == "auto", "automatic dot color must remain automatic")
+        expect(VitaDotColorStore.normalizedSelection(" #a855f7 ") == "#A855F7", "dot colors must normalize to uppercase hex")
+        expect(VitaDotColorStore.normalizedSelection("38BDF8") == "#38BDF8", "dot colors may omit the hash")
+        expect(VitaDotColorStore.normalizedSelection("#fff") == nil, "short hex colors must be rejected")
+        expect(VitaDotColorStore.normalizedSelection("#GG55F7") == nil, "invalid hex colors must be rejected")
+        expect(VitaDotColorStore.normalizedSelection("+00001") == nil, "signed values must not be accepted as hex colors")
     }
 
     private static func goalModel() -> VitaGoalDots {

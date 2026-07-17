@@ -150,6 +150,14 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
                 saveDotStyle(payload["style"] as? String ?? "", in: webView)
                 return
             }
+            if action == "set-dot-color" {
+                saveDotColor(
+                    payload["color"] as? String ?? "",
+                    rememberCustom: payload["custom"] as? Bool ?? false,
+                    in: webView
+                )
+                return
+            }
             if action == "pick-widget-photo" {
                 pickWidgetPhoto()
                 return
@@ -343,6 +351,15 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         pushWidgetTheme(to: webView, status: "Форма точек применена")
     }
 
+    private func saveDotColor(_ raw: String, rememberCustom: Bool, in webView: WKWebView) {
+        guard VitaDotColorStore.save(rawValue: raw, rememberCustom: rememberCustom) != nil else {
+            pushWidgetTheme(to: webView, status: "Неизвестный цвет точек", isError: true)
+            return
+        }
+        WidgetCenter.shared.reloadAllTimelines()
+        pushWidgetTheme(to: webView, status: "Цвет точек применён")
+    }
+
     private func pickWidgetPhoto() {
         guard UIImagePickerController.isSourceTypeAvailable(.photoLibrary) else {
             pushWidgetTheme(to: webView, status: "Фото недоступны", isError: true)
@@ -363,6 +380,8 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         var payload: [String: Any] = [
             "theme": (theme ?? VitaWidgetThemeStore.load()).rawValue,
             "dotStyle": VitaDotStyleStore.load().rawValue,
+            "dotColor": VitaDotColorStore.load(),
+            "customDotColor": VitaDotColorStore.customHex,
             "hasPhoto": VitaWidgetThemeStore.hasPhoto,
         ]
         if let status {

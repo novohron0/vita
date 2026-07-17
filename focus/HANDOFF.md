@@ -15,8 +15,8 @@ Vita — не набор отдельных демо, а одна система
 
 ## Текущее состояние (17.07.2026)
 
-- Extension manifest: **0.30.8**.
-- Все Xcode targets: `MARKETING_VERSION = 0.30.8`, build `4`.
+- Extension manifest: **0.30.9**.
+- Все Xcode targets: `MARKETING_VERSION = 0.30.9`, build `5`.
 - iOS app bundle: `ru.vitadots.focus`.
 - Safari extension: `ru.vitadots.focus.Extension`.
 - Widget: `ru.vitadots.focus.widget`.
@@ -38,8 +38,10 @@ Vita — не набор отдельных демо, а одна система
 Все виджеты используют общий визуальный язык Vita Material и тему из App Group:
 `graphite`, `violet`, `ocean`, `ember` или пользовательское фото. Для точек
 есть восемь вариантов: форма цели, круг, мягкий квадрат, квадрат, ромб, сердце,
-звезда и соты. В native app также настраивается режим `Vita · точки` — текущий
-месяц или диапазон до цели. Изменения сразу обновляют нужный WidgetKit timeline.
+звезда и соты. Цвет задаётся независимо: `Авто`, семь пресетов или любой цвет
+из системной палитры. В `Авто` календарь следует теме, а Habit — цвету цели с
+сайта. В native app также настраивается режим `Vita · точки` — текущий месяц
+или диапазон до цели. Изменения сразу обновляют нужный WidgetKit timeline.
 
 Пока активная привычка одна. Следующий продуктовый шаг — несколько привычек и
 `AppIntentConfiguration`, чтобы каждый экземпляр виджета выбирал свою цель.
@@ -56,8 +58,8 @@ youtube.js / site content scripts
 - YouTube: 21 фильтр, в мобильном popup показаны 5 основных.
 - Остальные сайты берутся из `focus/shared/registry.json`.
 - Popup и runtime-скрипты Safari не используют ES modules.
-- YouTube HUD: `VF 0.30.8 · storage OK/FAIL · …`.
-- Popup: `v0.30.8 · storage OK/FAIL` + ping текущей вкладки.
+- YouTube HUD: `VF 0.30.9 · storage OK/FAIL · …`.
+- Popup: `v0.30.9 · storage OK/FAIL` + ping текущей вкладки.
 
 Extension физически проверен на iPhone 11 / iOS 26.3.1: popup, storage и
 text-only DOM-фильтрация работают. PWA «На экран Домой» не поддерживает Safari

@@ -94,6 +94,56 @@ enum VitaDotStyleStore {
     }
 }
 
+enum VitaDotColorStore {
+    static let automatic = "auto"
+    static let defaultCustomHex = "#A855F7"
+
+    private static let selectionKey = "vitaDotColor"
+    private static let customKey = "vitaCustomDotColor"
+
+    static var defaults: UserDefaults? {
+        UserDefaults(suiteName: FocusAppGroup.id)
+    }
+
+    static func load() -> String {
+        guard let raw = defaults?.string(forKey: selectionKey),
+              let normalized = normalizedSelection(raw) else { return automatic }
+        return normalized
+    }
+
+    static var customHex: String {
+        guard let raw = defaults?.string(forKey: customKey),
+              let normalized = normalizedSelection(raw),
+              normalized != automatic else { return defaultCustomHex }
+        return normalized
+    }
+
+    static var overrideHex: String? {
+        let selection = load()
+        return selection == automatic ? nil : selection
+    }
+
+    @discardableResult
+    static func save(rawValue: String, rememberCustom: Bool = false) -> String? {
+        guard let normalized = normalizedSelection(rawValue) else { return nil }
+        defaults?.set(normalized, forKey: selectionKey)
+        if rememberCustom && normalized != automatic {
+            defaults?.set(normalized, forKey: customKey)
+        }
+        return normalized
+    }
+
+    static func normalizedSelection(_ rawValue: String) -> String? {
+        var raw = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if raw.lowercased() == automatic { return automatic }
+        if raw.hasPrefix("#") { raw.removeFirst() }
+        let hexDigits = CharacterSet(charactersIn: "0123456789abcdefABCDEF")
+        guard raw.count == 6,
+              raw.unicodeScalars.allSatisfy({ hexDigits.contains($0) }) else { return nil }
+        return "#\(raw.uppercased())"
+    }
+}
+
 struct FocusSnapshot: Codable {
     var blocksOn: Int
     var scheduleEnabled: Bool

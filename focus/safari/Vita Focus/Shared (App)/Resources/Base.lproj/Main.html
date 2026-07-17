@@ -154,6 +154,25 @@
                     <button type="button" class="dot-style" data-style="hex"><i class="dot-preview hex"></i><span>Соты</span></button>
                 </div>
                 <p class="step-hint">«Авто» повторяет форму подключённой цели; календарь остаётся круглым.</p>
+                <p class="appearance-label">Цвет точек</p>
+                <div class="dot-color-grid" role="group" aria-label="Цвет точек">
+                    <button type="button" class="dot-color" data-color="auto"><i class="dot-color-preview auto"></i><span>Авто</span></button>
+                    <button type="button" class="dot-color" data-color="#A855F7"><i class="dot-color-preview vita"></i><span>Vita</span></button>
+                    <button type="button" class="dot-color" data-color="#38BDF8"><i class="dot-color-preview sky"></i><span>Небо</span></button>
+                    <button type="button" class="dot-color" data-color="#34D399"><i class="dot-color-preview mint"></i><span>Мята</span></button>
+                    <button type="button" class="dot-color" data-color="#FACC15"><i class="dot-color-preview sun"></i><span>Солнце</span></button>
+                    <button type="button" class="dot-color" data-color="#FB923C"><i class="dot-color-preview fire"></i><span>Огонь</span></button>
+                    <button type="button" class="dot-color" data-color="#F472B6"><i class="dot-color-preview pink"></i><span>Розовый</span></button>
+                    <button type="button" class="dot-color" data-color="#F8FAFC"><i class="dot-color-preview white"></i><span>Белый</span></button>
+                </div>
+                <div class="custom-dot-color" id="customDotColorControl">
+                    <label for="customDotColor"><b>Свой цвет</b></label>
+                    <div class="custom-dot-color-actions">
+                        <input type="color" id="customDotColor" value="#A855F7" aria-label="Выбрать свой цвет точек">
+                        <button type="button" id="applyCustomDotColor">Включить</button>
+                    </div>
+                </div>
+                <p class="step-hint">«Авто»: у привычки — цвет цели с vitadots.ru, у календаря — цвет темы. Свой цвет меняет только точки.</p>
                 <p id="widgetThemeStatus" class="habit-status" role="status" aria-live="polite"></p>
             </section>
         </div>

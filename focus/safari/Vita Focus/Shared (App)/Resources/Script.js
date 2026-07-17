@@ -200,12 +200,28 @@ document.querySelectorAll(".refresh-habit").forEach((button) => button.addEventL
 document.querySelectorAll(".disconnect-habit").forEach((button) => button.addEventListener("click", () => post("disconnect-habit")));
 
 let widgetHasPhoto = false;
-let widgetThemeState = { theme: "graphite", dotStyle: "goal" };
+let widgetThemeState = {
+    theme: "graphite",
+    dotStyle: "goal",
+    dotColor: "auto",
+    customDotColor: "#A855F7"
+};
+
+function normalizedDotColor(value) {
+    if (typeof value !== "string") return null;
+    if (value.toLowerCase() === "auto") return "auto";
+    const normalized = value.toUpperCase();
+    return /^#[0-9A-F]{6}$/.test(normalized) ? normalized : null;
+}
 
 function showWidgetTheme(state) {
     if (!state || typeof state !== "object") return;
     if (typeof state.theme === "string") widgetThemeState.theme = state.theme;
     if (typeof state.dotStyle === "string") widgetThemeState.dotStyle = state.dotStyle;
+    const nextDotColor = normalizedDotColor(state.dotColor);
+    const nextCustomColor = normalizedDotColor(state.customDotColor);
+    if (nextDotColor) widgetThemeState.dotColor = nextDotColor;
+    if (nextCustomColor && nextCustomColor !== "auto") widgetThemeState.customDotColor = nextCustomColor;
     if (typeof state.hasPhoto === "boolean") widgetHasPhoto = state.hasPhoto;
     document.querySelectorAll(".widget-theme").forEach((button) => {
         const active = button.dataset.theme === widgetThemeState.theme;
@@ -217,6 +233,19 @@ function showWidgetTheme(state) {
         button.classList.toggle("is-active", active);
         button.setAttribute("aria-pressed", String(active));
     });
+    const presetColors = Array.from(document.querySelectorAll(".dot-color"), (button) =>
+        normalizedDotColor(button.dataset.color)
+    ).filter(Boolean);
+    document.querySelectorAll(".dot-color").forEach((button) => {
+        const active = normalizedDotColor(button.dataset.color) === widgetThemeState.dotColor;
+        button.classList.toggle("is-active", active);
+        button.setAttribute("aria-pressed", String(active));
+    });
+    const customIsActive = widgetThemeState.dotColor !== "auto" && !presetColors.includes(widgetThemeState.dotColor);
+    const customControl = document.getElementById("customDotColorControl");
+    customControl?.classList.toggle("is-active", customIsActive);
+    const customPicker = document.getElementById("customDotColor");
+    if (customPicker && document.activeElement !== customPicker) customPicker.value = widgetThemeState.customDotColor;
     const photoLabel = document.querySelector('.widget-theme[data-theme="photo"] span');
     if (photoLabel) photoLabel.textContent = widgetHasPhoto ? "Сменить фотографию" : "Своя фотография";
     const status = document.getElementById("widgetThemeStatus");
@@ -244,3 +273,23 @@ document.querySelectorAll(".dot-style").forEach((button) => {
         post({ action: "set-dot-style", style: button.dataset.style });
     });
 });
+
+document.querySelectorAll(".dot-color").forEach((button) => {
+    button.addEventListener("click", () => {
+        const color = normalizedDotColor(button.dataset.color);
+        if (!color) return;
+        showWidgetTheme({ dotColor: color, status: "Применяем…" });
+        post({ action: "set-dot-color", color, custom: false });
+    });
+});
+
+const customDotColor = document.getElementById("customDotColor");
+function applyCustomDotColor() {
+    const color = normalizedDotColor(customDotColor.value);
+    if (!color || color === "auto") return;
+    showWidgetTheme({ dotColor: color, customDotColor: color, status: "Применяем…" });
+    post({ action: "set-dot-color", color, custom: true });
+}
+
+customDotColor?.addEventListener("change", applyCustomDotColor);
+document.getElementById("applyCustomDotColor")?.addEventListener("click", applyCustomDotColor);
