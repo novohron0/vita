@@ -14,98 +14,44 @@
             <div class="brand">⠿ vita <span>Focus</span></div>
         </header>
 
-        <p class="lead platform-ios state-unknown">Проверяем расширение Safari…</p>
-        <p class="lead platform-ios state-on">✅ Расширение включено. Открой YouTube в Safari (кнопка ниже).</p>
-        <p class="lead platform-ios state-off">❌ Расширение <b>выключено</b> — блоки не работают. Сначала шаг 1.</p>
         <p class="lead platform-mac state-unknown">Включи расширение в Safari — и ленты перестанут отвлекать.</p>
         <p class="lead platform-mac state-on">Расширение включено. Можно открывать сайты в Safari.</p>
         <p class="lead platform-mac state-off">Расширение выключено. Включи его в настройках Safari.</p>
 
         <div class="flow platform-ios">
-            <section class="step-card platform-ios state-off">
-                <p class="step-warn">Если включить не получается: удали Vita Focus с iPhone → Xcode <b>⇧⌘K</b> → <b>⌘R</b> → включи снова.</p>
-            </section>
-
-            <section class="step-card">
+            <section class="step-card focus-card">
                 <div class="step-head">
-                    <span class="step-num">1</span>
-                    <h2 class="step-title">Включи расширение</h2>
+                    <h2 class="step-title">Safari Focus</h2>
+                    <span class="status-pill state-on"><i></i>Работает</span>
+                    <span class="status-pill state-off"><i></i>Выключен</span>
+                    <span class="status-pill state-unknown"><i></i>Проверь</span>
                 </div>
-                <p class="step-text">Кнопка откроет <b>Safari → Расширения</b>. Включи <b>Vita Focus</b> и «Разрешить на всех сайтах».</p>
-                <button type="button" class="primary open-settings">Safari → Расширения</button>
-                <p class="step-hint">Если открылись просто Настройки: <b>Приложения → Safari → Расширения</b>.<br>Или прямо в Safari: <b>⋯&nbsp;/&nbsp;АА в адресной строке → Управлять расширениями</b>.</p>
-            </section>
-
-            <section class="step-card">
-                <div class="step-head">
-                    <span class="step-num">2</span>
-                    <h2 class="step-title">YouTube в Safari</h2>
+                <div class="state-on">
+                    <p class="step-text">Открой YouTube и выбери, что скрыть, через <b>🧩 Vita Focus</b>.</p>
+                    <button type="button" class="primary open-youtube">Открыть YouTube</button>
+                    <p class="step-hint">Фильтры работают во вкладке Safari.</p>
                 </div>
-
-                <p class="step-warn"><b>Важно:</b> если уже добавил обычную иконку сайта, удали её и добавь заново без <b>«Открыть как веб‑приложение»</b> — внутри web‑app расширения Safari не работают. Самый простой вариант — виджет <b>YouTube Focus</b>.</p>
-
-                <ol class="guide-steps">
-                    <li>
-                        <div class="guide-shot" aria-hidden="true">
-                            <div class="shot-bar"><span class="shot-url">youtube.com</span><span class="shot-puzzle">🧩</span></div>
-                            <div class="shot-body"><span class="shot-chip on">Shorts</span><span class="shot-chip">Только текст</span></div>
-                        </div>
-                        <p>Кнопка ниже откроет <b>главную YouTube</b> в Safari. Нажми <b>🧩</b> → <b>Vita Focus</b> → спокойно настрой блоки.</p>
-                    </li>
-                    <li>
-                        <p>Для быстрого запуска добавь на домашний экран виджет <b>YouTube Focus</b>. Тап откроет главную в браузере по умолчанию, не в приложении YouTube. Для работы Vita Focus выбери браузером по умолчанию <b>Safari</b>.</p>
-                    </li>
-                    <li>
-                        <p>Нужна именно квадратная иконка? В <b>Командах</b> открой <b>Быстрые команды приложений → Vita Focus</b>, у <b>YouTube Focus</b> выбери <b>«Использовать в новой команде»</b>, затем открой её сведения → <b>«На экран Домой»</b>.</p>
-                    </li>
-                </ol>
-
-                <button type="button" class="primary open-youtube">Главная YouTube в Safari</button>
-            </section>
-
-            <section class="step-card goal-dots-settings">
-                <div class="step-head">
-                    <span class="step-num">3</span>
-                    <h2 class="step-title">Vita · точки</h2>
+                <div class="state-off">
+                    <p class="step-text">Включи <b>Vita Focus</b> и разреши доступ ко всем сайтам.</p>
+                    <button type="button" class="primary open-settings">Открыть расширения Safari</button>
+                    <p class="step-hint">Если открылись общие настройки: <b>Приложения → Safari → Расширения</b>.</p>
                 </div>
-                <p class="step-text">Выбери, что показывать: дни текущего месяца или отсчёт до личной цели до 42 дней.</p>
-
-                <div class="goal-mode-grid" role="group" aria-label="Режим виджета Vita · точки">
-                    <button type="button" class="goal-mode" data-mode="month" aria-pressed="false">Месяц</button>
-                    <button type="button" class="goal-mode" data-mode="goal" aria-pressed="false">До цели</button>
+                <div class="state-unknown">
+                    <p class="step-text">Если уже включил <b>Vita Focus</b> — всё готово. Иначе проверь доступ ко всем сайтам.</p>
+                    <button type="button" class="primary open-youtube">Открыть YouTube</button>
+                    <button type="button" class="secondary open-settings">Проверить настройки Safari</button>
                 </div>
-
-                <div id="goalDateFields" class="goal-date-fields" hidden>
-                    <label>
-                        <span>Начало</span>
-                        <input id="goalStart" type="date" autocomplete="off">
-                    </label>
-                    <label>
-                        <span>Конец</span>
-                        <input id="goalEnd" type="date" autocomplete="off">
-                    </label>
-                </div>
-
-                <button id="applyGoalDots" type="button" class="primary">Применить к виджету</button>
-                <p id="goalDotsStatus" class="habit-status" role="status" aria-live="polite"></p>
-                <p class="step-hint">Добавление: долгое нажатие на экран → <b>+</b> → <b>Vita Focus</b> → <b>«Vita · точки»</b>. На iOS 17+ день можно отмечать прямо в виджете.</p>
             </section>
 
             <section class="step-card habit-settings">
                 <div class="step-head">
-                    <span class="step-num">4</span>
-                    <h2 class="step-title">Привычка из Vita</h2>
+                    <h2 class="step-title">Цель Vita</h2>
                 </div>
-                <p class="step-text">Одна отметка дня обновляет цель на <b>vitadots.ru</b>, Habit‑виджет и «Обои жизни».</p>
+                <p class="step-text">Отметки синхронизируются с сайтом, виджетом и «Обоями жизни».</p>
 
                 <div id="habitEmpty">
-                    <p class="step-hint habit-lead">Создай цель на сайте и нажми там <b>«Открыть в Vita»</b>. Или вставь сюда ссылку вида <span class="mono">vitadots.ru/g/…</span>.</p>
-                    <label class="habit-code-field">
-                        <span>Ссылка или код цели</span>
-                        <input id="habitCode" type="text" inputmode="text" autocomplete="off" autocapitalize="none" placeholder="vitadots.ru/g/abcdef">
-                    </label>
-                    <button id="connectHabit" type="button" class="primary">Подключить привычку</button>
-                    <button type="button" class="secondary open-goals">Создать на vitadots.ru</button>
+                    <button type="button" class="primary open-goals">Создать цель</button>
+                    <button type="button" class="text-action edit-habit">Уже есть ссылка?</button>
                 </div>
 
                 <div id="habitConnected" class="habit-connected" hidden>
@@ -115,46 +61,91 @@
                     </div>
                     <div class="habit-stats">
                         <div><b id="habitDone">—</b><span>выполнено</span></div>
-                        <div><b id="habitStreak">—</b><span>стрик</span></div>
+                        <div><b id="habitStreak">—</b><span>серия</span></div>
                         <div><b id="habitBest">—</b><span>рекорд</span></div>
                     </div>
                     <div class="habit-progress"><i id="habitProgress"></i></div>
-                    <button type="button" class="primary open-active-habit">Открыть цель и обои</button>
-                    <div class="habit-actions">
-                        <button type="button" class="secondary refresh-habit">Обновить</button>
-                        <button type="button" class="secondary disconnect-habit">Сменить</button>
-                    </div>
+                    <button type="button" class="primary open-active-habit">Открыть цель</button>
+                    <button type="button" class="text-action edit-habit">Подключить другую</button>
+                </div>
+
+                <div id="habitConnectForm" class="habit-connect-form" hidden>
+                    <p class="step-hint habit-lead">На vitadots.ru открой цель и нажми <b>«Открыть в Vita»</b> или вставь ссылку.</p>
+                    <label class="habit-code-field">
+                        <span>Ссылка на цель</span>
+                        <input id="habitCode" type="text" inputmode="text" autocomplete="off" autocapitalize="none" placeholder="vitadots.ru/g/abcdef">
+                    </label>
+                    <button id="connectHabit" type="button" class="primary">Подключить</button>
+                    <button type="button" class="secondary cancel-habit-edit">Отмена</button>
                 </div>
 
                 <p id="habitStatus" class="habit-status" role="status" aria-live="polite"></p>
             </section>
 
-            <section class="step-card widget-themes">
+            <section class="step-card add-widget-card">
                 <div class="step-head">
-                    <span class="step-num">5</span>
-                    <h2 class="step-title">Стиль виджетов</h2>
+                    <h2 class="step-title">Добавь виджет</h2>
                 </div>
-                <p class="step-text">Выбери атмосферу — тема применяется сразу ко всем виджетам Vita.</p>
+                <div class="widget-path" aria-label="Как добавить виджет">
+                    <span>Зажми экран Домой</span><i>→</i><span>＋</span><i>→</i><span>Vita Focus</span>
+                </div>
+                <p class="step-hint">Выбери <b>YouTube Focus</b>, <b>Vita · точки</b> или <b>Vita · привычка</b>.</p>
+            </section>
+
+            <details id="goalDotsDetails" class="step-card settings-card goal-dots-settings">
+                <summary>
+                    <span><strong>Vita · точки</strong><small id="goalDotsSummary">Месяц</small></span>
+                    <i class="chevron" aria-hidden="true">›</i>
+                </summary>
+                <div class="settings-content">
+                    <p class="appearance-label first">Что показывать</p>
+                    <div class="goal-mode-grid" role="group" aria-label="Режим виджета Vita · точки">
+                        <button type="button" class="goal-mode" data-mode="month" aria-pressed="false">Месяц</button>
+                        <button type="button" class="goal-mode" data-mode="goal" aria-pressed="false">До цели</button>
+                    </div>
+
+                    <div id="goalDateFields" class="goal-date-fields" hidden>
+                        <label>
+                            <span>Начало</span>
+                            <input id="goalStart" type="date" autocomplete="off">
+                        </label>
+                        <label>
+                            <span>Конец</span>
+                            <input id="goalEnd" type="date" autocomplete="off">
+                        </label>
+                    </div>
+
+                    <button id="applyGoalDots" type="button" class="primary">Сохранить</button>
+                    <p id="goalDotsStatus" class="habit-status" role="status" aria-live="polite"></p>
+                </div>
+            </details>
+
+            <details id="appearanceDetails" class="step-card settings-card widget-themes">
+                <summary>
+                    <span><strong>Внешний вид</strong><small id="appearanceSummary">Графит · Авто · Авто</small></span>
+                    <i class="chevron" aria-hidden="true">›</i>
+                </summary>
+                <div class="settings-content">
+                <p class="appearance-label first">Фон</p>
                 <div class="theme-grid" role="group" aria-label="Тема виджетов">
                     <button type="button" class="widget-theme" data-theme="graphite"><i class="theme-preview graphite"></i><span>Графит</span></button>
                     <button type="button" class="widget-theme" data-theme="violet"><i class="theme-preview violet"></i><span>Vita</span></button>
                     <button type="button" class="widget-theme" data-theme="ocean"><i class="theme-preview ocean"></i><span>Океан</span></button>
                     <button type="button" class="widget-theme" data-theme="ember"><i class="theme-preview ember"></i><span>Закат</span></button>
-                    <button type="button" class="widget-theme photo-theme" data-theme="photo"><i class="theme-preview photo">＋</i><span>Своя фотография</span></button>
+                    <button type="button" class="widget-theme photo-theme" data-theme="photo"><i class="theme-preview photo">＋</i><span>Своё фото</span></button>
                 </div>
-                <p class="appearance-label">Форма точек</p>
+                <p class="appearance-label">Форма</p>
                 <div class="dot-style-grid" role="group" aria-label="Форма точек">
                     <button type="button" class="dot-style" data-style="goal"><i class="dot-preview goal"></i><span>Авто</span></button>
                     <button type="button" class="dot-style" data-style="circle"><i class="dot-preview circle"></i><span>Круг</span></button>
-                    <button type="button" class="dot-style" data-style="soft"><i class="dot-preview soft"></i><span>Мягкие</span></button>
+                    <button type="button" class="dot-style" data-style="soft"><i class="dot-preview soft"></i><span>Скруглённые</span></button>
                     <button type="button" class="dot-style" data-style="square"><i class="dot-preview square"></i><span>Квадрат</span></button>
                     <button type="button" class="dot-style" data-style="diamond"><i class="dot-preview diamond"></i><span>Ромб</span></button>
                     <button type="button" class="dot-style" data-style="heart"><i class="dot-preview heart"></i><span>Сердце</span></button>
                     <button type="button" class="dot-style" data-style="star"><i class="dot-preview star"></i><span>Звезда</span></button>
                     <button type="button" class="dot-style" data-style="hex"><i class="dot-preview hex"></i><span>Соты</span></button>
                 </div>
-                <p class="step-hint">«Авто» повторяет форму подключённой цели; календарь остаётся круглым.</p>
-                <p class="appearance-label">Цвет точек</p>
+                <p class="appearance-label">Цвет</p>
                 <div class="dot-color-grid" role="group" aria-label="Цвет точек">
                     <button type="button" class="dot-color" data-color="auto"><i class="dot-color-preview auto"></i><span>Авто</span></button>
                     <button type="button" class="dot-color" data-color="#A855F7"><i class="dot-color-preview vita"></i><span>Vita</span></button>
@@ -167,22 +158,24 @@
                 </div>
                 <div class="custom-dot-color" id="customDotColorControl">
                     <label for="customDotColor"><b>Свой цвет</b></label>
-                    <div class="custom-dot-color-actions">
-                        <input type="color" id="customDotColor" value="#A855F7" aria-label="Выбрать свой цвет точек">
-                        <button type="button" id="applyCustomDotColor">Включить</button>
-                    </div>
+                    <input type="color" id="customDotColor" value="#A855F7" aria-label="Выбрать свой цвет точек">
                 </div>
-                <p class="step-hint">«Авто»: у привычки — цвет цели с vitadots.ru, у календаря — цвет темы. Свой цвет меняет только точки.</p>
+                <p class="step-hint">Авто подбирает форму и цвет под цель или выбранную тему.</p>
                 <p id="widgetThemeStatus" class="habit-status" role="status" aria-live="polite"></p>
-            </section>
+                </div>
+            </details>
         </div>
 
-        <p class="foot-note platform-ios">YouTube только через приложение <b>Safari</b> (видна адресная строка). Иконка с «Домой» = без Vita Focus.</p>
-
-        <details id="diag" class="diag-details platform-ios" hidden>
-            <summary>Если что-то не работает</summary>
-            <pre id="diagBody" class="diag-pre">Собираем…</pre>
-            <p class="step-hint">Здесь находится техническая диагностика для поддержки.</p>
+        <details id="diag" class="step-card settings-card help-details platform-ios">
+            <summary>
+                <span><strong>Помощь</strong><small>Если что-то не работает</small></span>
+                <i class="chevron" aria-hidden="true">›</i>
+            </summary>
+            <div class="settings-content">
+                <p class="step-text">Vita Focus работает на YouTube только во вкладке Safari. В режиме веб‑приложения расширения недоступны.</p>
+                <p class="appearance-label">Диагностика</p>
+                <pre id="diagBody" class="diag-pre">Собираем…</pre>
+            </div>
         </details>
 
         <button type="button" class="primary platform-mac open-preferences">Открыть настройки Safari…</button>

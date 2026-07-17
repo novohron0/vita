@@ -24,6 +24,7 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
     @IBOutlet var webView: WKWebView!
 #if os(iOS)
     private var habitObserver: NSObjectProtocol?
+    private var appActiveObserver: NSObjectProtocol?
 #endif
 
     override func viewDidLoad() {
@@ -36,7 +37,16 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
             queue: .main
         ) { [weak self] _ in
             guard let self else { return }
-            self.refreshActiveHabit(in: self.webView, successStatus: "Цель открыта из vitadots.ru")
+            self.refreshActiveHabit(in: self.webView, successStatus: "Цель подключена")
+        }
+        appActiveObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            self.refreshExtensionState(in: self.webView)
+            self.refreshActiveHabit(in: self.webView)
         }
 #endif
 
@@ -56,6 +66,9 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
 #if os(iOS)
         if let habitObserver {
             NotificationCenter.default.removeObserver(habitObserver)
+        }
+        if let appActiveObserver {
+            NotificationCenter.default.removeObserver(appActiveObserver)
         }
 #endif
     }
@@ -123,7 +136,7 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
             if body == "disconnect-habit" {
                 VitaHabitStore.disconnect()
                 WidgetCenter.shared.reloadTimelines(ofKind: "VitaHabitWidget")
-                pushHabitState(to: webView, status: "Привычка отключена")
+                pushHabitState(to: webView, status: "Цель отключена")
                 return
             }
         }
@@ -213,12 +226,35 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
     }
 
     private func connectHabit(_ raw: String, in webView: WKWebView) {
-        do {
-            _ = try VitaHabitStore.activate(raw)
-            pushHabitState(to: webView, status: "Подключаем к vitadots.ru…", isRefreshing: true)
-            refreshActiveHabit(in: webView, successStatus: "Готово — сайт, виджет и обои используют одну цель")
-        } catch {
-            pushHabitState(to: webView, status: error.localizedDescription, isError: true)
+        guard let code = VitaHabitStore.code(from: raw) else {
+            pushHabitState(
+                to: webView,
+                status: VitaHabitError.invalidCode.localizedDescription,
+                isError: true
+            )
+            return
+        }
+        pushHabitState(to: webView, status: "Подключаем…", isRefreshing: true)
+        Task { [weak self, weak webView] in
+            do {
+                let snapshot = try await VitaHabitClient.fetch(code: code)
+                await MainActor.run {
+                    guard let self, let webView else { return }
+                    do {
+                        _ = try VitaHabitStore.activate(code)
+                        VitaHabitStore.save(snapshot)
+                        WidgetCenter.shared.reloadTimelines(ofKind: "VitaHabitWidget")
+                        self.pushHabitState(to: webView, status: "Цель подключена")
+                    } catch {
+                        self.pushHabitState(to: webView, status: error.localizedDescription, isError: true)
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    guard let self, let webView else { return }
+                    self.pushHabitState(to: webView, status: error.localizedDescription, isError: true)
+                }
+            }
         }
     }
 
@@ -246,7 +282,7 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
                     let cached = VitaHabitStore.loadSnapshot() != nil
                     self.pushHabitState(
                         to: webView,
-                        status: cached ? "Нет связи — показаны сохранённые данные" : error.localizedDescription,
+                        status: cached ? "Нет сети — показываем сохранённые данные" : error.localizedDescription,
                         isError: !cached
                     )
                 }
@@ -295,7 +331,7 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         do {
             _ = try VitaGoalDotsStore.configure(mode: mode, goalStart: start, goalEnd: end)
             WidgetCenter.shared.reloadTimelines(ofKind: "VitaMonthDotsWidget")
-            pushGoalDotsState(to: webView, status: "Виджет обновлён")
+            pushGoalDotsState(to: webView, status: "Сохранено")
         } catch {
             pushGoalDotsState(
                 to: webView,
@@ -339,7 +375,7 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
             return
         }
         WidgetCenter.shared.reloadAllTimelines()
-        pushWidgetTheme(to: webView, status: "Тема применена", theme: theme)
+        pushWidgetTheme(to: webView, status: "Готово", theme: theme)
     }
 
     private func saveDotStyle(_ raw: String, in webView: WKWebView) {
@@ -348,7 +384,7 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
             return
         }
         WidgetCenter.shared.reloadAllTimelines()
-        pushWidgetTheme(to: webView, status: "Форма точек применена")
+        pushWidgetTheme(to: webView, status: "Готово")
     }
 
     private func saveDotColor(_ raw: String, rememberCustom: Bool, in webView: WKWebView) {
@@ -357,7 +393,7 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
             return
         }
         WidgetCenter.shared.reloadAllTimelines()
-        pushWidgetTheme(to: webView, status: "Цвет точек применён")
+        pushWidgetTheme(to: webView, status: "Готово")
     }
 
     private func pickWidgetPhoto() {

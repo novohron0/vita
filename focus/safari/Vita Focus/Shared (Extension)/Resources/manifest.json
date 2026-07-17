@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Vita Focus",
   "description": "UnTrap + SocialFocus в одном: Shorts, ленты, рекомендации — тишина в Safari.",
-  "version": "0.30.9",
+  "version": "0.30.10",
   "icons": {
     "16": "icons/icon16.png",
     "19": "icons/icon19.png",

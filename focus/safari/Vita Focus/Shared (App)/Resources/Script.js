@@ -25,9 +25,9 @@ function post(action) {
     webkit.messageHandlers.controller.postMessage(action);
 }
 
-document.querySelector(".open-preferences")?.addEventListener("click", () => post("open-preferences"));
-document.querySelector(".open-youtube")?.addEventListener("click", () => post("open-youtube"));
-document.querySelector(".open-settings")?.addEventListener("click", () => post("open-settings"));
+document.querySelectorAll(".open-preferences").forEach((button) => button.addEventListener("click", () => post("open-preferences")));
+document.querySelectorAll(".open-youtube").forEach((button) => button.addEventListener("click", () => post("open-youtube")));
+document.querySelectorAll(".open-settings").forEach((button) => button.addEventListener("click", () => post("open-settings")));
 
 function showDiagnostics(lines) {
     const box = document.getElementById("diagBody");
@@ -36,6 +36,28 @@ function showDiagnostics(lines) {
 }
 
 let goalDotsState = { mode: "month", start: "", end: "" };
+let goalDotsSavedState = { mode: "month", start: "", end: "" };
+
+function shortDate(value) {
+    if (!value) return "";
+    const date = new Date(value + "T00:00:00");
+    if (Number.isNaN(date.getTime())) return "";
+    return new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short" })
+        .format(date)
+        .replace(".", "");
+}
+
+function updateGoalDotsSummary() {
+    const summary = document.getElementById("goalDotsSummary");
+    if (!summary) return;
+    if (goalDotsSavedState.mode !== "goal") {
+        summary.textContent = "Месяц";
+        return;
+    }
+    const start = shortDate(goalDotsSavedState.start);
+    const end = shortDate(goalDotsSavedState.end);
+    summary.textContent = start && end ? `${start} — ${end}` : "Цель до 42 дней";
+}
 
 function maxGoalEnd(start) {
     if (!start) return "";
@@ -61,6 +83,7 @@ function showGoalDotsState(state) {
     if (state.mode === "month" || state.mode === "goal") goalDotsState.mode = state.mode;
     if (typeof state.start === "string") goalDotsState.start = state.start;
     if (typeof state.end === "string") goalDotsState.end = state.end;
+    if (!state.isError) goalDotsSavedState = { ...goalDotsState };
 
     const start = document.getElementById("goalStart");
     const end = document.getElementById("goalEnd");
@@ -71,6 +94,7 @@ function showGoalDotsState(state) {
         end.max = maxGoalEnd(start?.value || goalDotsState.start);
     }
     renderGoalDotsControls();
+    updateGoalDotsSummary();
 
     const status = document.getElementById("goalDotsStatus");
     if (status) {
@@ -78,6 +102,7 @@ function showGoalDotsState(state) {
         status.classList.toggle("is-error", Boolean(state.isError));
         status.classList.toggle("is-success", Boolean(state.status) && !state.isError);
     }
+    if (state.isError) document.getElementById("goalDotsDetails")?.setAttribute("open", "");
     const apply = document.getElementById("applyGoalDots");
     if (apply) apply.disabled = false;
 }
@@ -124,23 +149,54 @@ document.getElementById("applyGoalDots")?.addEventListener("click", () => {
             status.classList.add("is-error");
             status.classList.remove("is-success");
         }
+        document.getElementById("goalDotsDetails")?.setAttribute("open", "");
         return;
     }
     const apply = document.getElementById("applyGoalDots");
     if (apply) apply.disabled = true;
     if (status) {
-        status.textContent = "Применяем…";
+        status.textContent = "Сохраняем…";
         status.classList.remove("is-error", "is-success");
     }
     post({ action: "configure-goal-dots", mode: goalDotsState.mode, goalStart: start, goalEnd: end });
 });
 
+let habitConnectionState = { connected: false };
+let habitEditing = false;
+let habitConnectPending = false;
+
+function renderHabitPanels() {
+    const connected = Boolean(habitConnectionState.connected);
+    const empty = document.getElementById("habitEmpty");
+    const active = document.getElementById("habitConnected");
+    const form = document.getElementById("habitConnectForm");
+    if (empty) empty.hidden = connected || habitEditing;
+    if (active) active.hidden = !connected || habitEditing;
+    if (form) form.hidden = !habitEditing;
+    document.querySelectorAll(".cancel-habit-edit").forEach((button) => {
+        button.disabled = habitConnectPending;
+    });
+}
+
+function editHabit() {
+    habitEditing = true;
+    const input = document.getElementById("habitCode");
+    if (habitConnectionState.connected && input) input.value = "";
+    const status = document.getElementById("habitStatus");
+    if (status) {
+        status.textContent = "";
+        status.classList.remove("is-error", "is-success");
+    }
+    renderHabitPanels();
+    input?.focus();
+}
+
 function showHabitState(state) {
     if (!state || typeof state !== "object") return;
-    const empty = document.getElementById("habitEmpty");
-    const connected = document.getElementById("habitConnected");
-    if (empty) empty.hidden = Boolean(state.connected);
-    if (connected) connected.hidden = !state.connected;
+    habitConnectionState = { ...habitConnectionState, ...state };
+    if (state.status && !state.refreshing) habitConnectPending = false;
+    if (state.connected && state.status && !state.isError && !state.refreshing) habitEditing = false;
+    renderHabitPanels();
 
     const input = document.getElementById("habitCode");
     if (input && document.activeElement !== input && state.code) input.value = state.code;
@@ -164,13 +220,12 @@ function showHabitState(state) {
 
     const status = document.getElementById("habitStatus");
     if (status) {
-        status.textContent = state.status || (state.refreshing ? "Синхронизируем с vitadots.ru…" : "");
+        status.textContent = state.status || (state.refreshing ? "Обновляем…" : "");
         status.classList.toggle("is-error", Boolean(state.isError));
         status.classList.toggle("is-success", Boolean(state.status) && !state.isError);
     }
-    document.querySelectorAll(".refresh-habit").forEach((button) => { button.disabled = Boolean(state.refreshing); });
     const connect = document.getElementById("connectHabit");
-    if (connect) connect.disabled = false;
+    if (connect) connect.disabled = habitConnectPending || Boolean(state.refreshing);
 }
 
 function connectHabit() {
@@ -178,11 +233,13 @@ function connectHabit() {
     const value = document.getElementById("habitCode")?.value.trim() || "";
     const status = document.getElementById("habitStatus");
     if (!value) {
-        if (status) status.textContent = "Вставь ссылку или код цели";
+        if (status) status.textContent = "Вставь ссылку на цель";
         status?.classList.add("is-error");
         return;
     }
+    habitConnectPending = true;
     if (button) button.disabled = true;
+    document.querySelectorAll(".cancel-habit-edit").forEach((cancel) => { cancel.disabled = true; });
     if (status) {
         status.textContent = "Подключаем…";
         status.classList.remove("is-error", "is-success");
@@ -194,10 +251,20 @@ document.getElementById("connectHabit")?.addEventListener("click", connectHabit)
 document.getElementById("habitCode")?.addEventListener("keydown", (event) => {
     if (event.key === "Enter") connectHabit();
 });
+document.querySelectorAll(".edit-habit").forEach((button) => button.addEventListener("click", editHabit));
+document.querySelectorAll(".cancel-habit-edit").forEach((button) => {
+    button.addEventListener("click", () => {
+        habitEditing = false;
+        const status = document.getElementById("habitStatus");
+        if (status) {
+            status.textContent = "";
+            status.classList.remove("is-error", "is-success");
+        }
+        renderHabitPanels();
+    });
+});
 document.querySelectorAll(".open-goals").forEach((button) => button.addEventListener("click", () => post("open-goals")));
 document.querySelectorAll(".open-active-habit").forEach((button) => button.addEventListener("click", () => post("open-active-habit")));
-document.querySelectorAll(".refresh-habit").forEach((button) => button.addEventListener("click", () => post("refresh-habit")));
-document.querySelectorAll(".disconnect-habit").forEach((button) => button.addEventListener("click", () => post("disconnect-habit")));
 
 let widgetHasPhoto = false;
 let widgetThemeState = {
@@ -206,6 +273,28 @@ let widgetThemeState = {
     dotColor: "auto",
     customDotColor: "#A855F7"
 };
+
+const themeLabels = { graphite: "Графит", violet: "Vita", ocean: "Океан", ember: "Закат", photo: "Фото" };
+const dotStyleLabels = { goal: "Авто", circle: "Круг", soft: "Скруглённые", square: "Квадрат", diamond: "Ромб", heart: "Сердце", star: "Звезда", hex: "Соты" };
+const dotColorLabels = {
+    auto: "Авто",
+    "#A855F7": "Vita",
+    "#38BDF8": "Небо",
+    "#34D399": "Мята",
+    "#FACC15": "Солнце",
+    "#FB923C": "Огонь",
+    "#F472B6": "Розовый",
+    "#F8FAFC": "Белый"
+};
+
+function updateAppearanceSummary() {
+    const summary = document.getElementById("appearanceSummary");
+    if (!summary) return;
+    const theme = themeLabels[widgetThemeState.theme] || "Тема";
+    const style = dotStyleLabels[widgetThemeState.dotStyle] || "Форма";
+    const color = dotColorLabels[widgetThemeState.dotColor] || "Свой цвет";
+    summary.textContent = `${theme} · ${style} · ${color}`;
+}
 
 function normalizedDotColor(value) {
     if (typeof value !== "string") return null;
@@ -247,13 +336,15 @@ function showWidgetTheme(state) {
     const customPicker = document.getElementById("customDotColor");
     if (customPicker && document.activeElement !== customPicker) customPicker.value = widgetThemeState.customDotColor;
     const photoLabel = document.querySelector('.widget-theme[data-theme="photo"] span');
-    if (photoLabel) photoLabel.textContent = widgetHasPhoto ? "Сменить фотографию" : "Своя фотография";
+    if (photoLabel) photoLabel.textContent = widgetHasPhoto ? "Сменить фото" : "Своё фото";
+    updateAppearanceSummary();
     const status = document.getElementById("widgetThemeStatus");
     if (status) {
         status.textContent = state.status || "";
         status.classList.toggle("is-error", Boolean(state.isError));
         status.classList.toggle("is-success", Boolean(state.status) && !state.isError);
     }
+    if (state.isError) document.getElementById("appearanceDetails")?.setAttribute("open", "");
 }
 
 document.querySelectorAll(".widget-theme").forEach((button) => {
@@ -262,14 +353,14 @@ document.querySelectorAll(".widget-theme").forEach((button) => {
             post({ action: "pick-widget-photo" });
             return;
         }
-        showWidgetTheme({ theme: button.dataset.theme, status: "Применяем…" });
+        showWidgetTheme({ theme: button.dataset.theme, status: "Сохраняем…" });
         post({ action: "set-widget-theme", theme: button.dataset.theme });
     });
 });
 
 document.querySelectorAll(".dot-style").forEach((button) => {
     button.addEventListener("click", () => {
-        showWidgetTheme({ dotStyle: button.dataset.style, status: "Применяем…" });
+        showWidgetTheme({ dotStyle: button.dataset.style, status: "Сохраняем…" });
         post({ action: "set-dot-style", style: button.dataset.style });
     });
 });
@@ -278,7 +369,7 @@ document.querySelectorAll(".dot-color").forEach((button) => {
     button.addEventListener("click", () => {
         const color = normalizedDotColor(button.dataset.color);
         if (!color) return;
-        showWidgetTheme({ dotColor: color, status: "Применяем…" });
+        showWidgetTheme({ dotColor: color, status: "Сохраняем…" });
         post({ action: "set-dot-color", color, custom: false });
     });
 });
@@ -287,9 +378,8 @@ const customDotColor = document.getElementById("customDotColor");
 function applyCustomDotColor() {
     const color = normalizedDotColor(customDotColor.value);
     if (!color || color === "auto") return;
-    showWidgetTheme({ dotColor: color, customDotColor: color, status: "Применяем…" });
+    showWidgetTheme({ dotColor: color, customDotColor: color, status: "Сохраняем…" });
     post({ action: "set-dot-color", color, custom: true });
 }
 
 customDotColor?.addEventListener("change", applyCustomDotColor);
-document.getElementById("applyCustomDotColor")?.addEventListener("click", applyCustomDotColor);
