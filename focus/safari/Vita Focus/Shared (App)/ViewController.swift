@@ -27,6 +27,15 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
     private var appActiveObserver: NSObjectProtocol?
     private var impulseObserver: NSObjectProtocol?
     private var webContentReady = false
+    private var appInterfaceStyle: UIUserInterfaceStyle = .unspecified
+
+    override var preferredStatusBarStyle: UIStatusBarStyle {
+        switch appInterfaceStyle {
+        case .dark: return .lightContent
+        case .light: return .darkContent
+        default: return .default
+        }
+    }
 #endif
 
     override func viewDidLoad() {
@@ -38,7 +47,7 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            guard let self else { return }
+            guard let self, self.webContentReady else { return }
             self.refreshActiveHabit(in: self.webView, successStatus: "Цель подключена")
             _ = FocusDeepLinks.consumeGoalHighlight()
             self.highlightGoals(in: self.webView)
@@ -175,6 +184,10 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         }
         if let payload = message.body as? [String: Any],
            let action = payload["action"] as? String {
+            if action == "set-app-appearance" {
+                setAppAppearance(payload["mode"] as? String ?? "system")
+                return
+            }
             if action == "connect-habit" {
                 connectHabit(payload["value"] as? String ?? "", in: webView)
                 return
@@ -290,6 +303,17 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
     }
 
 #if os(iOS)
+    private func setAppAppearance(_ mode: String) {
+        switch mode {
+        case "light": appInterfaceStyle = .light
+        case "dark": appInterfaceStyle = .dark
+        default: appInterfaceStyle = .unspecified
+        }
+        view.overrideUserInterfaceStyle = appInterfaceStyle
+        view.window?.overrideUserInterfaceStyle = appInterfaceStyle
+        setNeedsStatusBarAppearanceUpdate()
+    }
+
     private func refreshExtensionState(in webView: WKWebView) {
         queryExtensionEnabled { enabled in
             DispatchQueue.main.async {

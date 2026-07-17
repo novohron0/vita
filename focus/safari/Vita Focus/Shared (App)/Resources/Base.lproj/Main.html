@@ -1,9 +1,10 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru" data-app-appearance="dark" data-app-appearance-mode="system">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'">
-    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Vita Focus</title>
     <link rel="stylesheet" href="../Style.css">
     <script src="../Script.js" defer></script>
 </head>
@@ -18,8 +19,14 @@
         <p class="lead platform-mac state-on">Расширение включено. Можно открывать сайты в Safari.</p>
         <p class="lead platform-mac state-off">Расширение выключено. Включи его в настройках Safari.</p>
 
-        <div class="flow platform-ios">
-            <section class="step-card focus-card">
+        <main class="flow platform-ios" id="appContent">
+            <section class="app-tab-intro" data-app-tab-content="focus" hidden>
+                <span>Меньше шума</span>
+                <h1>Focus</h1>
+                <p>Настрой спокойный Safari и возвращай внимание себе.</p>
+            </section>
+
+            <section class="step-card focus-card" data-app-tab-content="focus" hidden>
                 <div class="step-head">
                     <h2 class="step-title">Safari Focus</h2>
                     <span class="status-pill state-on"><i></i>Работает</span>
@@ -43,7 +50,13 @@
                 </div>
             </section>
 
-            <section id="goalsSection" class="step-card habit-settings">
+            <section class="app-tab-intro" data-app-tab-content="target" hidden>
+                <span>Куда ты идёшь</span>
+                <h1>Target</h1>
+                <p>Следи за целью, серией и прогрессом прямо на экране.</p>
+            </section>
+
+            <section id="goalsSection" class="step-card habit-settings" data-app-tab-content="target" hidden>
                 <div class="step-head">
                     <h2 class="step-title">Цель Vita</h2>
                 </div>
@@ -82,7 +95,27 @@
                 <p id="habitStatus" class="habit-status" role="status" aria-live="polite"></p>
             </section>
 
-            <details id="vitaIDDetails" class="step-card settings-card vita-id-settings">
+            <section class="app-tab-intro" data-app-tab-content="me" hidden>
+                <span>Твоё пространство</span>
+                <h1>Me</h1>
+                <p>Аккаунт, внешний вид и помощь — всё личное здесь.</p>
+            </section>
+
+            <section class="step-card app-theme-card" data-app-tab-content="me" hidden>
+                <div class="step-head">
+                    <div>
+                        <h2 class="step-title">Оформление приложения</h2>
+                        <p id="appThemeSummary" class="impulse-summary">Как на устройстве</p>
+                    </div>
+                </div>
+                <div class="app-theme-picker" role="group" aria-label="Тема приложения">
+                    <button type="button" data-app-theme="system" aria-pressed="true"><i aria-hidden="true">◐</i><span>Авто</span></button>
+                    <button type="button" data-app-theme="light" aria-pressed="false"><i aria-hidden="true">☀︎</i><span>Светлая</span></button>
+                    <button type="button" data-app-theme="dark" aria-pressed="false"><i aria-hidden="true">◒</i><span>Тёмная</span></button>
+                </div>
+            </section>
+
+            <details id="vitaIDDetails" class="step-card settings-card vita-id-settings" data-app-tab-content="me" hidden>
                 <summary>
                     <span><strong>Vita ID</strong><small id="vitaIDSummary">Подключи личный кабинет</small></span>
                     <i class="chevron" aria-hidden="true">›</i>
@@ -98,7 +131,13 @@
                 </div>
             </details>
 
-            <section class="step-card impulse-card">
+            <section class="app-tab-intro" data-app-tab-content="impulse">
+                <span>Следующий шаг</span>
+                <h1>Impulse</h1>
+                <p>Напоминания, которые помогают начать с самого малого.</p>
+            </section>
+
+            <section class="step-card impulse-card" data-app-tab-content="impulse">
                 <div class="step-head">
                     <div>
                         <h2 class="step-title">Vita Импульс</h2>
@@ -211,7 +250,7 @@
                 <p id="impulseStatus" class="habit-status" role="status" aria-live="polite"></p>
             </section>
 
-            <section class="step-card add-widget-card">
+            <section class="step-card add-widget-card" data-app-tab-content="target" hidden>
                 <div class="step-head">
                     <h2 class="step-title">Добавь виджет</h2>
                 </div>
@@ -221,9 +260,9 @@
                 <p class="step-hint">Выбери единственный виджет <b>Vita · цель</b>.</p>
             </section>
 
-            <details id="appearanceDetails" class="step-card settings-card widget-themes">
+            <details id="appearanceDetails" class="step-card settings-card widget-themes" data-app-tab-content="me" hidden>
                 <summary>
-                    <span><strong>Внешний вид</strong><small id="appearanceSummary">Графит · Авто · Авто</small></span>
+                    <span><strong>Оформление виджета</strong><small id="appearanceSummary">Графит · Авто · Авто</small></span>
                     <i class="chevron" aria-hidden="true">›</i>
                 </summary>
                 <div class="settings-content">
@@ -265,9 +304,9 @@
                 <p id="widgetThemeStatus" class="habit-status" role="status" aria-live="polite"></p>
                 </div>
             </details>
-        </div>
+        </main>
 
-        <details id="diag" class="step-card settings-card help-details platform-ios">
+        <details id="diag" class="step-card settings-card help-details platform-ios" data-app-tab-content="me" hidden>
             <summary>
                 <span><strong>Помощь</strong><small>Если что-то не работает</small></span>
                 <i class="chevron" aria-hidden="true">›</i>
@@ -280,7 +319,27 @@
         </details>
 
         <button type="button" class="primary platform-mac open-preferences">Открыть настройки Safari…</button>
-        <p id="appVersion" class="app-version">Версия —</p>
+        <p id="appVersion" class="app-version platform-ios" data-app-tab-content="me" hidden>Версия —</p>
+        <p id="appVersionMac" class="app-version platform-mac">Версия —</p>
+
+    <nav class="app-tab-bar platform-ios" aria-label="Разделы Vita Focus">
+        <button type="button" class="app-tab is-active" data-app-tab="impulse" aria-current="page">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.2 2.8 5.7 13h5.1l-1 8.2L18.3 10h-5.1z"/></svg>
+            <span>Impulse</span>
+        </button>
+        <button type="button" class="app-tab" data-app-tab="focus">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+            <span>Focus</span>
+        </button>
+        <button type="button" class="app-tab" data-app-tab="target">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1"/></svg>
+            <span>Target</span>
+        </button>
+        <button type="button" class="app-tab" data-app-tab="me">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.4"/><path d="M5.5 20c.7-4 2.9-6 6.5-6s5.8 2 6.5 6"/></svg>
+            <span>Me</span>
+        </button>
+    </nav>
     </div>
 
     <div id="impulseSheet" class="impulse-sheet-layer" hidden>

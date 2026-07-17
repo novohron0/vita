@@ -1,6 +1,8 @@
 function show(platform, enabled, useSettingsInsteadOfPreferences) {
     document.body.classList.add(`platform-${platform}`);
 
+    if (platform === "ios") syncNativeAppearance();
+
     if (useSettingsInsteadOfPreferences) {
         document.querySelector('.platform-mac.state-on').innerText =
             "Расширение включено. Можно открывать сайты в Safari.";
@@ -25,9 +27,123 @@ function post(action) {
     webkit.messageHandlers.controller.postMessage(action);
 }
 
+const appTabNames = ["impulse", "focus", "target", "me"];
+const appTabStorageKey = "vitaFocus.activeTab";
+const appAppearanceStorageKey = "vitaFocus.appAppearance";
+const appColorScheme = window.matchMedia("(prefers-color-scheme: dark)");
+const appReduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+function storedAppPreference(key, allowed, fallback) {
+    try {
+        const value = localStorage.getItem(key);
+        return allowed.includes(value) ? value : fallback;
+    } catch (_) {
+        return fallback;
+    }
+}
+
+function storeAppPreference(key, value) {
+    try { localStorage.setItem(key, value); } catch (_) { /* WebView storage can be unavailable. */ }
+}
+
+let activeAppTab = storedAppPreference(appTabStorageKey, appTabNames, "impulse");
+let appAppearanceMode = storedAppPreference(
+    appAppearanceStorageKey,
+    ["system", "light", "dark"],
+    "system"
+);
+
+function setAppTab(name, options = {}) {
+    const next = appTabNames.includes(name) ? name : "impulse";
+    const changed = activeAppTab !== next;
+    activeAppTab = next;
+    document.body.dataset.appTab = next;
+    document.querySelectorAll("[data-app-tab-content]").forEach((element) => {
+        element.hidden = element.dataset.appTabContent !== next;
+    });
+    document.querySelectorAll("[data-app-tab]").forEach((button) => {
+        const active = button.dataset.appTab === next;
+        button.classList.toggle("is-active", active);
+        if (active) button.setAttribute("aria-current", "page");
+        else button.removeAttribute("aria-current");
+    });
+    if (options.persist !== false) storeAppPreference(appTabStorageKey, next);
+    if (options.scroll !== false && (changed || options.scrollCurrent === true)) {
+        window.scrollTo({ top: 0, behavior: "auto" });
+    }
+}
+
+function resolvedAppAppearance(mode = appAppearanceMode) {
+    if (mode === "light" || mode === "dark") return mode;
+    return appColorScheme.matches ? "dark" : "light";
+}
+
+function syncNativeAppearance() {
+    if (!document.body.classList.contains("platform-ios")) return;
+    post({ action: "set-app-appearance", mode: appAppearanceMode });
+}
+
+function applyAppAppearance(mode, persist = true) {
+    appAppearanceMode = ["system", "light", "dark"].includes(mode) ? mode : "system";
+    const resolved = resolvedAppAppearance();
+    document.documentElement.dataset.appAppearance = resolved;
+    document.documentElement.dataset.appAppearanceMode = appAppearanceMode;
+    document.querySelectorAll("[data-app-theme]").forEach((button) => {
+        const active = button.dataset.appTheme === appAppearanceMode;
+        button.classList.toggle("is-active", active);
+        button.setAttribute("aria-pressed", String(active));
+    });
+    const summary = document.getElementById("appThemeSummary");
+    if (summary) {
+        const current = resolved === "dark" ? "тёмная" : "светлая";
+        summary.textContent = appAppearanceMode === "system"
+            ? `Как на устройстве · сейчас ${current}`
+            : (resolved === "dark" ? "Всегда тёмная" : "Всегда светлая");
+    }
+    if (persist) storeAppPreference(appAppearanceStorageKey, appAppearanceMode);
+    syncNativeAppearance();
+}
+
+document.querySelectorAll("[data-app-tab]").forEach((button) => {
+    button.addEventListener("click", () => {
+        const current = button.dataset.appTab === activeAppTab;
+        setAppTab(button.dataset.appTab, { scrollCurrent: current });
+    });
+});
+
+document.querySelector(".app-tab-bar")?.addEventListener("keydown", (event) => {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    const current = Math.max(0, appTabNames.indexOf(activeAppTab));
+    let index = current;
+    if (event.key === "ArrowLeft") index = (current - 1 + appTabNames.length) % appTabNames.length;
+    if (event.key === "ArrowRight") index = (current + 1) % appTabNames.length;
+    if (event.key === "Home") index = 0;
+    if (event.key === "End") index = appTabNames.length - 1;
+    event.preventDefault();
+    const button = document.querySelector(`[data-app-tab="${appTabNames[index]}"]`);
+    setAppTab(appTabNames[index]);
+    button?.focus();
+});
+
+document.querySelectorAll("[data-app-theme]").forEach((button) => {
+    button.addEventListener("click", () => applyAppAppearance(button.dataset.appTheme));
+});
+
+const handleAppColorSchemeChange = () => {
+    if (appAppearanceMode === "system") applyAppAppearance("system", false);
+};
+if (typeof appColorScheme.addEventListener === "function") {
+    appColorScheme.addEventListener("change", handleAppColorSchemeChange);
+} else if (typeof appColorScheme.addListener === "function") {
+    appColorScheme.addListener(handleAppColorSchemeChange);
+}
+
+applyAppAppearance(appAppearanceMode, false);
+setAppTab(activeAppTab, { persist: false, scroll: false });
+
 function showAppVersion(value) {
-    const label = document.getElementById("appVersion");
-    if (label && typeof value === "string") label.textContent = value;
+    if (typeof value !== "string") return;
+    document.querySelectorAll(".app-version").forEach((label) => { label.textContent = value; });
 }
 
 document.querySelectorAll(".open-preferences").forEach((button) => button.addEventListener("click", () => post("open-preferences")));
@@ -43,9 +159,12 @@ function showDiagnostics(lines) {
 function showGoalsSection() {
     const section = document.getElementById("goalsSection");
     if (!section) return;
-    section.scrollIntoView({ behavior: "smooth", block: "center" });
-    section.classList.remove("is-deep-link-target");
-    requestAnimationFrame(() => section.classList.add("is-deep-link-target"));
+    setAppTab("target", { scroll: false });
+    requestAnimationFrame(() => {
+        section.scrollIntoView({ behavior: appReduceMotion.matches ? "auto" : "smooth", block: "center" });
+        section.classList.remove("is-deep-link-target");
+        requestAnimationFrame(() => section.classList.add("is-deep-link-target"));
+    });
     setTimeout(() => section.classList.remove("is-deep-link-target"), 2200);
 }
 
@@ -908,6 +1027,7 @@ function showImpulseState(state) {
 
     const pending = pendingImpulseAction(state.pendingAction);
     if (pending && (pending.type === "accept" || pending.type === "snooze")) {
+        setAppTab("impulse", { scroll: false });
         const item = impulseItem(pending.id) || (typeof state.pendingAction === "object" ? state.pendingAction.item : null);
         openImpulseSheet(item, pending.type);
         const snoozeUntil = typeof state.pendingAction === "object" ? state.pendingAction.snoozeUntil : null;

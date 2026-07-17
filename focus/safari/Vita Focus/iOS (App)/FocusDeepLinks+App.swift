@@ -24,6 +24,8 @@ extension FocusDeepLinks {
     static func handle(_ incoming: URL) {
         if ["vita", "vitafocus"].contains(incoming.scheme?.lowercased() ?? ""),
            incoming.host?.lowercased() == "home" {
+            UserDefaults.standard.set(true, forKey: pendingGoalHighlightKey)
+            NotificationCenter.default.post(name: .vitaActiveHabitChanged, object: nil)
             return
         }
         if isGoalDeepLink(incoming) {
