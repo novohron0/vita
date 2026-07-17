@@ -82,6 +82,7 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
 #endif
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        pushAppVersion(to: webView)
 #if os(iOS)
         refreshExtensionState(in: webView)
         pushHabitState(to: webView, isRefreshing: VitaHabitStore.activeCode != nil)
@@ -107,6 +108,15 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
             }
         }
 #endif
+    }
+
+    private func pushAppVersion(to webView: WKWebView) {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"
+        let label = "Версия \(version) (\(build))"
+        guard let data = try? JSONSerialization.data(withJSONObject: label),
+              let json = String(data: data, encoding: .utf8) else { return }
+        webView.evaluateJavaScript("showAppVersion(\(json))", completionHandler: nil)
     }
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {

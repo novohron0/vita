@@ -25,6 +25,11 @@ function post(action) {
     webkit.messageHandlers.controller.postMessage(action);
 }
 
+function showAppVersion(value) {
+    const label = document.getElementById("appVersion");
+    if (label && typeof value === "string") label.textContent = value;
+}
+
 document.querySelectorAll(".open-preferences").forEach((button) => button.addEventListener("click", () => post("open-preferences")));
 document.querySelectorAll(".open-youtube").forEach((button) => button.addEventListener("click", () => post("open-youtube")));
 document.querySelectorAll(".open-settings").forEach((button) => button.addEventListener("click", () => post("open-settings")));
