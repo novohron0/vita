@@ -114,7 +114,7 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"
         let label = "Версия \(version) (\(build))"
-        guard let data = try? JSONSerialization.data(withJSONObject: label),
+        guard let data = try? JSONSerialization.data(withJSONObject: label, options: [.fragmentsAllowed]),
               let json = String(data: data, encoding: .utf8) else { return }
         webView.evaluateJavaScript("showAppVersion(\(json))", completionHandler: nil)
     }
