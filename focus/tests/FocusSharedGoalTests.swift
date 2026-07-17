@@ -19,6 +19,8 @@ struct FocusSharedGoalTests {
         try testImpulseLegacyMigration()
         try testImpulseLifecycle()
         try testImpulseRecurrence()
+        try testImpulseDeadlineAlertValidation()
+        try testImpulseFolders()
         testImpulsePendingAction()
         testVitaProfileCodes()
         print("FocusSharedGoalTests: \(checks) checks passed")
@@ -219,6 +221,11 @@ struct FocusSharedGoalTests {
             let reason: String
             let firstStep: String
             let fireDate: Date
+            let deadline: Date?
+            let durationMinutes: Int
+            let focusMode: VitaImpulseFocusMode
+            let status: VitaImpulseStatus
+            let timerEndDate: Date?
             let isEnabled: Bool
         }
 
@@ -238,11 +245,18 @@ struct FocusSharedGoalTests {
 
         defaults.removeObject(forKey: collectionKey)
         let fireDate = try date("2026-08-01")
+        let deadline = fireDate.addingTimeInterval(3600)
+        let timerEndDate = fireDate.addingTimeInterval(900)
         let data = try JSONEncoder().encode(LegacyImpulse(
             title: "Старый импульс",
             reason: "Важно",
             firstStep: "Начать",
             fireDate: fireDate,
+            deadline: deadline,
+            durationMinutes: 25,
+            focusMode: .reading,
+            status: .running,
+            timerEndDate: timerEndDate,
             isEnabled: true
         ))
         defaults.set(data, forKey: legacyKey)
@@ -250,9 +264,12 @@ struct FocusSharedGoalTests {
         let migrated = VitaImpulseStore.all()
         expect(migrated.count == 1, "a legacy single impulse must migrate into the collection")
         expect(!migrated[0].id.isEmpty, "legacy migration must assign a stable identifier")
-        expect(migrated[0].durationMinutes == 15, "legacy reminders must receive safe duration defaults")
+        expect(migrated[0].deadlineAlertDate == deadline, "a legacy deadline must also become its alert date")
+        expect(!migrated[0].usesAlarm && migrated[0].folderID == nil, "legacy reminders must default new alarm and folder fields safely")
+        expect(migrated[0].durationMinutes == 25 && migrated[0].focusMode == .reading, "legacy timer and focus settings must survive migration")
+        expect(migrated[0].timerEndDate == timerEndDate && migrated[0].status == .running, "legacy running timers must not be discarded")
         expect(migrated[0].recurrenceAnchorDate == fireDate, "legacy reminders must anchor recurrence to their fire date")
-        expect(migrated[0].priority == .none && migrated[0].status == .scheduled, "legacy reminders must receive enum defaults")
+        expect(migrated[0].priority == .none, "legacy reminders must receive safe defaults for absent enum fields")
         expect(VitaImpulseStore.all()[0].id == migrated[0].id, "the migrated identifier must remain stable")
         expect(defaults.data(forKey: legacyKey) == nil, "the legacy storage key must be retired after migration")
     }
@@ -331,7 +348,7 @@ struct FocusSharedGoalTests {
         )
         expect(rescheduled.status == .scheduled && rescheduled.acceptedAt == nil, "changing reminder time must re-arm an accepted impulse")
 
-        let snoozed = try VitaImpulseStore.snooze(id: impulse.id, until: deadline, now: now.addingTimeInterval(80))
+        let snoozed = try VitaImpulseStore.snooze(id: impulse.id, until: deadline.addingTimeInterval(-20), now: now.addingTimeInterval(80))
         expect(snoozed.status == .snoozed && snoozed.snoozeCount == 1, "snooze must move the reminder and count interruptions")
         let adjustedSnooze = try VitaImpulseStore.snooze(
             id: impulse.id,
@@ -339,6 +356,13 @@ struct FocusSharedGoalTests {
             now: now.addingTimeInterval(81)
         )
         expect(adjustedSnooze.snoozeCount == 1, "choosing an exact time after the notification fallback must not double-count a snooze")
+        _ = try VitaImpulseStore.upsert(adjustedSnooze, now: now.addingTimeInterval(81))
+        do {
+            _ = try VitaImpulseStore.snooze(id: impulse.id, until: deadline, now: now)
+            fail("snooze at the deadline must be rejected")
+        } catch VitaImpulseError.invalidSnooze {
+            checks += 1
+        }
         do {
             _ = try VitaImpulseStore.snooze(id: impulse.id, until: deadline.addingTimeInterval(1), now: now)
             fail("snooze after the deadline must be rejected")
@@ -440,6 +464,211 @@ struct FocusSharedGoalTests {
         expect(calendar.component(.weekday, from: next.fireDate) == 2, "weekday recurrence must skip the weekend")
         expect(next.deadline?.timeIntervalSince(next.fireDate) == deadline.timeIntervalSince(fireDate), "recurrence must advance its deadline with the reminder")
         expect(next.snoozeCount == 0 && next.acceptedAt == nil, "a new recurrence must reset transient state")
+        expect(next.deadlineAlertDate?.timeIntervalSince(next.fireDate) == deadline.timeIntervalSince(fireDate), "recurrence must advance the deadline alert too")
+    }
+
+    private static func testImpulseDeadlineAlertValidation() throws {
+        let now = try date("2026-07-17")
+        let fireDate = now.addingTimeInterval(60)
+        let deadline = now.addingTimeInterval(600)
+        let impulse = try VitaImpulseStore.save(
+            title: "Завершить отчёт",
+            reason: "Освободить вечер",
+            firstStep: "Открыть документ",
+            notes: "",
+            fireDate: fireDate,
+            deadline: deadline,
+            folderID: nil,
+            deadlineAlertDate: deadline,
+            usesAlarm: true,
+            now: now
+        )
+        defer { _ = VitaImpulseStore.delete(id: impulse.id) }
+        expect(impulse.deadlineAlertDate == deadline && impulse.usesAlarm, "rich save must persist deadline alerts and alarm preference")
+
+        let encoded = try JSONEncoder().encode(VitaImpulse(
+            title: "Без сигнала дедлайна",
+            reason: "",
+            firstStep: "Начать",
+            fireDate: fireDate,
+            deadline: deadline,
+            deadlineAlertDate: nil
+        ))
+        let decoded = try JSONDecoder().decode(VitaImpulse.self, from: encoded)
+        expect(decoded.deadlineAlertDate == nil, "an explicitly absent modern deadline alert must stay absent")
+
+        do {
+            _ = try VitaImpulseStore.save(
+                title: "Без дедлайна",
+                reason: "",
+                firstStep: "Начать",
+                notes: "",
+                fireDate: fireDate,
+                folderID: nil,
+                deadlineAlertDate: deadline,
+                usesAlarm: false,
+                now: now
+            )
+            fail("a deadline alert without a deadline must be rejected")
+        } catch VitaImpulseError.invalidDeadlineAlert {
+            checks += 1
+        }
+        do {
+            _ = try VitaImpulseStore.save(
+                title: "Слишком ранний сигнал",
+                reason: "",
+                firstStep: "Начать",
+                notes: "",
+                fireDate: fireDate,
+                deadline: deadline,
+                folderID: nil,
+                deadlineAlertDate: fireDate,
+                usesAlarm: false,
+                now: now
+            )
+            fail("a deadline alert at the first reminder must be rejected")
+        } catch VitaImpulseError.invalidDeadlineAlert {
+            checks += 1
+        }
+        do {
+            _ = try VitaImpulseStore.save(
+                title: "Поздний сигнал",
+                reason: "",
+                firstStep: "Начать",
+                notes: "",
+                fireDate: fireDate,
+                deadline: deadline,
+                folderID: nil,
+                deadlineAlertDate: deadline.addingTimeInterval(1),
+                usesAlarm: false,
+                now: now
+            )
+            fail("a deadline alert after the deadline must be rejected")
+        } catch VitaImpulseError.invalidDeadlineAlert {
+            checks += 1
+        }
+        let editedExpired = try VitaImpulseStore.save(
+            id: impulse.id,
+            title: "Завершить отчёт — уточнено",
+            reason: impulse.reason,
+            firstStep: impulse.firstStep,
+            notes: impulse.notes,
+            fireDate: fireDate,
+            deadline: deadline,
+            folderID: nil,
+            deadlineAlertDate: deadline,
+            usesAlarm: true,
+            now: deadline.addingTimeInterval(10)
+        )
+        expect(
+            editedExpired.id == impulse.id
+                && editedExpired.fireDate == fireDate
+                && editedExpired.deadlineAlertDate == deadline,
+            "editing an expired reminder without changing its dates must stay possible"
+        )
+        do {
+            _ = try VitaImpulseStore.save(
+                id: impulse.id,
+                title: editedExpired.title,
+                reason: editedExpired.reason,
+                firstStep: editedExpired.firstStep,
+                notes: editedExpired.notes,
+                fireDate: fireDate,
+                deadline: deadline,
+                folderID: nil,
+                deadlineAlertDate: deadline.addingTimeInterval(-1),
+                usesAlarm: true,
+                now: deadline.addingTimeInterval(10)
+            )
+            fail("a changed deadline alert in the past must be rejected while editing")
+        } catch VitaImpulseError.invalidDeadlineAlert {
+            checks += 1
+        }
+    }
+
+    private static func testImpulseFolders() throws {
+        guard let defaults = VitaImpulseFolderStore.defaults else {
+            fail("the impulse folder App Group defaults must be available")
+        }
+        let key = "vitaImpulseFolders"
+        let oldFolders = defaults.data(forKey: key)
+        defer {
+            if let oldFolders { defaults.set(oldFolders, forKey: key) }
+            else { defaults.removeObject(forKey: key) }
+        }
+        defaults.removeObject(forKey: key)
+
+        let now = try date("2026-07-17")
+        let folder = try VitaImpulseFolderStore.create(name: "  Работа  ", now: now)
+        expect(folder.name == "Работа", "folder names must be trimmed")
+        expect(VitaImpulseFolderStore.list() == [folder], "created folders must persist in the App Group")
+        do {
+            _ = try VitaImpulseFolderStore.create(name: "работа", now: now)
+            fail("folder names must be unique ignoring case")
+        } catch VitaImpulseFolderError.duplicateName {
+            checks += 1
+        }
+        let renamed = try VitaImpulseFolderStore.rename(id: folder.id, name: "  Чтение ")
+        expect(renamed.name == "Чтение" && renamed.createdAt == folder.createdAt, "renaming must preserve folder identity and creation time")
+        do {
+            _ = try VitaImpulseFolderStore.rename(id: folder.id, name: "  ")
+            fail("empty folder names must be rejected while renaming")
+        } catch VitaImpulseFolderError.missingName {
+            checks += 1
+        }
+
+        let fireDate = now.addingTimeInterval(60)
+        let deadline = now.addingTimeInterval(600)
+        let impulse = try VitaImpulseStore.save(
+            title: "Прочитать главу",
+            reason: "Развитие",
+            firstStep: "Открыть книгу",
+            notes: "",
+            fireDate: fireDate,
+            deadline: deadline,
+            folderID: folder.id,
+            deadlineAlertDate: deadline,
+            usesAlarm: true,
+            focusMode: .reading,
+            now: now
+        )
+        defer { _ = VitaImpulseStore.delete(id: impulse.id) }
+        expect(impulse.folderID == folder.id, "rich save must attach an impulse to a folder")
+        let editedByLegacyAPI = try VitaImpulseStore.save(
+            id: impulse.id,
+            title: "Прочитать две главы",
+            reason: impulse.reason,
+            firstStep: impulse.firstStep,
+            notes: impulse.notes,
+            fireDate: impulse.fireDate,
+            deadline: impulse.deadline,
+            durationMinutes: impulse.durationMinutes,
+            priority: impulse.priority,
+            repeatRule: impulse.repeatRule,
+            focusMode: impulse.focusMode,
+            now: now
+        )
+        expect(editedByLegacyAPI.folderID == folder.id && editedByLegacyAPI.usesAlarm, "the old rich save API must preserve new fields while editing")
+        expect(editedByLegacyAPI.deadlineAlertDate == deadline, "the old rich save API must preserve the deadline alert")
+
+        expect(VitaImpulseFolderStore.delete(id: folder.id), "deleting an existing folder must succeed")
+        expect(VitaImpulseFolderStore.list().isEmpty, "deleted folders must leave the folder list")
+        expect(VitaImpulseStore.load(id: impulse.id)?.folderID == nil, "deleting a folder must unlink its impulses")
+        var staleImpulse = impulse
+        staleImpulse.folderID = folder.id
+        do {
+            _ = try VitaImpulseStore.upsert(staleImpulse)
+            fail("an impulse must not restore a deleted folder reference")
+        } catch VitaImpulseError.invalidFolder {
+            checks += 1
+        }
+        expect(!VitaImpulseFolderStore.delete(id: folder.id), "deleting an absent folder must be a no-op")
+        do {
+            _ = try VitaImpulseFolderStore.rename(id: folder.id, name: "Несуществующая")
+            fail("renaming an absent folder must fail")
+        } catch VitaImpulseFolderError.notFound {
+            checks += 1
+        }
     }
 
     private static func testImpulsePendingAction() {

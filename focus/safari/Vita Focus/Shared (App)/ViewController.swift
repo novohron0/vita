@@ -217,12 +217,29 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
                     firstStep: payload["firstStep"] as? String ?? "",
                     fireDateRaw: payload["fireDate"] as? String ?? "",
                     deadlineRaw: payload["deadline"] as? String ?? "",
-                    durationMinutes: (payload["durationMinutes"] as? NSNumber)?.intValue ?? 15,
+                    deadlineAlertRaw: payload["deadlineAlertDate"] as? String ?? "",
+                    folderID: payload["folderID"] as? String,
+                    usesAlarm: payload["usesAlarm"] as? Bool ?? false,
                     priorityRaw: payload["priority"] as? String ?? "none",
                     repeatRaw: payload["repeatRule"] as? String ?? "none",
-                    focusModeRaw: payload["focusMode"] as? String ?? "none",
                     in: webView
                 )
+                return
+            }
+            if action == "create-impulse-folder" {
+                createImpulseFolder(payload["name"] as? String ?? "", in: webView)
+                return
+            }
+            if action == "rename-impulse-folder" {
+                renameImpulseFolder(
+                    payload["folderID"] as? String ?? "",
+                    name: payload["name"] as? String ?? "",
+                    in: webView
+                )
+                return
+            }
+            if action == "delete-impulse-folder" {
+                deleteImpulseFolder(payload["folderID"] as? String ?? "", in: webView)
                 return
             }
             if action == "accept-impulse" {
@@ -237,29 +254,12 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
                 )
                 return
             }
-            if action == "start-impulse-timer" {
-                startImpulseTimer(
-                    payload["id"] as? String ?? "",
-                    durationMinutes: (payload["durationMinutes"] as? NSNumber)?.intValue,
-                    focusModeRaw: payload["focusMode"] as? String,
-                    in: webView
-                )
-                return
-            }
-            if action == "cancel-impulse-timer" {
-                cancelImpulseTimer(payload["id"] as? String ?? "", in: webView)
-                return
-            }
             if action == "complete-impulse" {
                 completeImpulse(payload["id"] as? String ?? "", in: webView)
                 return
             }
             if action == "delete-impulse" {
                 deleteImpulse(payload["id"] as? String ?? "", in: webView)
-                return
-            }
-            if action == "open-focus-shortcuts" {
-                openFocusShortcuts()
                 return
             }
             if action == "connect-profile" {
@@ -587,19 +587,31 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         firstStep: String,
         fireDateRaw: String,
         deadlineRaw: String,
-        durationMinutes: Int,
+        deadlineAlertRaw: String,
+        folderID: String?,
+        usesAlarm: Bool,
         priorityRaw: String,
         repeatRaw: String,
-        focusModeRaw: String,
         in webView: WKWebView
     ) {
         guard let fireDate = impulseDate(from: fireDateRaw) else {
-            pushImpulseState(to: webView, status: VitaImpulseError.invalidDate.localizedDescription, isError: true)
+            pushImpulseState(to: webView, status: VitaImpulseError.invalidDate.localizedDescription, isError: true, saveResult: true)
             return
         }
         let deadline = deadlineRaw.isEmpty ? nil : impulseDate(from: deadlineRaw)
         if !deadlineRaw.isEmpty, deadline == nil {
-            pushImpulseState(to: webView, status: "Проверь дату дедлайна", isError: true)
+            pushImpulseState(to: webView, status: "Проверь дату дедлайна", isError: true, saveResult: true)
+            return
+        }
+        let deadlineAlert = deadlineAlertRaw.isEmpty ? nil : impulseDate(from: deadlineAlertRaw)
+        if !deadlineAlertRaw.isEmpty, deadlineAlert == nil {
+            pushImpulseState(to: webView, status: "Проверь время предупреждения", isError: true, saveResult: true)
+            return
+        }
+        let normalizedFolderID = folderID?.isEmpty == false ? folderID : nil
+        if let normalizedFolderID,
+           !VitaImpulseFolderStore.list().contains(where: { $0.id == normalizedFolderID }) {
+            pushImpulseState(to: webView, status: "Папка не найдена", isError: true, saveResult: true)
             return
         }
         do {
@@ -611,39 +623,157 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
                 notes: notes,
                 fireDate: fireDate,
                 deadline: deadline,
-                durationMinutes: durationMinutes,
+                folderID: normalizedFolderID,
+                deadlineAlertDate: deadlineAlert,
+                usesAlarm: usesAlarm && VitaImpulseAlarms.isSupported,
+                durationMinutes: 15,
                 priority: VitaImpulsePriority(rawValue: priorityRaw) ?? .none,
                 repeatRule: VitaImpulseRepeat(rawValue: repeatRaw) ?? .none,
-                focusMode: VitaImpulseFocusMode(rawValue: focusModeRaw) ?? .none
+                focusMode: .none
             )
             VitaImpulseNotifications.requestAccess { [weak self, weak webView] granted in
                 guard let self, let webView else { return }
-                guard granted else {
+                guard granted || impulse.usesAlarm else {
                     _ = try? VitaImpulseStore.disable(id: impulse.id)
+                    VitaImpulseDelivery.cancelAll(for: impulse.id)
                     DispatchQueue.main.async {
-                        self.pushImpulseState(to: webView, status: "Разреши уведомления Vita Focus в настройках", isError: true)
+                        self.pushImpulseState(
+                            to: webView,
+                            status: "Разреши уведомления Vita Focus в настройках",
+                            isError: true,
+                            saveResult: true,
+                            savedImpulseID: impulse.id
+                        )
                     }
                     return
                 }
-                VitaImpulseNotifications.schedule(impulse) { error in
-                    DispatchQueue.main.async {
-                        if let error {
-                            self.pushImpulseState(to: webView, status: error.localizedDescription, isError: true)
-                        } else {
-                            self.pushImpulseState(to: webView, status: "Импульс сохранён")
-                        }
-                    }
-                }
+                self.deliverSavedImpulse(
+                    impulse,
+                    notificationsGranted: granted,
+                    in: webView
+                )
             }
         } catch {
-            pushImpulseState(to: webView, status: error.localizedDescription, isError: true)
+            pushImpulseState(to: webView, status: error.localizedDescription, isError: true, saveResult: true)
+        }
+    }
+
+    private func createImpulseFolder(_ name: String, in webView: WKWebView) {
+        do {
+            let folder = try VitaImpulseFolderStore.create(name: name)
+            pushImpulseState(
+                to: webView,
+                folderStatus: "Папка создана",
+                selectedFolderID: folder.id
+            )
+        } catch {
+            pushImpulseState(
+                to: webView,
+                folderStatus: error.localizedDescription,
+                folderIsError: true
+            )
+        }
+    }
+
+    private func renameImpulseFolder(_ id: String, name: String, in webView: WKWebView) {
+        do {
+            _ = try VitaImpulseFolderStore.rename(id: id, name: name)
+            pushImpulseState(to: webView, folderStatus: "Папка переименована")
+        } catch {
+            pushImpulseState(
+                to: webView,
+                folderStatus: error.localizedDescription,
+                folderIsError: true
+            )
+        }
+    }
+
+    private func deleteImpulseFolder(_ id: String, in webView: WKWebView) {
+        guard VitaImpulseFolderStore.delete(id: id) else {
+            pushImpulseState(to: webView, folderStatus: "Папка не найдена", folderIsError: true)
+            return
+        }
+        pushImpulseState(
+            to: webView,
+            folderStatus: "Папка удалена · напоминания сохранены"
+        )
+    }
+
+    private func deliverSavedImpulse(
+        _ impulse: VitaImpulse,
+        notificationsGranted: Bool,
+        in webView: WKWebView
+    ) {
+        VitaImpulseDelivery.schedule(
+            impulse,
+            includeLocalNotifications: notificationsGranted
+        ) { [weak self, weak webView] error in
+            DispatchQueue.main.async {
+                guard let self, let webView else { return }
+                if error is VitaImpulseDeliveryError {
+                    guard notificationsGranted else {
+                        _ = try? VitaImpulseStore.disable(id: impulse.id)
+                        VitaImpulseDelivery.cancelAll(for: impulse.id)
+                        self.pushImpulseState(
+                            to: webView,
+                            status: "Будильник не разрешён, а обычные уведомления выключены",
+                            isError: true,
+                            saveResult: true,
+                            savedImpulseID: impulse.id
+                        )
+                        return
+                    }
+                    if var fallback = VitaImpulseStore.load(id: impulse.id) {
+                        fallback.usesAlarm = false
+                        _ = try? VitaImpulseStore.upsert(fallback)
+                    }
+                    self.pushImpulseState(
+                        to: webView,
+                        status: "Будильник недоступен — сохранили обычное уведомление",
+                        saveResult: true,
+                        savedImpulseID: impulse.id
+                    )
+                    return
+                }
+                if let error {
+                    if impulse.usesAlarm && !notificationsGranted {
+                        _ = try? VitaImpulseStore.disable(id: impulse.id)
+                        VitaImpulseDelivery.cancelAll(for: impulse.id)
+                    }
+                    self.pushImpulseState(
+                        to: webView,
+                        status: error.localizedDescription,
+                        isError: true,
+                        saveResult: true,
+                        savedImpulseID: impulse.id
+                    )
+                    return
+                }
+                let status: String
+                let alarmScheduled = impulse.usesAlarm
+                    && (impulse.status == .scheduled || impulse.status == .snoozed)
+                    && impulse.fireDate.timeIntervalSinceNow >= 1
+                if alarmScheduled {
+                    status = !notificationsGranted && impulse.deadlineAlertDate != nil
+                        ? "Будильник сохранён · предупреждение дедлайна требует уведомлений"
+                        : "Будильник сохранён"
+                } else {
+                    status = "Импульс сохранён"
+                }
+                self.pushImpulseState(
+                    to: webView,
+                    status: status,
+                    saveResult: true,
+                    savedImpulseID: impulse.id
+                )
+            }
         }
     }
 
     private func acceptImpulse(_ id: String, in webView: WKWebView) {
         do {
             _ = try VitaImpulseStore.accept(id: id)
-            VitaImpulseNotifications.cancelReminder(for: id)
+            VitaImpulseDelivery.cancelReminder(for: id)
             VitaImpulsePendingActionStore.set(type: .accept, impulseID: id)
             pushImpulseState(to: webView)
         } catch {
@@ -659,73 +789,23 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         do {
             let impulse = try VitaImpulseStore.snooze(id: id, until: until)
             VitaImpulsePendingActionStore.clear()
-            VitaImpulseNotifications.schedule(impulse) { [weak self, weak webView] error in
+            VitaImpulseDelivery.schedule(impulse) { [weak self, weak webView] error in
                 DispatchQueue.main.async {
                     guard let self, let webView else { return }
-                    self.pushImpulseState(
-                        to: webView,
-                        status: error == nil ? "Вернёмся к этому в выбранное время" : error?.localizedDescription,
-                        isError: error != nil
-                    )
-                }
-            }
-        } catch {
-            pushImpulseState(to: webView, status: error.localizedDescription, isError: true)
-        }
-    }
-
-    private func startImpulseTimer(
-        _ id: String,
-        durationMinutes: Int?,
-        focusModeRaw: String?,
-        in webView: WKWebView
-    ) {
-        do {
-            let previousTimerIDs = VitaImpulseStore.all()
-                .filter { $0.id != id && ($0.timerEndDate != nil || $0.status == .running) }
-                .map(\.id)
-            let running = try VitaImpulseStore.startTimer(
-                id: id,
-                durationMinutes: durationMinutes,
-                focusMode: focusModeRaw.flatMap(VitaImpulseFocusMode.init(rawValue:))
-            )
-            for timerID in previousTimerIDs {
-                VitaImpulseNotifications.cancelTimer(for: timerID)
-            }
-            VitaImpulseNotifications.cancelReminder(for: id)
-            VitaImpulsePendingActionStore.clear()
-            VitaImpulseNotifications.scheduleTimer(running) { [weak self, weak webView] error in
-                DispatchQueue.main.async {
-                    guard let self, let webView else { return }
-                    let current = VitaImpulseStore.load(id: id)
-                    let isCurrent = current?.status == .running
-                        && current?.timerEndDate == running.timerEndDate
-                    guard isCurrent else {
-                        let hasNewerTimer = current?.status == .running
-                            && current?.timerEndDate != running.timerEndDate
-                        if !hasNewerTimer {
-                            VitaImpulseNotifications.cancelTimer(for: id)
-                        }
-                        self.pushImpulseState(to: webView)
-                        return
+                    if error is VitaImpulseDeliveryError,
+                       var fallback = VitaImpulseStore.load(id: impulse.id) {
+                        fallback.usesAlarm = false
+                        _ = try? VitaImpulseStore.upsert(fallback)
                     }
                     self.pushImpulseState(
                         to: webView,
-                        status: error == nil ? "Фокус запущен на \(running.durationMinutes) минут" : error?.localizedDescription,
-                        isError: error != nil
+                        status: error is VitaImpulseDeliveryError
+                            ? "Будильник недоступен — вернём обычным уведомлением"
+                            : (error == nil ? "Вернёмся к этому в выбранное время" : error?.localizedDescription),
+                        isError: error != nil && !(error is VitaImpulseDeliveryError)
                     )
                 }
             }
-        } catch {
-            pushImpulseState(to: webView, status: error.localizedDescription, isError: true)
-        }
-    }
-
-    private func cancelImpulseTimer(_ id: String, in webView: WKWebView) {
-        do {
-            _ = try VitaImpulseStore.cancelTimer(id: id)
-            VitaImpulseNotifications.cancelTimer(for: id)
-            pushImpulseState(to: webView, status: "Таймер остановлен")
         } catch {
             pushImpulseState(to: webView, status: error.localizedDescription, isError: true)
         }
@@ -735,15 +815,22 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         do {
             let impulse = try VitaImpulseStore.complete(id: id)
             VitaImpulsePendingActionStore.clear()
-            VitaImpulseNotifications.cancelAll(for: id)
+            VitaImpulseDelivery.cancelAll(for: id)
             if impulse.isEnabled && impulse.status != .completed {
-                VitaImpulseNotifications.schedule(impulse) { [weak self, weak webView] error in
+                VitaImpulseDelivery.schedule(impulse) { [weak self, weak webView] error in
                     DispatchQueue.main.async {
                         guard let self, let webView else { return }
+                        if error is VitaImpulseDeliveryError,
+                           var fallback = VitaImpulseStore.load(id: impulse.id) {
+                            fallback.usesAlarm = false
+                            _ = try? VitaImpulseStore.upsert(fallback)
+                        }
                         self.pushImpulseState(
                             to: webView,
-                            status: error == nil ? "Готово · следующий повтор запланирован" : error?.localizedDescription,
-                            isError: error != nil
+                            status: error is VitaImpulseDeliveryError
+                                ? "Готово · следующий повтор будет обычным уведомлением"
+                                : (error == nil ? "Готово · следующий повтор запланирован" : error?.localizedDescription),
+                            isError: error != nil && !(error is VitaImpulseDeliveryError)
                         )
                     }
                 }
@@ -756,7 +843,7 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
     }
 
     private func deleteImpulse(_ id: String, in webView: WKWebView) {
-        VitaImpulseNotifications.cancelAll(for: id)
+        VitaImpulseDelivery.cancelAll(for: id)
         VitaImpulseStore.delete(id: id)
         if VitaImpulsePendingActionStore.load()?.impulseID == id {
             VitaImpulsePendingActionStore.clear()
@@ -764,16 +851,26 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         pushImpulseState(to: webView, status: "Напоминание удалено")
     }
 
-    private func pushImpulseState(to webView: WKWebView, status: String? = nil, isError: Bool = false) {
-        for timerID in VitaImpulseStore.reconcileExpiredTimers() {
-            VitaImpulseNotifications.cancelTimer(for: timerID)
-        }
+    private func pushImpulseState(
+        to webView: WKWebView,
+        status: String? = nil,
+        isError: Bool = false,
+        saveResult: Bool = false,
+        savedImpulseID: String? = nil,
+        folderStatus: String? = nil,
+        folderIsError: Bool = false,
+        selectedFolderID: String? = nil
+    ) {
         let impulses = VitaImpulseStore.all()
         var payload: [String: Any] = [
             "configured": !impulses.isEmpty,
             "enabled": impulses.contains { $0.isEnabled && $0.status != .completed },
             "items": impulses.map(impulsePayload),
-            "supportsImpulseShortcut": supportsImpulseShortcut,
+            "folders": VitaImpulseFolderStore.list().map { [
+                "id": $0.id,
+                "name": $0.name,
+            ] },
+            "supportsAlarm": VitaImpulseAlarms.isSupported,
         ]
         let pending = VitaImpulsePendingActionStore.load()
         if let pending, impulses.contains(where: { $0.id == pending.impulseID }) {
@@ -786,16 +883,22 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
             }
             payload["pendingAction"] = action
         }
-        if let running = impulses
-            .filter({ $0.status == .running && ($0.timerEndDate ?? .distantPast) > .now })
-            .sorted(by: { ($0.timerEndDate ?? .distantFuture) < ($1.timerEndDate ?? .distantFuture) })
-            .first,
-           let timerEnd = running.timerEndDate {
-            payload["runningTimer"] = ["id": running.id, "endsAt": impulseDateString(timerEnd)]
-        }
         if let status {
             payload["status"] = status
             payload["isError"] = isError
+        }
+        if saveResult {
+            payload["saveResult"] = true
+        }
+        if let savedImpulseID {
+            payload["savedImpulseID"] = savedImpulseID
+        }
+        if let folderStatus {
+            payload["folderStatus"] = folderStatus
+            payload["folderIsError"] = folderIsError
+        }
+        if let selectedFolderID {
+            payload["selectedFolderID"] = selectedFolderID
         }
         guard let data = try? JSONSerialization.data(withJSONObject: payload),
               let json = String(data: data, encoding: .utf8) else { return }
@@ -813,24 +916,21 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
             "notes": impulse.notes,
             "reason": impulse.reason,
             "firstStep": impulse.firstStep,
+            "folderID": impulse.folderID ?? "",
             "fireDate": impulseDateString(impulse.fireDate),
-            "durationMinutes": impulse.durationMinutes,
             "priority": impulse.priority.rawValue,
             "repeatRule": impulse.repeatRule.rawValue,
-            "focusMode": impulse.focusMode.rawValue,
             "status": impulse.status.rawValue,
             "snoozeCount": impulse.snoozeCount,
             "enabled": impulse.isEnabled,
             "completed": impulse.status == .completed,
+            "usesAlarm": impulse.usesAlarm,
         ]
         if let deadline = impulse.deadline { payload["deadline"] = impulseDateString(deadline) }
-        if let timerEnd = impulse.timerEndDate { payload["timerEndDate"] = impulseDateString(timerEnd) }
+        if let deadlineAlert = impulse.deadlineAlertDate {
+            payload["deadlineAlertDate"] = impulseDateString(deadlineAlert)
+        }
         return payload
-    }
-
-    private var supportsImpulseShortcut: Bool {
-        if #available(iOS 16.0, *) { return true }
-        return false
     }
 
     private func impulseDate(from raw: String) -> Date? {
@@ -845,11 +945,6 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return formatter.string(from: date)
-    }
-
-    private func openFocusShortcuts() {
-        guard let shortcuts = URL(string: "shortcuts://create-shortcut") else { return }
-        UIApplication.shared.open(shortcuts, options: [:], completionHandler: nil)
     }
 
     private func highlightGoals(in webView: WKWebView) {

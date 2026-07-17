@@ -327,13 +327,12 @@ const impulseRepeatLabels = {
     none: "Один раз", daily: "Каждый день", weekdays: "По будням",
     weekly: "Каждую неделю", monthly: "Каждый месяц"
 };
-const impulsePriorityLabels = { low: "Низкий", medium: "Средний", high: "Высокий" };
-const impulseFocusLabels = { deepWork: "Глубокая работа", reading: "Чтение", study: "Учёба", workout: "Тренировка" };
+const impulsePriorityLabels = { low: "Сила 1", medium: "Сила 2", high: "Сила 3" };
 const impulseStatusLabels = {
     scheduled: "Запланировано", accepted: "Принято", snoozed: "Отложено",
-    running: "Фокус", completed: "Готово"
+    running: "Принято", completed: "Готово"
 };
-let impulseState = { items: [] };
+let impulseState = { items: [], folders: [] };
 let activeSheetImpulseID = "";
 let impulseSheetReturnFocus = null;
 let pendingImpulseFocusRestore = null;
@@ -341,8 +340,7 @@ let impulseFocusRestoreTimer = null;
 let pendingImpulseDeleteID = "";
 let impulseDeleteTimer = null;
 let impulseSavePending = false;
-let optimisticImpulseTimer = null;
-let impulseTimerInterval = null;
+let impulseEditorStep = 1;
 
 function impulseDateLabel(value) {
     const date = new Date(value);
@@ -356,12 +354,90 @@ function impulseItem(id) {
     return impulseState.items.find((item) => String(item.id) === String(id));
 }
 
+function editedImpulse() {
+    const id = document.getElementById("impulseID")?.value || "";
+    return id ? impulseItem(id) : null;
+}
+
+function impulseEditorDateUnchanged(value, key) {
+    const existing = editedImpulse();
+    return Boolean(existing?.[key] && impulseLocalDate(existing[key]) === value);
+}
+
 function setImpulseStatus(message, isError = false, isSuccess = false) {
     const status = document.getElementById("impulseStatus");
     if (!status) return;
     status.textContent = message || "";
     status.classList.toggle("is-error", isError);
     status.classList.toggle("is-success", isSuccess && !isError);
+}
+
+function setImpulseEditorStatus(message, isError = false) {
+    const status = document.getElementById("impulseEditorStatus");
+    if (!status) return;
+    status.textContent = message || "";
+    status.classList.toggle("is-error", isError);
+    status.classList.toggle("is-success", false);
+}
+
+function impulseFolder(id) {
+    if (id == null || id === "") return null;
+    return impulseState.folders.find((folder) => String(folder.id) === String(id)) || null;
+}
+
+function renderImpulseFolderOptions() {
+    const select = document.getElementById("impulseFolder");
+    if (!select) return;
+    const selected = select.value;
+    select.replaceChildren(new Option("Без папки", ""));
+    impulseState.folders.forEach((folder) => {
+        select.append(new Option(folder.name || "Без названия", String(folder.id)));
+    });
+    select.value = impulseFolder(selected) ? selected : "";
+}
+
+function renderImpulseFolders() {
+    renderImpulseFolderOptions();
+    const list = document.getElementById("impulseFolderList");
+    if (!list) return;
+    list.replaceChildren();
+    impulseState.folders.forEach((folder) => {
+        const row = document.createElement("div");
+        row.className = "impulse-folder-row";
+        row.dataset.folderId = String(folder.id);
+        const input = document.createElement("input");
+        input.type = "text";
+        input.maxLength = 40;
+        input.value = folder.name || "";
+        input.setAttribute("aria-label", `Название папки ${folder.name || "без названия"}`);
+        const save = document.createElement("button");
+        save.type = "button";
+        save.className = "secondary compact";
+        save.dataset.folderAction = "rename";
+        save.textContent = "Сохранить";
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "text-action danger compact";
+        remove.dataset.folderAction = "delete";
+        remove.textContent = "Удалить";
+        remove.setAttribute("aria-label", `Удалить папку ${folder.name || "без названия"}`);
+        row.append(input, save, remove);
+        list.append(row);
+    });
+    if (!impulseState.folders.length) {
+        const empty = document.createElement("p");
+        empty.className = "impulse-folder-empty";
+        empty.textContent = "Пока нет папок";
+        list.append(empty);
+    }
+}
+
+function setImpulseFoldersOpen(open) {
+    const manager = document.getElementById("impulseFolderManager");
+    const toggle = document.getElementById("manageImpulseFolders");
+    if (manager) manager.hidden = !open;
+    if (toggle) toggle.setAttribute("aria-expanded", String(open));
+    if (open) setTimeout(() => document.getElementById("impulseFolderName")?.focus(), 0);
 }
 
 function makeImpulseButton(label, action, className = "secondary") {
@@ -447,17 +523,33 @@ function renderImpulseList() {
         meta.className = "impulse-item-meta";
         const repeat = impulseRepeatLabels[item.repeatRule] || impulseRepeatLabels.none;
         const itemStatus = impulseStatusLabels[item.status];
-        meta.textContent = [itemStatus, impulseDateLabel(item.fireDate), repeat].filter(Boolean).join(" · ");
+        meta.textContent = [itemStatus, impulseDateLabel(item.fireDate), repeat, item.usesAlarm ? "Будильник" : null].filter(Boolean).join(" · ");
         copy.append(title, meta);
         top.append(copy);
+        const badges = document.createElement("div");
+        badges.className = "impulse-item-badges";
+        const folder = impulseFolder(item.folderID);
+        if (folder) {
+            const folderBadge = document.createElement("span");
+            folderBadge.className = "impulse-folder-badge";
+            folderBadge.textContent = folder.name || "Папка";
+            badges.append(folderBadge);
+        }
         if (impulsePriorityLabels[item.priority]) {
             const priority = document.createElement("span");
             priority.className = `impulse-priority priority-${item.priority}`;
             priority.textContent = impulsePriorityLabels[item.priority];
-            top.append(priority);
+            badges.append(priority);
         }
+        if (badges.childElementCount) top.append(badges);
         card.append(top);
 
+        if (item.notes) {
+            const notes = document.createElement("p");
+            notes.className = "impulse-item-notes";
+            notes.textContent = item.notes;
+            card.append(notes);
+        }
         if (item.firstStep) {
             const step = document.createElement("p");
             step.className = "impulse-item-step";
@@ -522,20 +614,153 @@ function fillImpulseEditor(item) {
         impulseDate: impulseLocalDate(item?.fireDate),
         impulseDeadline: item?.deadline ? impulseLocalDate(item.deadline) : "",
         impulseRepeat: item?.repeatRule || "none",
-        impulsePriority: item?.priority || "none",
-        impulseDuration: String(Number(item?.durationMinutes) || 25),
-        impulseFocus: item?.focusMode || "none"
+        impulseFolder: item?.folderID == null ? "" : String(item.folderID)
     };
     Object.entries(values).forEach(([id, value]) => {
         const field = document.getElementById(id);
         if (field) field.value = value;
     });
+    const priority = ["low", "medium", "high"].includes(item?.priority) ? item.priority : "medium";
+    document.querySelectorAll('input[name="impulsePriority"]').forEach((input) => {
+        input.checked = input.value === priority;
+    });
+    const alarm = document.getElementById("impulseUsesAlarm");
+    if (alarm) alarm.checked = item?.usesAlarm === true;
+    const hasDeadline = document.getElementById("impulseHasDeadline");
+    if (hasDeadline) hasDeadline.checked = Boolean(item?.deadline);
+    const deadline = item?.deadline ? new Date(item.deadline) : null;
+    const alert = item?.deadlineAlertDate ? new Date(item.deadlineAlertDate) : null;
+    let alertRule = item?.deadline && !item?.deadlineAlertDate ? "none" : "atDeadline";
+    if (deadline && alert && !Number.isNaN(deadline.getTime()) && !Number.isNaN(alert.getTime())) {
+        const difference = Math.round((deadline.getTime() - alert.getTime()) / 60000);
+        if (Math.abs(difference - 60) <= 1) alertRule = "hour1";
+        else if (Math.abs(difference - 120) <= 1) alertRule = "hour2";
+        else if (Math.abs(difference - 1440) <= 1) alertRule = "day1";
+        else if (Math.abs(difference) > 1) alertRule = "custom";
+    }
+    const alertSelect = document.getElementById("impulseDeadlineAlert");
+    if (alertSelect) alertSelect.value = alertRule;
+    const custom = document.getElementById("impulseDeadlineCustom");
+    if (custom) custom.value = alertRule === "custom" && item?.deadlineAlertDate ? impulseLocalDate(item.deadlineAlertDate) : "";
+    updateImpulseDeadlineControls();
     const heading = document.getElementById("impulseEditorTitle");
     if (heading) heading.textContent = item ? "Изменить импульс" : "Новый импульс";
 }
 
+function updateImpulseDeadlineControls() {
+    const enabled = document.getElementById("impulseHasDeadline")?.checked === true;
+    const fields = document.getElementById("impulseDeadlineFields");
+    if (fields) fields.hidden = !enabled;
+    const custom = document.getElementById("impulseDeadlineCustomWrap");
+    if (custom) custom.hidden = !enabled || document.getElementById("impulseDeadlineAlert")?.value !== "custom";
+}
+
+function impulseDeadlineAlertDate(deadline) {
+    if (!(deadline instanceof Date) || Number.isNaN(deadline.getTime())) return null;
+    const rule = document.getElementById("impulseDeadlineAlert")?.value || "atDeadline";
+    if (rule === "none") return null;
+    if (rule === "custom") {
+        const custom = new Date(document.getElementById("impulseDeadlineCustom")?.value || "");
+        return Number.isNaN(custom.getTime()) ? null : custom;
+    }
+    const offsets = { atDeadline: 0, hour1: 60, hour2: 120, day1: 1440 };
+    return new Date(deadline.getTime() - (offsets[rule] ?? 0) * 60000);
+}
+
+function renderImpulseEditorStep() {
+    document.querySelectorAll("[data-impulse-step]").forEach((panel) => {
+        panel.hidden = Number(panel.dataset.impulseStep) !== impulseEditorStep;
+    });
+    document.querySelectorAll("[data-wizard-progress]").forEach((item) => {
+        const step = Number(item.dataset.wizardProgress);
+        item.classList.toggle("is-active", step === impulseEditorStep);
+        item.classList.toggle("is-complete", step < impulseEditorStep);
+        if (step === impulseEditorStep) item.setAttribute("aria-current", "step");
+        else item.removeAttribute("aria-current");
+    });
+    const label = document.getElementById("impulseEditorStepLabel");
+    if (label) label.textContent = `Шаг ${impulseEditorStep} из 4`;
+    const back = document.getElementById("impulseEditorBack");
+    const next = document.getElementById("impulseEditorNext");
+    const save = document.getElementById("saveImpulse");
+    if (back) back.hidden = impulseEditorStep === 1;
+    if (next) next.hidden = impulseEditorStep === 4;
+    if (save) save.hidden = impulseEditorStep !== 4;
+    setImpulseEditorStatus("");
+}
+
+function validateImpulseEditorStep(step) {
+    if (step === 1) {
+        const title = document.getElementById("impulseTitle")?.value.trim() || "";
+        if (!title) {
+            setImpulseEditorStatus("Напиши название напоминания", true);
+            document.getElementById("impulseTitle")?.focus();
+            return false;
+        }
+    }
+    if (step === 2) {
+        const value = document.getElementById("impulseDate")?.value || "";
+        const date = new Date(value);
+        const unchanged = impulseEditorDateUnchanged(value, "fireDate");
+        if (!value || Number.isNaN(date.getTime()) || (!unchanged && date.getTime() < Date.now() + 5000)) {
+            setImpulseEditorStatus("Выбери дату и время в будущем", true);
+            document.getElementById("impulseDate")?.focus();
+            return false;
+        }
+    }
+    if (step === 3 && document.getElementById("impulseHasDeadline")?.checked) {
+        const fireDate = new Date(document.getElementById("impulseDate")?.value || "");
+        const value = document.getElementById("impulseDeadline")?.value || "";
+        const deadline = new Date(value);
+        if (!value || Number.isNaN(deadline.getTime()) || deadline <= fireDate) {
+            setImpulseEditorStatus("Дедлайн должен быть позже напоминания", true);
+            document.getElementById("impulseDeadline")?.focus();
+            return false;
+        }
+        if (document.getElementById("impulseDeadlineAlert")?.value === "custom") {
+            const customValue = document.getElementById("impulseDeadlineCustom")?.value || "";
+            const custom = new Date(customValue);
+            if (!customValue || Number.isNaN(custom.getTime()) || custom > deadline) {
+                setImpulseEditorStatus("Своё предупреждение должно быть не позже дедлайна", true);
+                document.getElementById("impulseDeadlineCustom")?.focus();
+                return false;
+            }
+        }
+        const alertDate = impulseDeadlineAlertDate(deadline);
+        if (document.getElementById("impulseDeadlineAlert")?.value !== "none") {
+            const alertUnchanged = Boolean(
+                editedImpulse()?.deadlineAlertDate
+                && impulseLocalDate(editedImpulse().deadlineAlertDate) === impulseLocalDate(alertDate)
+            );
+            if (!alertDate || (!alertUnchanged && alertDate.getTime() < Date.now() + 5000)) {
+                setImpulseEditorStatus("Выбери предупреждение, которое ещё не прошло", true);
+                document.getElementById("impulseDeadlineAlert")?.focus();
+                return false;
+            }
+            if (alertDate <= fireDate) {
+                setImpulseEditorStatus("Предупреждение о дедлайне должно быть позже первого напоминания", true);
+                document.getElementById("impulseDeadlineAlert")?.focus();
+                return false;
+            }
+        }
+    }
+    if (step === 4) {
+        const firstStep = document.getElementById("impulseStep")?.value.trim() || "";
+        if (!firstStep) {
+            setImpulseEditorStatus("Добавь самый маленький шаг", true);
+            document.getElementById("impulseStep")?.focus();
+            return false;
+        }
+    }
+    setImpulseEditorStatus("");
+    return true;
+}
+
 function openImpulseEditor(item = null) {
+    renderImpulseFolderOptions();
     fillImpulseEditor(item);
+    impulseEditorStep = 1;
+    renderImpulseEditorStep();
     const editor = document.getElementById("impulseEditor");
     const create = document.getElementById("newImpulse");
     if (editor) editor.hidden = false;
@@ -544,11 +769,13 @@ function openImpulseEditor(item = null) {
     document.getElementById("impulseTitle")?.focus();
 }
 
-function closeImpulseEditor() {
+function closeImpulseEditor(force = false) {
+    if (impulseSavePending && force !== true) return;
     const editor = document.getElementById("impulseEditor");
     const create = document.getElementById("newImpulse");
     if (editor) editor.hidden = true;
     if (create) create.hidden = false;
+    setImpulseEditorStatus("");
 }
 
 function impulseDeadlineText(value) {
@@ -594,10 +821,6 @@ function openImpulseSheet(item, view = "accept") {
     const deadline = document.getElementById("sheetImpulseDeadline");
     if (deadlineWrap) deadlineWrap.hidden = !item.deadline;
     if (deadline && item.deadline) deadline.textContent = impulseDeadlineText(item.deadline);
-    const duration = document.getElementById("acceptImpulseDuration");
-    const focus = document.getElementById("acceptImpulseFocus");
-    if (duration) duration.value = String(Number(item.durationMinutes) || 25);
-    if (focus) focus.value = item.focusMode || "none";
     const sheetStatus = document.getElementById("impulseSheetStatus");
     if (sheetStatus) {
         sheetStatus.textContent = "";
@@ -643,65 +866,43 @@ function pendingImpulseAction(pending) {
     return { type, id };
 }
 
-function resolvedImpulseTimer() {
-    const fromState = impulseState.runningTimer || impulseState.timer;
-    if (fromState?.endsAt || fromState?.endDate) {
-        return { id: fromState.id || fromState.impulseId, endsAt: fromState.endsAt || fromState.endDate };
-    }
-    const item = impulseState.items.find((value) => value.timerEndsAt || value.timerEndDate);
-    if (item) return { id: item.id, endsAt: item.timerEndsAt || item.timerEndDate };
-    return optimisticImpulseTimer;
-}
-
-function updateImpulseCountdown() {
-    const timer = resolvedImpulseTimer();
-    const bar = document.getElementById("impulseTimerBar");
-    if (!bar) return;
-    const endsAt = timer ? new Date(timer.endsAt) : null;
-    const valid = endsAt && !Number.isNaN(endsAt.getTime()) && endsAt.getTime() > Date.now();
-    bar.hidden = !valid;
-    if (valid) {
-        const remaining = Math.max(0, Math.ceil((endsAt.getTime() - Date.now()) / 1000));
-        const minutes = Math.floor(remaining / 60);
-        const seconds = remaining % 60;
-        const countdown = document.getElementById("impulseTimerCountdown");
-        if (countdown) countdown.textContent = `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-        const item = impulseItem(timer.id);
-        const title = document.getElementById("impulseTimerTitle");
-        if (title) {
-            const focus = impulseFocusLabels[item?.focusMode];
-            title.textContent = [focus, item?.title || "Импульс"].filter(Boolean).join(" · ");
-        }
-        bar.dataset.impulseId = String(timer.id || "");
-    } else if (timer && optimisticImpulseTimer) {
-        optimisticImpulseTimer = null;
-    }
-    const sheetItem = impulseItem(activeSheetImpulseID);
-    if (sheetItem?.deadline) {
-        const label = document.getElementById("sheetImpulseDeadline");
-        if (label) label.textContent = impulseDeadlineText(sheetItem.deadline);
-    }
-}
-
 function showImpulseState(state) {
     if (!state || typeof state !== "object") return;
     impulseState = {
         ...impulseState,
         ...state,
         items: Array.isArray(state.items) ? state.items : impulseState.items,
-        runningTimer: Object.prototype.hasOwnProperty.call(state, "runningTimer") ? state.runningTimer : null
+        folders: Array.isArray(state.folders) ? state.folders.filter((folder) => folder && folder.id != null) : impulseState.folders
     };
-    if (state.isError) optimisticImpulseTimer = null;
+    renderImpulseFolders();
+    if (state.selectedFolderID != null) {
+        const folder = document.getElementById("impulseFolder");
+        if (folder) folder.value = String(state.selectedFolderID);
+    }
     renderImpulseList();
-    updateImpulseCountdown();
-    const shortcut = document.getElementById("openFocusShortcuts");
-    if (shortcut) shortcut.hidden = state.supportsImpulseShortcut !== true;
+    const supportsAlarm = state.supportsAlarm === true;
+    const alarmControl = document.getElementById("impulseAlarmControl");
+    const alarm = document.getElementById("impulseUsesAlarm");
+    if (alarmControl) alarmControl.hidden = !supportsAlarm;
+    if (alarm) {
+        alarm.disabled = !supportsAlarm;
+        if (!supportsAlarm) alarm.checked = false;
+    }
+    const folderStatus = document.getElementById("impulseFolderStatus");
+    if (folderStatus && typeof state.folderStatus === "string") {
+        folderStatus.textContent = state.folderStatus;
+        folderStatus.classList.toggle("is-error", Boolean(state.folderIsError));
+        folderStatus.classList.toggle("is-success", !state.folderIsError);
+    }
 
     const save = document.getElementById("saveImpulse");
-    if (save) save.disabled = false;
-    if (impulseSavePending) {
+    if (save && (!impulseSavePending || state.saveResult === true)) save.disabled = false;
+    if (impulseSavePending && state.saveResult === true) {
+        const savedID = document.getElementById("impulseID");
+        if (savedID && state.savedImpulseID != null) savedID.value = String(state.savedImpulseID);
         impulseSavePending = false;
-        if (!state.isError) closeImpulseEditor();
+        if (!state.isError) closeImpulseEditor(true);
+        else setImpulseEditorStatus(state.status || "Не удалось сохранить", true);
     }
     setImpulseStatus(state.status || "", Boolean(state.isError), Boolean(state.status));
 
@@ -715,8 +916,67 @@ function showImpulseState(state) {
     }
 }
 
+document.getElementById("manageImpulseFolders")?.addEventListener("click", () => {
+    const manager = document.getElementById("impulseFolderManager");
+    setImpulseFoldersOpen(Boolean(manager?.hidden));
+});
+document.getElementById("closeImpulseFolders")?.addEventListener("click", () => setImpulseFoldersOpen(false));
+document.getElementById("newImpulseFolderFromEditor")?.addEventListener("click", () => setImpulseFoldersOpen(true));
+document.getElementById("createImpulseFolder")?.addEventListener("click", () => {
+    const input = document.getElementById("impulseFolderName");
+    const name = input?.value.trim() || "";
+    const status = document.getElementById("impulseFolderStatus");
+    if (!name) {
+        if (status) { status.textContent = "Напиши название папки"; status.classList.add("is-error"); }
+        input?.focus();
+        return;
+    }
+    post({ action: "create-impulse-folder", name });
+    if (input) input.value = "";
+    if (status) { status.textContent = "Создаём…"; status.classList.remove("is-error", "is-success"); }
+});
+document.getElementById("impulseFolderName")?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+        event.preventDefault();
+        document.getElementById("createImpulseFolder")?.click();
+    }
+});
+document.getElementById("impulseFolderList")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-folder-action]");
+    const row = button?.closest("[data-folder-id]");
+    if (!button || !row) return;
+    const id = row.dataset.folderId || "";
+    if (button.dataset.folderAction === "rename") {
+        const name = row.querySelector("input")?.value.trim() || "";
+        if (!name) {
+            const status = document.getElementById("impulseFolderStatus");
+            if (status) { status.textContent = "Название папки не может быть пустым"; status.classList.add("is-error"); }
+            row.querySelector("input")?.focus();
+            return;
+        }
+        post({ action: "rename-impulse-folder", folderID: id, name });
+    }
+    if (button.dataset.folderAction === "delete") {
+        post({ action: "delete-impulse-folder", folderID: id });
+    }
+});
+
 document.getElementById("newImpulse")?.addEventListener("click", () => openImpulseEditor());
 document.getElementById("cancelImpulseEdit")?.addEventListener("click", closeImpulseEditor);
+document.getElementById("impulseEditorBack")?.addEventListener("click", () => {
+    if (impulseEditorStep <= 1) return;
+    impulseEditorStep -= 1;
+    renderImpulseEditorStep();
+    document.querySelector(`[data-impulse-step="${impulseEditorStep}"] input, [data-impulse-step="${impulseEditorStep}"] textarea, [data-impulse-step="${impulseEditorStep}"] select`)?.focus();
+});
+document.getElementById("impulseEditorNext")?.addEventListener("click", () => {
+    if (!validateImpulseEditorStep(impulseEditorStep) || impulseEditorStep >= 4) return;
+    impulseEditorStep += 1;
+    renderImpulseEditorStep();
+    document.querySelector(`[data-impulse-step="${impulseEditorStep}"] input, [data-impulse-step="${impulseEditorStep}"] textarea, [data-impulse-step="${impulseEditorStep}"] select`)?.focus();
+});
+document.getElementById("impulseHasDeadline")?.addEventListener("change", updateImpulseDeadlineControls);
+document.getElementById("impulseDeadlineAlert")?.addEventListener("change", updateImpulseDeadlineControls);
 
 document.getElementById("impulseList")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-impulse-action]");
@@ -749,27 +1009,41 @@ document.getElementById("impulseList")?.addEventListener("click", (event) => {
 
 document.getElementById("impulseEditor")?.addEventListener("submit", (event) => {
     event.preventDefault();
+    if (impulseEditorStep < 4) {
+        if (validateImpulseEditorStep(impulseEditorStep)) {
+            impulseEditorStep += 1;
+            renderImpulseEditorStep();
+        }
+        return;
+    }
+    if (!validateImpulseEditorStep(4)) return;
     const id = document.getElementById("impulseID")?.value || "";
     const title = document.getElementById("impulseTitle")?.value.trim() || "";
     const notes = document.getElementById("impulseNotes")?.value.trim() || "";
     const reason = document.getElementById("impulseReason")?.value.trim() || "";
     const firstStep = document.getElementById("impulseStep")?.value.trim() || "";
     const fireValue = document.getElementById("impulseDate")?.value || "";
+    const existing = id ? impulseItem(id) : null;
+    const fireDate = existing?.fireDate && impulseLocalDate(existing.fireDate) === fireValue
+        ? new Date(existing.fireDate)
+        : new Date(fireValue);
+    const hasDeadline = document.getElementById("impulseHasDeadline")?.checked === true;
     const deadlineValue = document.getElementById("impulseDeadline")?.value || "";
-    const fireDate = new Date(fireValue);
-    const deadlineDate = deadlineValue ? new Date(deadlineValue) : null;
-    if (!title || !reason || !firstStep || !fireValue || Number.isNaN(fireDate.getTime()) || fireDate.getTime() < Date.now() + 5000) {
-        setImpulseStatus(!title ? "Напиши, что хочешь сделать" : !reason ? "Добавь, зачем это важно" : !firstStep ? "Добавь самый маленький шаг" : "Выбери время в будущем", true);
-        return;
-    }
-    if (deadlineDate && (Number.isNaN(deadlineDate.getTime()) || deadlineDate <= fireDate)) {
-        setImpulseStatus("Дедлайн должен быть позже напоминания", true);
-        return;
-    }
+    const deadlineDate = hasDeadline
+        ? (existing?.deadline && impulseLocalDate(existing.deadline) === deadlineValue
+            ? new Date(existing.deadline)
+            : new Date(deadlineValue))
+        : null;
+    const calculatedDeadlineAlert = hasDeadline ? impulseDeadlineAlertDate(deadlineDate) : null;
+    const deadlineAlertDate = existing?.deadlineAlertDate
+        && calculatedDeadlineAlert
+        && impulseLocalDate(existing.deadlineAlertDate) === impulseLocalDate(calculatedDeadlineAlert)
+        ? new Date(existing.deadlineAlertDate)
+        : calculatedDeadlineAlert;
     const save = document.getElementById("saveImpulse");
     if (save) save.disabled = true;
     impulseSavePending = true;
-    setImpulseStatus("Сохраняем…");
+    setImpulseEditorStatus("Сохраняем…");
     post({
         action: "save-impulse",
         id: id || null,
@@ -779,17 +1053,17 @@ document.getElementById("impulseEditor")?.addEventListener("submit", (event) => 
         firstStep,
         fireDate: fireDate.toISOString(),
         deadline: deadlineDate ? deadlineDate.toISOString() : null,
-        durationMinutes: Number(document.getElementById("impulseDuration")?.value) || 25,
-        priority: document.getElementById("impulsePriority")?.value || "none",
+        deadlineAlertDate: deadlineAlertDate ? deadlineAlertDate.toISOString() : null,
+        usesAlarm: impulseState.supportsAlarm === true && document.getElementById("impulseUsesAlarm")?.checked === true,
+        folderID: document.getElementById("impulseFolder")?.value || null,
+        priority: document.querySelector('input[name="impulsePriority"]:checked')?.value || "medium",
         repeatRule: document.getElementById("impulseRepeat")?.value || "none",
-        focusMode: document.getElementById("impulseFocus")?.value || "none"
     });
 });
 
 document.querySelectorAll("[data-sheet-close]").forEach((button) => button.addEventListener("click", closeImpulseSheet));
 document.getElementById("openImpulseSnooze")?.addEventListener("click", () => showImpulseSheetView("snooze"));
 document.getElementById("backToImpulseAccept")?.addEventListener("click", () => showImpulseSheetView("accept"));
-document.getElementById("openFocusShortcuts")?.addEventListener("click", () => post({ action: "open-focus-shortcuts" }));
 
 function snoozeImpulse(until) {
     const date = new Date(until);
@@ -803,7 +1077,7 @@ function snoozeImpulse(until) {
         }
         return;
     }
-    if (deadline && !Number.isNaN(deadline.getTime()) && date > deadline) {
+    if (deadline && !Number.isNaN(deadline.getTime()) && date >= deadline) {
         if (sheetStatus) {
             sheetStatus.textContent = `Нужно успеть до ${impulseDateLabel(item.deadline)}`;
             sheetStatus.classList.add("is-error");
@@ -827,35 +1101,10 @@ document.getElementById("confirmImpulseSnooze")?.addEventListener("click", () =>
     snoozeImpulse(document.getElementById("snoozeImpulseDate")?.value || "");
 });
 
-document.getElementById("startImpulseTimer")?.addEventListener("click", () => {
-    const id = activeSheetImpulseID;
-    const durationMinutes = Number(document.getElementById("acceptImpulseDuration")?.value) || 25;
-    const focusMode = document.getElementById("acceptImpulseFocus")?.value || "none";
-    if (!id) return;
-    optimisticImpulseTimer = { id, endsAt: new Date(Date.now() + durationMinutes * 60000).toISOString() };
-    post({ action: "start-impulse-timer", id, durationMinutes, focusMode });
-    closeImpulseSheet();
-    updateImpulseCountdown();
-});
-
 document.getElementById("completeImpulseFromSheet")?.addEventListener("click", () => {
     if (!activeSheetImpulseID) return;
     post({ action: "complete-impulse", id: activeSheetImpulseID });
     closeImpulseSheet();
-});
-
-document.getElementById("cancelImpulseTimer")?.addEventListener("click", () => {
-    const id = document.getElementById("impulseTimerBar")?.dataset.impulseId || "";
-    optimisticImpulseTimer = null;
-    post({ action: "cancel-impulse-timer", id });
-    updateImpulseCountdown();
-});
-
-document.getElementById("completeImpulseTimer")?.addEventListener("click", () => {
-    const id = document.getElementById("impulseTimerBar")?.dataset.impulseId || "";
-    optimisticImpulseTimer = null;
-    post({ action: "complete-impulse", id });
-    updateImpulseCountdown();
 });
 
 document.addEventListener("keydown", (event) => {
@@ -879,8 +1128,6 @@ document.addEventListener("keydown", (event) => {
         first.focus();
     }
 });
-
-impulseTimerInterval = setInterval(updateImpulseCountdown, 1000);
 
 let widgetHasPhoto = false;
 let widgetThemeState = {

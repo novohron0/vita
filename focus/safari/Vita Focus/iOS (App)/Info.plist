@@ -14,6 +14,8 @@
 			</array>
 		</dict>
 	</array>
+	<key>NSAlarmKitUsageDescription</key>
+	<string>Vita может включать выбранные вами будильники для важных напоминаний.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Выбрать фотографию для фона виджетов Vita.</string>
 	<key>SFSafariWebExtensionConverterVersion</key>

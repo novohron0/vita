@@ -60,7 +60,7 @@ struct OpenYouTubeFocusIntent: AppIntent {
 @available(iOS 16.0, *)
 struct StartVitaImpulseIntent: AppIntent {
     static var title: LocalizedStringResource = "Начать Vita Импульс"
-    static var description = IntentDescription("Открывает ближайший импульс с его причиной, минимальным шагом и таймером.")
+    static var description = IntentDescription("Открывает ближайший импульс с его причиной, минимальным шагом и дедлайном.")
     static var openAppWhenRun = true
 
     @available(iOS 26.0, *)
@@ -87,7 +87,7 @@ struct VitaFocusAppShortcuts: AppShortcutsProvider {
             intent: StartVitaImpulseIntent(),
             phrases: [
                 "Начать импульс в \(.applicationName)",
-                "Запустить фокус в \(.applicationName)",
+                "Открыть напоминание в \(.applicationName)",
             ],
             shortTitle: "Vita Импульс",
             systemImageName: "bolt.fill"

@@ -41,9 +41,12 @@ struct VitaImpulse: Codable, Equatable, Identifiable {
     var reason: String
     var firstStep: String
     var notes: String
+    var folderID: String?
     var fireDate: Date
     var recurrenceAnchorDate: Date
     var deadline: Date?
+    var deadlineAlertDate: Date?
+    var usesAlarm: Bool
     var durationMinutes: Int
     var priority: VitaImpulsePriority
     var repeatRule: VitaImpulseRepeat
@@ -62,9 +65,12 @@ struct VitaImpulse: Codable, Equatable, Identifiable {
         reason: String,
         firstStep: String,
         notes: String = "",
+        folderID: String? = nil,
         fireDate: Date,
         recurrenceAnchorDate: Date? = nil,
         deadline: Date? = nil,
+        deadlineAlertDate: Date? = nil,
+        usesAlarm: Bool = false,
         durationMinutes: Int = 15,
         priority: VitaImpulsePriority = .none,
         repeatRule: VitaImpulseRepeat = .none,
@@ -82,9 +88,12 @@ struct VitaImpulse: Codable, Equatable, Identifiable {
         self.reason = reason
         self.firstStep = firstStep
         self.notes = notes
+        self.folderID = folderID
         self.fireDate = fireDate
         self.recurrenceAnchorDate = recurrenceAnchorDate ?? fireDate
         self.deadline = deadline
+        self.deadlineAlertDate = deadlineAlertDate
+        self.usesAlarm = usesAlarm
         self.durationMinutes = durationMinutes
         self.priority = priority
         self.repeatRule = repeatRule
@@ -99,7 +108,8 @@ struct VitaImpulse: Codable, Equatable, Identifiable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, title, reason, firstStep, notes, fireDate, recurrenceAnchorDate, deadline, durationMinutes
+        case id, title, reason, firstStep, notes, folderID, fireDate, recurrenceAnchorDate
+        case deadline, deadlineAlertDate, usesAlarm, durationMinutes
         case priority, repeatRule, focusMode, status, createdAt, completedAt, acceptedAt
         case snoozeCount, timerEndDate, isEnabled
     }
@@ -110,10 +120,17 @@ struct VitaImpulse: Codable, Equatable, Identifiable {
         reason = try values.decodeIfPresent(String.self, forKey: .reason) ?? ""
         firstStep = try values.decode(String.self, forKey: .firstStep)
         notes = try values.decodeIfPresent(String.self, forKey: .notes) ?? ""
+        folderID = try values.decodeIfPresent(String.self, forKey: .folderID)
         fireDate = try values.decode(Date.self, forKey: .fireDate)
         recurrenceAnchorDate = try values.decodeIfPresent(Date.self, forKey: .recurrenceAnchorDate) ?? fireDate
         id = try values.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString.lowercased()
         deadline = try values.decodeIfPresent(Date.self, forKey: .deadline)
+        let hasModernAlarmFields = values.contains(.usesAlarm)
+        deadlineAlertDate = try values.decodeIfPresent(Date.self, forKey: .deadlineAlertDate)
+        if !hasModernAlarmFields && !values.contains(.deadlineAlertDate) {
+            deadlineAlertDate = deadline
+        }
+        usesAlarm = try values.decodeIfPresent(Bool.self, forKey: .usesAlarm) ?? false
         durationMinutes = try values.decodeIfPresent(Int.self, forKey: .durationMinutes) ?? 15
         priority = try values.decodeIfPresent(VitaImpulsePriority.self, forKey: .priority) ?? .none
         repeatRule = try values.decodeIfPresent(VitaImpulseRepeat.self, forKey: .repeatRule) ?? .none
@@ -142,6 +159,8 @@ enum VitaImpulseError: LocalizedError {
     case missingFirstStep
     case invalidDate
     case invalidDeadline
+    case invalidDeadlineAlert
+    case invalidFolder
     case invalidSnooze
     case invalidDuration
     case tooManyActive
@@ -153,6 +172,8 @@ enum VitaImpulseError: LocalizedError {
         case .missingFirstStep: return "Добавь самый маленький первый шаг"
         case .invalidDate: return "Выбери время в будущем"
         case .invalidDeadline: return "Дедлайн должен быть позже напоминания"
+        case .invalidDeadlineAlert: return "Напоминание о дедлайне должно быть после старта и не позже дедлайна"
+        case .invalidFolder: return "Папка не найдена"
         case .invalidSnooze: return "Выбери новое время до дедлайна"
         case .invalidDuration: return "Таймер может длиться от 1 до 240 минут"
         case .tooManyActive: return "Можно держать не больше \(VitaImpulseStore.maxActiveCount) активных импульсов"
@@ -269,6 +290,47 @@ enum VitaImpulseStore {
         focusMode: VitaImpulseFocusMode = .none,
         now: Date = .now
     ) throws -> VitaImpulse {
+        let existing = id.flatMap { load(id: $0) }
+        let legacyDeadlineAlert = existing?.deadline == deadline
+            ? existing?.deadlineAlertDate
+            : deadline
+        return try save(
+            id: id,
+            title: title,
+            reason: reason,
+            firstStep: firstStep,
+            notes: notes,
+            fireDate: fireDate,
+            deadline: deadline,
+            folderID: existing?.folderID,
+            deadlineAlertDate: legacyDeadlineAlert,
+            usesAlarm: existing?.usesAlarm ?? false,
+            durationMinutes: durationMinutes,
+            priority: priority,
+            repeatRule: repeatRule,
+            focusMode: focusMode,
+            now: now
+        )
+    }
+
+    @discardableResult
+    static func save(
+        id: String? = nil,
+        title: String,
+        reason: String,
+        firstStep: String,
+        notes: String,
+        fireDate: Date,
+        deadline: Date? = nil,
+        folderID: String?,
+        deadlineAlertDate: Date?,
+        usesAlarm: Bool,
+        durationMinutes: Int = 15,
+        priority: VitaImpulsePriority = .none,
+        repeatRule: VitaImpulseRepeat = .none,
+        focusMode: VitaImpulseFocusMode = .none,
+        now: Date = .now
+    ) throws -> VitaImpulse {
         let existing: VitaImpulse?
         if let id {
             existing = load(id: id)
@@ -286,9 +348,12 @@ enum VitaImpulseStore {
             reason: reason,
             firstStep: firstStep,
             notes: notes,
+            folderID: folderID,
             fireDate: fireDate,
             recurrenceAnchorDate: scheduleChanged ? fireDate : existing?.recurrenceAnchorDate,
             deadline: deadline,
+            deadlineAlertDate: deadlineAlertDate,
+            usesAlarm: usesAlarm,
             durationMinutes: durationMinutes,
             priority: priority,
             repeatRule: repeatRule,
@@ -301,6 +366,10 @@ enum VitaImpulseStore {
             timerEndDate: scheduleChanged ? nil : existing?.timerEndDate,
             isEnabled: true
         )
+        try validate(impulse)
+        let deadlineAlertChanged = existing?.deadlineAlertDate != deadlineAlertDate
+            || existing?.deadline != deadline
+        try validateDeadlineAlert(impulse, now: deadlineAlertChanged ? now : nil)
         return try upsert(impulse, now: now)
     }
 
@@ -367,11 +436,15 @@ enum VitaImpulseStore {
     static func snooze(id: String, until: Date, now: Date = .now) throws -> VitaImpulse {
         guard until > now else { throw VitaImpulseError.invalidSnooze }
         return try mutate(id: id) { impulse in
-            if let deadline = impulse.deadline, until > deadline {
+            if let deadline = impulse.deadline, until >= deadline {
                 throw VitaImpulseError.invalidSnooze
             }
             let replacesPendingChoice = impulse.status == .snoozed && impulse.fireDate > now
             impulse.fireDate = until
+            if let deadlineAlertDate = impulse.deadlineAlertDate,
+               deadlineAlertDate <= until {
+                impulse.deadlineAlertDate = nil
+            }
             impulse.status = .snoozed
             if !replacesPendingChoice {
                 impulse.snoozeCount += 1
@@ -445,8 +518,12 @@ enum VitaImpulseStore {
                 now: now,
                 calendar: calendar
             )
+            let recurrenceOffset = nextFireDate.timeIntervalSince(oldAnchorDate)
             if let deadline = impulse.deadline {
-                impulse.deadline = deadline.addingTimeInterval(nextFireDate.timeIntervalSince(oldAnchorDate))
+                impulse.deadline = deadline.addingTimeInterval(recurrenceOffset)
+            }
+            if let deadlineAlertDate = impulse.deadlineAlertDate {
+                impulse.deadlineAlertDate = deadlineAlertDate.addingTimeInterval(recurrenceOffset)
             }
             impulse.fireDate = nextFireDate
             impulse.recurrenceAnchorDate = nextFireDate
@@ -476,6 +553,11 @@ enum VitaImpulseStore {
         impulse.reason = impulse.reason.trimmingCharacters(in: .whitespacesAndNewlines)
         impulse.firstStep = impulse.firstStep.trimmingCharacters(in: .whitespacesAndNewlines)
         impulse.notes = impulse.notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let folderID = impulse.folderID?.trimmingCharacters(in: .whitespacesAndNewlines), !folderID.isEmpty {
+            impulse.folderID = folderID
+        } else {
+            impulse.folderID = nil
+        }
     }
 
     private static func validate(_ impulse: VitaImpulse) throws {
@@ -484,6 +566,25 @@ enum VitaImpulseStore {
         guard durationRange.contains(impulse.durationMinutes) else { throw VitaImpulseError.invalidDuration }
         if let deadline = impulse.deadline, deadline <= impulse.fireDate {
             throw VitaImpulseError.invalidDeadline
+        }
+        if let folderID = impulse.folderID,
+           !VitaImpulseFolderStore.list().contains(where: { $0.id == folderID }) {
+            throw VitaImpulseError.invalidFolder
+        }
+        if impulse.deadlineAlertDate != nil {
+            try validateDeadlineAlert(impulse, now: nil)
+        }
+    }
+
+    private static func validateDeadlineAlert(_ impulse: VitaImpulse, now: Date?) throws {
+        guard let alertDate = impulse.deadlineAlertDate else { return }
+        guard let deadline = impulse.deadline,
+              alertDate > impulse.fireDate,
+              alertDate <= deadline else {
+            throw VitaImpulseError.invalidDeadlineAlert
+        }
+        if let now, alertDate.timeIntervalSince(now) < 5 {
+            throw VitaImpulseError.invalidDeadlineAlert
         }
     }
 
@@ -535,6 +636,133 @@ enum VitaImpulseStore {
 
     private static func persist(_ impulses: [VitaImpulse]) {
         guard let data = try? JSONEncoder().encode(sorted(impulses)) else { return }
+        defaults?.set(data, forKey: key)
+    }
+
+    fileprivate static func unlinkFolder(id: String) {
+        var impulses = all()
+        var changed = false
+        for index in impulses.indices where impulses[index].folderID == id {
+            impulses[index].folderID = nil
+            changed = true
+        }
+        if changed {
+            persist(impulses)
+        }
+    }
+}
+
+struct VitaImpulseFolder: Codable, Equatable, Identifiable {
+    var id: String
+    var name: String
+    var createdAt: Date
+
+    init(
+        id: String = UUID().uuidString.lowercased(),
+        name: String,
+        createdAt: Date = .now
+    ) {
+        self.id = id
+        self.name = name
+        self.createdAt = createdAt
+    }
+}
+
+enum VitaImpulseFolderError: LocalizedError {
+    case missingName
+    case duplicateName
+    case notFound
+
+    var errorDescription: String? {
+        switch self {
+        case .missingName: return "Добавь название списка"
+        case .duplicateName: return "Такой список уже есть"
+        case .notFound: return "Список не найден"
+        }
+    }
+}
+
+enum VitaImpulseFolderStore {
+    private static let key = "vitaImpulseFolders"
+
+    static var defaults: UserDefaults? { UserDefaults(suiteName: FocusAppGroup.id) }
+
+    static func list() -> [VitaImpulseFolder] {
+        guard let data = defaults?.data(forKey: key),
+              let folders = try? JSONDecoder().decode([VitaImpulseFolder].self, from: data) else {
+            return []
+        }
+        return sorted(folders)
+    }
+
+    @discardableResult
+    static func create(name: String, now: Date = .now) throws -> VitaImpulseFolder {
+        let name = trimmed(name)
+        guard !name.isEmpty else { throw VitaImpulseFolderError.missingName }
+        var folders = list()
+        guard !contains(name: name, in: folders) else { throw VitaImpulseFolderError.duplicateName }
+        let folder = VitaImpulseFolder(name: name, createdAt: now)
+        folders.append(folder)
+        persist(folders)
+        return folder
+    }
+
+    @discardableResult
+    static func rename(id: String, name: String) throws -> VitaImpulseFolder {
+        let name = trimmed(name)
+        guard !name.isEmpty else { throw VitaImpulseFolderError.missingName }
+        var folders = list()
+        guard let index = folders.firstIndex(where: { $0.id == id }) else {
+            throw VitaImpulseFolderError.notFound
+        }
+        guard !contains(name: name, in: folders, excluding: id) else {
+            throw VitaImpulseFolderError.duplicateName
+        }
+        folders[index].name = name
+        persist(folders)
+        return folders[index]
+    }
+
+    @discardableResult
+    static func delete(id: String) -> Bool {
+        var folders = list()
+        let oldCount = folders.count
+        folders.removeAll { $0.id == id }
+        guard folders.count != oldCount else { return false }
+        persist(folders)
+        VitaImpulseStore.unlinkFolder(id: id)
+        return true
+    }
+
+    private static func contains(
+        name: String,
+        in folders: [VitaImpulseFolder],
+        excluding excludedID: String? = nil
+    ) -> Bool {
+        let normalizedName = normalized(name)
+        return folders.contains { $0.id != excludedID && normalized($0.name) == normalizedName }
+    }
+
+    private static func trimmed(_ name: String) -> String {
+        name.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func normalized(_ name: String) -> String {
+        trimmed(name).folding(
+            options: [.caseInsensitive, .diacriticInsensitive],
+            locale: Locale(identifier: "ru_RU")
+        )
+    }
+
+    private static func sorted(_ folders: [VitaImpulseFolder]) -> [VitaImpulseFolder] {
+        folders.sorted {
+            if $0.createdAt != $1.createdAt { return $0.createdAt < $1.createdAt }
+            return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+        }
+    }
+
+    private static func persist(_ folders: [VitaImpulseFolder]) {
+        guard let data = try? JSONEncoder().encode(sorted(folders)) else { return }
         defaults?.set(data, forKey: key)
     }
 }

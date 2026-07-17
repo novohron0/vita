@@ -107,17 +107,22 @@
                     <span id="impulsePill" class="status-pill"><i></i><span>0</span></span>
                 </div>
 
-                <div id="impulseTimerBar" class="impulse-timer-bar" hidden>
-                    <div>
-                        <span class="impulse-eyebrow">Сейчас в фокусе</span>
-                        <strong id="impulseTimerTitle">Импульс</strong>
-                    </div>
-                    <time id="impulseTimerCountdown">00:00</time>
-                    <div class="impulse-timer-actions">
-                        <button id="cancelImpulseTimer" type="button" class="secondary compact">Стоп</button>
-                        <button id="completeImpulseTimer" type="button" class="primary compact">Готово</button>
-                    </div>
+                <div class="impulse-section-toolbar">
+                    <button id="manageImpulseFolders" type="button" class="secondary compact" aria-expanded="false" aria-controls="impulseFolderManager">Папки</button>
                 </div>
+
+                <section id="impulseFolderManager" class="impulse-folder-manager" aria-labelledby="impulseFolderManagerTitle" hidden>
+                    <div class="impulse-folder-manager-head">
+                        <strong id="impulseFolderManagerTitle">Папки напоминаний</strong>
+                        <button id="closeImpulseFolders" type="button" class="icon-button" aria-label="Закрыть папки">×</button>
+                    </div>
+                    <div class="impulse-folder-create">
+                        <label><span>Новая папка</span><input id="impulseFolderName" type="text" maxlength="40" autocomplete="off" placeholder="Например, Здоровье"></label>
+                        <button id="createImpulseFolder" type="button" class="primary compact">Создать</button>
+                    </div>
+                    <div id="impulseFolderList" class="impulse-folder-list"></div>
+                    <p id="impulseFolderStatus" class="habit-status" role="status" aria-live="polite"></p>
+                </section>
 
                 <div id="impulseList" class="impulse-list" aria-live="polite"></div>
                 <div id="impulseEmpty" class="impulse-empty">
@@ -127,58 +132,81 @@
                 </div>
                 <button id="newImpulse" type="button" class="primary">Создать импульс</button>
 
-                <form id="impulseEditor" class="impulse-editor" hidden>
+                <form id="impulseEditor" class="impulse-editor" novalidate hidden>
                     <div class="impulse-editor-head">
                         <div>
-                            <span class="impulse-eyebrow">Настройка</span>
+                            <span id="impulseEditorStepLabel" class="impulse-eyebrow">Шаг 1 из 4</span>
                             <strong id="impulseEditorTitle">Новый импульс</strong>
                         </div>
                         <button id="cancelImpulseEdit" type="button" class="icon-button" aria-label="Закрыть редактор">×</button>
                     </div>
+                    <ol class="impulse-wizard-progress" aria-label="Шаги создания импульса">
+                        <li data-wizard-progress="1"><i>1</i><span>Напоминание</span></li>
+                        <li data-wizard-progress="2"><i>2</i><span>Время</span></li>
+                        <li data-wizard-progress="3"><i>3</i><span>Дедлайн</span></li>
+                        <li data-wizard-progress="4"><i>4</i><span>Импульс</span></li>
+                    </ol>
                     <input id="impulseID" type="hidden">
-                    <div class="impulse-fields">
-                        <label><span>Что сделать</span><input id="impulseTitle" type="text" maxlength="80" autocomplete="off" placeholder="Например, почитать 20 минут" required></label>
-                        <label><span>Заметки</span><textarea id="impulseNotes" maxlength="400" rows="2" placeholder="Детали, место или ссылка"></textarea></label>
-                        <label><span>Зачем это важно</span><textarea id="impulseReason" maxlength="240" rows="2" placeholder="Хочу спокойно закончить начатое" required></textarea></label>
-                        <label><span>Самый маленький шаг</span><input id="impulseStep" type="text" maxlength="160" autocomplete="off" placeholder="Открыть книгу" required></label>
-                        <div class="impulse-field-grid">
-                            <label><span>Напомнить</span><input id="impulseDate" type="datetime-local" required></label>
-                            <label><span>Дедлайн <em>необязательно</em></span><input id="impulseDeadline" type="datetime-local"></label>
+                    <section class="impulse-wizard-step impulse-fields" data-impulse-step="1" aria-labelledby="impulseStepOneTitle">
+                        <div><span class="impulse-eyebrow">Шаг 1</span><h3 id="impulseStepOneTitle">Напоминание</h3></div>
+                        <label><span>Название</span><input id="impulseTitle" type="text" maxlength="80" autocomplete="off" aria-required="true" placeholder="Например, почитать 20 минут"></label>
+                        <label><span>Заметки <em>необязательно</em></span><textarea id="impulseNotes" maxlength="400" rows="3" placeholder="Детали, место или ссылка"></textarea></label>
+                        <div class="impulse-folder-picker">
+                            <label><span>Папка</span><select id="impulseFolder"><option value="">Без папки</option></select></label>
+                            <button id="newImpulseFolderFromEditor" type="button" class="secondary compact">Создать папку</button>
                         </div>
-                        <div class="impulse-field-grid">
-                            <label><span>Повтор</span><select id="impulseRepeat">
-                                <option value="none">Не повторять</option>
-                                <option value="daily">Каждый день</option>
-                                <option value="weekdays">По будням</option>
-                                <option value="weekly">Каждую неделю</option>
-                                <option value="monthly">Каждый месяц</option>
-                            </select></label>
-                            <label><span>Приоритет</span><select id="impulsePriority">
-                                <option value="none">Нет</option>
-                                <option value="low">Низкий</option>
-                                <option value="medium">Средний</option>
-                                <option value="high">Высокий</option>
-                            </select></label>
+                        <div class="impulse-strength" role="radiogroup" aria-labelledby="impulseStrengthLabel">
+                            <span id="impulseStrengthLabel">Сила напоминания</span>
+                            <div>
+                                <label><input type="radio" name="impulsePriority" value="low"><b>1</b><small>Мягко</small></label>
+                                <label><input type="radio" name="impulsePriority" value="medium" checked><b>2</b><small>Важно</small></label>
+                                <label><input type="radio" name="impulsePriority" value="high"><b>3</b><small>Сильно</small></label>
+                            </div>
                         </div>
-                        <div class="impulse-field-grid">
-                            <label><span>Таймер</span><select id="impulseDuration">
-                                <option value="5">5 минут</option>
-                                <option value="10">10 минут</option>
-                                <option value="15">15 минут</option>
-                                <option value="25" selected>25 минут</option>
-                                <option value="45">45 минут</option>
-                                <option value="60">60 минут</option>
+                    </section>
+
+                    <section class="impulse-wizard-step impulse-fields" data-impulse-step="2" aria-labelledby="impulseStepTwoTitle" hidden>
+                        <div><span class="impulse-eyebrow">Шаг 2</span><h3 id="impulseStepTwoTitle">Дата и время</h3></div>
+                        <label><span>Напомнить</span><input id="impulseDate" type="datetime-local" aria-required="true"></label>
+                        <label><span>Повтор</span><select id="impulseRepeat">
+                            <option value="none">Не повторять</option>
+                            <option value="daily">Каждый день</option>
+                            <option value="weekdays">По будням</option>
+                            <option value="weekly">Каждую неделю</option>
+                            <option value="monthly">Каждый месяц</option>
+                        </select></label>
+                        <label id="impulseAlarmControl" class="impulse-toggle" hidden><input id="impulseUsesAlarm" type="checkbox" disabled><span><b>Будильник</b><small>Более заметный сигнал в выбранное время</small></span></label>
+                    </section>
+
+                    <section class="impulse-wizard-step impulse-fields" data-impulse-step="3" aria-labelledby="impulseStepThreeTitle" hidden>
+                        <div><span class="impulse-eyebrow">Шаг 3</span><h3 id="impulseStepThreeTitle">Дедлайн</h3></div>
+                        <label class="impulse-toggle"><input id="impulseHasDeadline" type="checkbox"><span><b>Добавить дедлайн</b><small>Можно оставить без срока</small></span></label>
+                        <div id="impulseDeadlineFields" class="impulse-fields" hidden>
+                            <label><span>Выполнить до</span><input id="impulseDeadline" type="datetime-local"></label>
+                            <label><span>Предупредить</span><select id="impulseDeadlineAlert">
+                                <option value="none">Не предупреждать</option>
+                                <option value="atDeadline">В момент дедлайна</option>
+                                <option value="hour1">За 1 час</option>
+                                <option value="hour2">За 2 часа</option>
+                                <option value="day1">За 1 день</option>
+                                <option value="custom">В своё время</option>
                             </select></label>
-                            <label><span>Режим сессии</span><select id="impulseFocus">
-                                <option value="none">Не включать</option>
-                                <option value="deepWork">Глубокая работа</option>
-                                <option value="reading">Чтение</option>
-                                <option value="study">Учёба</option>
-                                <option value="workout">Тренировка</option>
-                            </select></label>
+                            <label id="impulseDeadlineCustomWrap" hidden><span>Своё время предупреждения</span><input id="impulseDeadlineCustom" type="datetime-local"></label>
                         </div>
+                    </section>
+
+                    <section class="impulse-wizard-step impulse-fields" data-impulse-step="4" aria-labelledby="impulseStepFourTitle" hidden>
+                        <div><span class="impulse-eyebrow">Шаг 4</span><h3 id="impulseStepFourTitle">Импульс</h3></div>
+                        <label><span>Самый маленький шаг</span><input id="impulseStep" type="text" maxlength="160" autocomplete="off" aria-required="true" placeholder="Открыть книгу"></label>
+                        <label><span>Зачем это важно <em>необязательно</em></span><textarea id="impulseReason" maxlength="240" rows="3" placeholder="Хочу спокойно закончить начатое"></textarea></label>
+                    </section>
+
+                    <p id="impulseEditorStatus" class="habit-status impulse-editor-status" role="status" aria-live="polite"></p>
+                    <div class="impulse-wizard-actions">
+                        <button id="impulseEditorBack" type="button" class="secondary" hidden>Назад</button>
+                        <button id="impulseEditorNext" type="button" class="primary">Продолжить</button>
+                        <button id="saveImpulse" type="submit" class="primary" hidden>Сохранить импульс</button>
                     </div>
-                    <button id="saveImpulse" type="submit" class="primary">Сохранить импульс</button>
                 </form>
                 <p id="impulseStatus" class="habit-status" role="status" aria-live="polite"></p>
             </section>
@@ -283,22 +311,8 @@
             </div>
 
             <div id="impulseAcceptView" class="impulse-sheet-view">
-                <div class="impulse-field-grid">
-                    <label><span>Таймер</span><select id="acceptImpulseDuration">
-                        <option value="5">5 минут</option><option value="10">10 минут</option>
-                        <option value="15">15 минут</option><option value="25">25 минут</option>
-                        <option value="45">45 минут</option><option value="60">60 минут</option>
-                    </select></label>
-                    <label><span>Режим сессии</span><select id="acceptImpulseFocus">
-                        <option value="none">Без фокуса</option><option value="deepWork">Глубокая работа</option>
-                        <option value="reading">Чтение</option><option value="study">Учёба</option>
-                        <option value="workout">Тренировка</option>
-                    </select></label>
-                </div>
-                <button id="startImpulseTimer" type="button" class="primary">Принять и запустить таймер</button>
                 <button id="completeImpulseFromSheet" type="button" class="secondary">Уже сделано</button>
                 <button id="openImpulseSnooze" type="button" class="text-action">Отложить…</button>
-                <button id="openFocusShortcuts" type="button" class="shortcut-action" hidden>Настроить системный Фокус в Командах <span>↗</span><small>Соедини «Установить фокусирование» и «Vita Импульс».</small></button>
             </div>
 
             <div id="impulseSnoozeView" class="impulse-sheet-view" hidden>
