@@ -16,6 +16,10 @@ struct FocusSharedGoalTests {
         testGoalDotStyles()
         testDotColors()
         try testImpulseValidation()
+        try testImpulseLegacyMigration()
+        try testImpulseLifecycle()
+        try testImpulseRecurrence()
+        testImpulsePendingAction()
         testVitaProfileCodes()
         print("FocusSharedGoalTests: \(checks) checks passed")
     }
@@ -192,6 +196,7 @@ struct FocusSharedGoalTests {
             fireDate: fireDate,
             now: now
         )
+        defer { _ = VitaImpulseStore.delete(id: impulse.id) }
         expect(impulse.title == "Тренировка", "impulse title must be trimmed")
         expect(impulse.notificationBody.contains("Первый шаг: Надеть кроссовки"), "notification must make starting explicit")
         do {
@@ -206,6 +211,257 @@ struct FocusSharedGoalTests {
         } catch VitaImpulseError.invalidDate {
             checks += 1
         }
+    }
+
+    private static func testImpulseLegacyMigration() throws {
+        struct LegacyImpulse: Codable {
+            let title: String
+            let reason: String
+            let firstStep: String
+            let fireDate: Date
+            let isEnabled: Bool
+        }
+
+        guard let defaults = VitaImpulseStore.defaults else {
+            fail("the impulse App Group defaults must be available")
+        }
+        let collectionKey = "vitaImpulses"
+        let legacyKey = "vitaImpulse"
+        let oldCollection = defaults.data(forKey: collectionKey)
+        let oldLegacy = defaults.data(forKey: legacyKey)
+        defer {
+            if let oldCollection { defaults.set(oldCollection, forKey: collectionKey) }
+            else { defaults.removeObject(forKey: collectionKey) }
+            if let oldLegacy { defaults.set(oldLegacy, forKey: legacyKey) }
+            else { defaults.removeObject(forKey: legacyKey) }
+        }
+
+        defaults.removeObject(forKey: collectionKey)
+        let fireDate = try date("2026-08-01")
+        let data = try JSONEncoder().encode(LegacyImpulse(
+            title: "Старый импульс",
+            reason: "Важно",
+            firstStep: "Начать",
+            fireDate: fireDate,
+            isEnabled: true
+        ))
+        defaults.set(data, forKey: legacyKey)
+
+        let migrated = VitaImpulseStore.all()
+        expect(migrated.count == 1, "a legacy single impulse must migrate into the collection")
+        expect(!migrated[0].id.isEmpty, "legacy migration must assign a stable identifier")
+        expect(migrated[0].durationMinutes == 15, "legacy reminders must receive safe duration defaults")
+        expect(migrated[0].recurrenceAnchorDate == fireDate, "legacy reminders must anchor recurrence to their fire date")
+        expect(migrated[0].priority == .none && migrated[0].status == .scheduled, "legacy reminders must receive enum defaults")
+        expect(VitaImpulseStore.all()[0].id == migrated[0].id, "the migrated identifier must remain stable")
+        expect(defaults.data(forKey: legacyKey) == nil, "the legacy storage key must be retired after migration")
+    }
+
+    private static func testImpulseLifecycle() throws {
+        let now = try date("2026-07-17")
+        let fireDate = now.addingTimeInterval(60)
+        let deadline = now.addingTimeInterval(600)
+        let impulse = try VitaImpulseStore.save(
+            title: "  Прочитать главу ",
+            reason: " Зачем это важно ",
+            firstStep: " Открыть книгу ",
+            notes: " Без телефона ",
+            fireDate: fireDate,
+            deadline: deadline,
+            durationMinutes: 25,
+            priority: .high,
+            repeatRule: .none,
+            focusMode: .reading,
+            now: now
+        )
+        defer { _ = VitaImpulseStore.delete(id: impulse.id) }
+
+        expect(VitaImpulseStore.load(id: impulse.id)?.notes == "Без телефона", "rich impulse fields must be trimmed and stored")
+        expect(VitaImpulseStore.all().contains(where: { $0.id == impulse.id }), "the collection must contain every saved reminder")
+        expect(VitaImpulseStore.notificationID(for: impulse.id).contains(impulse.id), "notification identifiers must be unique per impulse")
+
+        let accepted = try VitaImpulseStore.accept(id: impulse.id, now: now.addingTimeInterval(70))
+        expect(accepted.status == .accepted && accepted.acceptedAt != nil, "accept must record state and time")
+        let edited = try VitaImpulseStore.save(
+            id: impulse.id,
+            title: "Прочитать две главы",
+            reason: impulse.reason,
+            firstStep: impulse.firstStep,
+            notes: impulse.notes,
+            fireDate: fireDate,
+            deadline: deadline,
+            durationMinutes: 25,
+            priority: .medium,
+            repeatRule: .none,
+            focusMode: .reading,
+            now: now
+        )
+        expect(edited.id == impulse.id && edited.createdAt == impulse.createdAt, "editing must preserve identity and creation time")
+        expect(edited.status == .accepted, "editing must preserve the current lifecycle state")
+        let disabled = try VitaImpulseStore.disable(id: impulse.id)
+        expect(!disabled.isEnabled, "disabling must pause a reminder")
+        let reenabled = try VitaImpulseStore.save(
+            id: impulse.id,
+            title: edited.title,
+            reason: edited.reason,
+            firstStep: edited.firstStep,
+            notes: edited.notes,
+            fireDate: edited.fireDate,
+            deadline: edited.deadline,
+            durationMinutes: edited.durationMinutes,
+            priority: edited.priority,
+            repeatRule: edited.repeatRule,
+            focusMode: edited.focusMode,
+            now: now
+        )
+        expect(reenabled.isEnabled, "explicitly saving a paused reminder must enable it again")
+        let rescheduled = try VitaImpulseStore.save(
+            id: impulse.id,
+            title: reenabled.title,
+            reason: reenabled.reason,
+            firstStep: reenabled.firstStep,
+            notes: reenabled.notes,
+            fireDate: now.addingTimeInterval(90),
+            deadline: reenabled.deadline,
+            durationMinutes: reenabled.durationMinutes,
+            priority: reenabled.priority,
+            repeatRule: reenabled.repeatRule,
+            focusMode: reenabled.focusMode,
+            now: now
+        )
+        expect(rescheduled.status == .scheduled && rescheduled.acceptedAt == nil, "changing reminder time must re-arm an accepted impulse")
+
+        let snoozed = try VitaImpulseStore.snooze(id: impulse.id, until: deadline, now: now.addingTimeInterval(80))
+        expect(snoozed.status == .snoozed && snoozed.snoozeCount == 1, "snooze must move the reminder and count interruptions")
+        let adjustedSnooze = try VitaImpulseStore.snooze(
+            id: impulse.id,
+            until: deadline.addingTimeInterval(-10),
+            now: now.addingTimeInterval(81)
+        )
+        expect(adjustedSnooze.snoozeCount == 1, "choosing an exact time after the notification fallback must not double-count a snooze")
+        do {
+            _ = try VitaImpulseStore.snooze(id: impulse.id, until: deadline.addingTimeInterval(1), now: now)
+            fail("snooze after the deadline must be rejected")
+        } catch VitaImpulseError.invalidSnooze {
+            checks += 1
+        }
+
+        let running = try VitaImpulseStore.startTimer(
+            id: impulse.id,
+            durationMinutes: 10,
+            focusMode: .deepWork,
+            now: now.addingTimeInterval(100)
+        )
+        expect(running.status == .running, "starting a timer must expose the running state")
+        expect(running.timerEndDate == now.addingTimeInterval(700), "the timer must use the selected duration")
+        expect(running.focusMode == .deepWork, "the timer may override the selected focus mode")
+        expect(VitaImpulseStore.reconcileExpiredTimers(now: now.addingTimeInterval(699)).isEmpty, "an active timer must not finish early")
+        expect(VitaImpulseStore.reconcileExpiredTimers(now: now.addingTimeInterval(701)) == [impulse.id], "an expired timer must reconcile into accepted state")
+        _ = try VitaImpulseStore.startTimer(id: impulse.id, durationMinutes: 10, now: now.addingTimeInterval(702))
+        let second = try VitaImpulseStore.save(
+            title: "Второй таймер",
+            reason: "Проверка",
+            firstStep: "Начать",
+            fireDate: now.addingTimeInterval(120),
+            now: now
+        )
+        defer { _ = VitaImpulseStore.delete(id: second.id) }
+        _ = try VitaImpulseStore.startTimer(id: second.id, now: now.addingTimeInterval(710))
+        let interrupted = VitaImpulseStore.load(id: impulse.id)
+        expect(interrupted?.timerEndDate == nil && interrupted?.status == .accepted, "starting a timer must stop the previous session")
+        _ = try VitaImpulseStore.startTimer(id: impulse.id, durationMinutes: 10, now: now.addingTimeInterval(715))
+        let cancelled = try VitaImpulseStore.cancelTimer(id: impulse.id)
+        expect(cancelled.timerEndDate == nil && cancelled.status == .accepted, "cancelling a timer must return to the accepted state")
+
+        let completed = try VitaImpulseStore.complete(id: impulse.id, now: now.addingTimeInterval(200))
+        expect(completed.status == .completed && !completed.isEnabled, "a one-off impulse must disable after completion")
+
+        do {
+            _ = try VitaImpulseStore.save(
+                title: "Неверный дедлайн",
+                reason: "",
+                firstStep: "Начать",
+                notes: "",
+                fireDate: fireDate,
+                deadline: fireDate,
+                now: now
+            )
+            fail("a deadline at the reminder time must be rejected")
+        } catch VitaImpulseError.invalidDeadline {
+            checks += 1
+        }
+        do {
+            _ = try VitaImpulseStore.save(
+                title: "Неверный таймер",
+                reason: "",
+                firstStep: "Начать",
+                notes: "",
+                fireDate: fireDate,
+                durationMinutes: 0,
+                now: now
+            )
+            fail("a zero-duration timer must be rejected")
+        } catch VitaImpulseError.invalidDuration {
+            checks += 1
+        }
+    }
+
+    private static func testImpulseRecurrence() throws {
+        let now = try date("2026-07-17").addingTimeInterval(9 * 3600)
+        let fireDate = now.addingTimeInterval(60)
+        let deadline = now.addingTimeInterval(3600)
+        let impulse = try VitaImpulseStore.save(
+            title: "Будний ритуал",
+            reason: "Ритм",
+            firstStep: "Открыть план",
+            notes: "",
+            fireDate: fireDate,
+            deadline: deadline,
+            durationMinutes: 15,
+            repeatRule: .weekdays,
+            now: now
+        )
+        defer { _ = VitaImpulseStore.delete(id: impulse.id) }
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Europe/Moscow")!
+        let snoozed = try VitaImpulseStore.snooze(
+            id: impulse.id,
+            until: now.addingTimeInterval(1800),
+            now: now.addingTimeInterval(120)
+        )
+        expect(snoozed.recurrenceAnchorDate == fireDate, "snooze must not move the recurrence anchor")
+        let next = try VitaImpulseStore.complete(
+            id: impulse.id,
+            now: now.addingTimeInterval(1900),
+            calendar: calendar
+        )
+        expect(next.status == .scheduled && next.isEnabled, "a recurring impulse must schedule its next occurrence")
+        expect(calendar.component(.weekday, from: next.fireDate) == 2, "weekday recurrence must skip the weekend")
+        expect(next.deadline?.timeIntervalSince(next.fireDate) == deadline.timeIntervalSince(fireDate), "recurrence must advance its deadline with the reminder")
+        expect(next.snoozeCount == 0 && next.acceptedAt == nil, "a new recurrence must reset transient state")
+    }
+
+    private static func testImpulsePendingAction() {
+        let previous = VitaImpulsePendingActionStore.load()
+        defer {
+            if let previous {
+                VitaImpulsePendingActionStore.set(
+                    type: previous.type,
+                    impulseID: previous.impulseID,
+                    snoozeUntil: previous.snoozeUntil,
+                    requestedAt: previous.requestedAt
+                )
+            } else {
+                VitaImpulsePendingActionStore.clear()
+            }
+        }
+
+        let requestedAt = Date(timeIntervalSinceReferenceDate: 1_000)
+        VitaImpulsePendingActionStore.set(type: .snooze, impulseID: "test-id", requestedAt: requestedAt)
+        expect(VitaImpulsePendingActionStore.load()?.type == .snooze, "notification actions must survive until the app handles them")
+        expect(VitaImpulsePendingActionStore.consume()?.impulseID == "test-id", "consume must return the pending impulse action")
+        expect(VitaImpulsePendingActionStore.load() == nil, "consume must clear the pending action")
     }
 
     private static func testVitaProfileCodes() {

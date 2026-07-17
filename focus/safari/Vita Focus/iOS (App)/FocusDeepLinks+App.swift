@@ -5,6 +5,7 @@ import AppIntents
 
 extension Notification.Name {
     static let vitaActiveHabitChanged = Notification.Name("vitaActiveHabitChanged")
+    static let vitaImpulseActionRequested = Notification.Name("vitaImpulseActionRequested")
 }
 
 extension FocusDeepLinks {
@@ -57,8 +58,40 @@ struct OpenYouTubeFocusIntent: AppIntent {
 }
 
 @available(iOS 16.0, *)
+struct StartVitaImpulseIntent: AppIntent {
+    static var title: LocalizedStringResource = "Начать Vita Импульс"
+    static var description = IntentDescription("Открывает ближайший импульс с его причиной, минимальным шагом и таймером.")
+    static var openAppWhenRun = true
+
+    @available(iOS 26.0, *)
+    static var supportedModes: IntentModes { .foreground(.immediate) }
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        let next = VitaImpulseStore.all()
+            .filter { $0.isEnabled && $0.status != .completed }
+            .sorted { $0.fireDate < $1.fireDate }
+            .first
+        if let next {
+            _ = try? VitaImpulseStore.accept(id: next.id)
+            VitaImpulsePendingActionStore.set(type: .accept, impulseID: next.id)
+        }
+        return .result()
+    }
+}
+
+@available(iOS 16.0, *)
 struct VitaFocusAppShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
+        AppShortcut(
+            intent: StartVitaImpulseIntent(),
+            phrases: [
+                "Начать импульс в \(.applicationName)",
+                "Запустить фокус в \(.applicationName)",
+            ],
+            shortTitle: "Vita Импульс",
+            systemImageName: "bolt.fill"
+        )
         AppShortcut(
             intent: OpenYouTubeFocusIntent(),
             phrases: [

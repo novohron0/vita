@@ -4,67 +4,587 @@ enum FocusAppGroup {
     static let id = "group.ru.vitadots.focus"
 }
 
-struct VitaImpulse: Codable, Equatable {
+enum VitaImpulsePriority: String, Codable, CaseIterable {
+    case none
+    case low
+    case medium
+    case high
+}
+
+enum VitaImpulseRepeat: String, Codable, CaseIterable {
+    case none
+    case daily
+    case weekdays
+    case weekly
+    case monthly
+}
+
+enum VitaImpulseFocusMode: String, Codable, CaseIterable {
+    case none
+    case deepWork
+    case reading
+    case study
+    case workout
+}
+
+enum VitaImpulseStatus: String, Codable, CaseIterable {
+    case scheduled
+    case accepted
+    case snoozed
+    case running
+    case completed
+}
+
+struct VitaImpulse: Codable, Equatable, Identifiable {
+    var id: String
     var title: String
     var reason: String
     var firstStep: String
+    var notes: String
     var fireDate: Date
+    var recurrenceAnchorDate: Date
+    var deadline: Date?
+    var durationMinutes: Int
+    var priority: VitaImpulsePriority
+    var repeatRule: VitaImpulseRepeat
+    var focusMode: VitaImpulseFocusMode
+    var status: VitaImpulseStatus
+    var createdAt: Date
+    var completedAt: Date?
+    var acceptedAt: Date?
+    var snoozeCount: Int
+    var timerEndDate: Date?
     var isEnabled: Bool
+
+    init(
+        id: String = UUID().uuidString.lowercased(),
+        title: String,
+        reason: String,
+        firstStep: String,
+        notes: String = "",
+        fireDate: Date,
+        recurrenceAnchorDate: Date? = nil,
+        deadline: Date? = nil,
+        durationMinutes: Int = 15,
+        priority: VitaImpulsePriority = .none,
+        repeatRule: VitaImpulseRepeat = .none,
+        focusMode: VitaImpulseFocusMode = .none,
+        status: VitaImpulseStatus = .scheduled,
+        createdAt: Date = .now,
+        completedAt: Date? = nil,
+        acceptedAt: Date? = nil,
+        snoozeCount: Int = 0,
+        timerEndDate: Date? = nil,
+        isEnabled: Bool = true
+    ) {
+        self.id = id
+        self.title = title
+        self.reason = reason
+        self.firstStep = firstStep
+        self.notes = notes
+        self.fireDate = fireDate
+        self.recurrenceAnchorDate = recurrenceAnchorDate ?? fireDate
+        self.deadline = deadline
+        self.durationMinutes = durationMinutes
+        self.priority = priority
+        self.repeatRule = repeatRule
+        self.focusMode = focusMode
+        self.status = status
+        self.createdAt = createdAt
+        self.completedAt = completedAt
+        self.acceptedAt = acceptedAt
+        self.snoozeCount = snoozeCount
+        self.timerEndDate = timerEndDate
+        self.isEnabled = isEnabled
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, title, reason, firstStep, notes, fireDate, recurrenceAnchorDate, deadline, durationMinutes
+        case priority, repeatRule, focusMode, status, createdAt, completedAt, acceptedAt
+        case snoozeCount, timerEndDate, isEnabled
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        title = try values.decode(String.self, forKey: .title)
+        reason = try values.decodeIfPresent(String.self, forKey: .reason) ?? ""
+        firstStep = try values.decode(String.self, forKey: .firstStep)
+        notes = try values.decodeIfPresent(String.self, forKey: .notes) ?? ""
+        fireDate = try values.decode(Date.self, forKey: .fireDate)
+        recurrenceAnchorDate = try values.decodeIfPresent(Date.self, forKey: .recurrenceAnchorDate) ?? fireDate
+        id = try values.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString.lowercased()
+        deadline = try values.decodeIfPresent(Date.self, forKey: .deadline)
+        durationMinutes = try values.decodeIfPresent(Int.self, forKey: .durationMinutes) ?? 15
+        priority = try values.decodeIfPresent(VitaImpulsePriority.self, forKey: .priority) ?? .none
+        repeatRule = try values.decodeIfPresent(VitaImpulseRepeat.self, forKey: .repeatRule) ?? .none
+        focusMode = try values.decodeIfPresent(VitaImpulseFocusMode.self, forKey: .focusMode) ?? .none
+        status = try values.decodeIfPresent(VitaImpulseStatus.self, forKey: .status) ?? .scheduled
+        createdAt = try values.decodeIfPresent(Date.self, forKey: .createdAt) ?? fireDate
+        completedAt = try values.decodeIfPresent(Date.self, forKey: .completedAt)
+        acceptedAt = try values.decodeIfPresent(Date.self, forKey: .acceptedAt)
+        snoozeCount = try values.decodeIfPresent(Int.self, forKey: .snoozeCount) ?? 0
+        timerEndDate = try values.decodeIfPresent(Date.self, forKey: .timerEndDate)
+        isEnabled = try values.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? true
+    }
 
     var notificationBody: String {
         let step = "Первый шаг: \(firstStep)"
         return reason.isEmpty ? step : "\(reason) · \(step)"
     }
+
+    var isActive: Bool {
+        isEnabled && status != .completed
+    }
 }
 
 enum VitaImpulseError: LocalizedError {
-    case missingTitle, missingFirstStep, invalidDate
+    case missingTitle
+    case missingFirstStep
+    case invalidDate
+    case invalidDeadline
+    case invalidSnooze
+    case invalidDuration
+    case tooManyActive
+    case notFound
 
     var errorDescription: String? {
         switch self {
         case .missingTitle: return "Напиши, что хочешь начать"
         case .missingFirstStep: return "Добавь самый маленький первый шаг"
         case .invalidDate: return "Выбери время в будущем"
+        case .invalidDeadline: return "Дедлайн должен быть позже напоминания"
+        case .invalidSnooze: return "Выбери новое время до дедлайна"
+        case .invalidDuration: return "Таймер может длиться от 1 до 240 минут"
+        case .tooManyActive: return "Можно держать не больше \(VitaImpulseStore.maxActiveCount) активных импульсов"
+        case .notFound: return "Импульс не найден"
         }
     }
 }
 
 enum VitaImpulseStore {
+    static let maxActiveCount = 32
+    static let durationRange = 1...240
+
+    // Kept for already delivered notifications and callers from the first Impulse version.
     static let notificationID = "vita.impulse.active"
     static let categoryID = "VITA_IMPULSE"
     static let startActionID = "VITA_IMPULSE_START"
     static let postponeActionID = "VITA_IMPULSE_POSTPONE"
-    private static let key = "vitaImpulse"
+    static let acceptActionID = startActionID
+    static let snoozeActionID = postponeActionID
+    static let completeActionID = "VITA_IMPULSE_COMPLETE"
+
+    private static let key = "vitaImpulses"
+    private static let legacyKey = "vitaImpulse"
 
     static var defaults: UserDefaults? { UserDefaults(suiteName: FocusAppGroup.id) }
 
+    static func notificationID(for impulseID: String) -> String {
+        "vita.impulse.reminder.\(impulseID)"
+    }
+
+    static func deadlineNotificationID(for impulseID: String) -> String {
+        "vita.impulse.deadline.\(impulseID)"
+    }
+
+    static func timerNotificationID(for impulseID: String) -> String {
+        "vita.impulse.timer.\(impulseID)"
+    }
+
+    static func all() -> [VitaImpulse] {
+        if let data = defaults?.data(forKey: key),
+           let impulses = try? JSONDecoder().decode([VitaImpulse].self, from: data) {
+            return sorted(impulses)
+        }
+
+        guard let data = defaults?.data(forKey: legacyKey),
+              let impulse = try? JSONDecoder().decode(VitaImpulse.self, from: data) else { return [] }
+        persist([impulse])
+        defaults?.removeObject(forKey: legacyKey)
+        return [impulse]
+    }
+
+    // Compatibility helper for the original single-reminder UI.
     static func load() -> VitaImpulse? {
-        guard let data = defaults?.data(forKey: key) else { return nil }
-        return try? JSONDecoder().decode(VitaImpulse.self, from: data)
+        let impulses = all()
+        return impulses.first(where: \.isActive) ?? impulses.first
+    }
+
+    static func load(id: String) -> VitaImpulse? {
+        all().first { $0.id == id }
     }
 
     @discardableResult
-    static func save(title: String, reason: String, firstStep: String, fireDate: Date, now: Date = .now) throws -> VitaImpulse {
-        let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let reason = reason.trimmingCharacters(in: .whitespacesAndNewlines)
-        let firstStep = firstStep.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !title.isEmpty else { throw VitaImpulseError.missingTitle }
-        guard !firstStep.isEmpty else { throw VitaImpulseError.missingFirstStep }
-        guard fireDate.timeIntervalSince(now) >= 5 else { throw VitaImpulseError.invalidDate }
-        let impulse = VitaImpulse(title: title, reason: reason, firstStep: firstStep, fireDate: fireDate, isEnabled: true)
-        update(impulse)
+    static func upsert(_ impulse: VitaImpulse, now: Date = .now) throws -> VitaImpulse {
+        var impulse = impulse
+        trim(&impulse)
+        try validate(impulse)
+
+        var impulses = all()
+        let index = impulses.firstIndex { $0.id == impulse.id }
+        let wasActive = index.map { impulses[$0].isActive } ?? false
+        let activeCount = impulses.filter(\.isActive).count
+        if impulse.isActive && !wasActive && activeCount >= maxActiveCount {
+            throw VitaImpulseError.tooManyActive
+        }
+        if let index {
+            impulses[index] = impulse
+        } else {
+            impulses.append(impulse)
+        }
+        persist(impulses)
         return impulse
     }
 
+    @discardableResult
+    static func save(
+        title: String,
+        reason: String,
+        firstStep: String,
+        fireDate: Date,
+        now: Date = .now
+    ) throws -> VitaImpulse {
+        try save(
+            title: title,
+            reason: reason,
+            firstStep: firstStep,
+            notes: "",
+            fireDate: fireDate,
+            now: now
+        )
+    }
+
+    @discardableResult
+    static func save(
+        id: String? = nil,
+        title: String,
+        reason: String,
+        firstStep: String,
+        notes: String,
+        fireDate: Date,
+        deadline: Date? = nil,
+        durationMinutes: Int = 15,
+        priority: VitaImpulsePriority = .none,
+        repeatRule: VitaImpulseRepeat = .none,
+        focusMode: VitaImpulseFocusMode = .none,
+        now: Date = .now
+    ) throws -> VitaImpulse {
+        let existing: VitaImpulse?
+        if let id {
+            existing = load(id: id)
+        } else {
+            existing = nil
+        }
+        if existing == nil || existing?.fireDate != fireDate {
+            guard fireDate.timeIntervalSince(now) >= 5 else { throw VitaImpulseError.invalidDate }
+        }
+        let scheduleChanged = existing?.fireDate != fireDate
+        let status: VitaImpulseStatus = scheduleChanged ? .scheduled : (existing?.status ?? .scheduled)
+        let impulse = VitaImpulse(
+            id: id ?? UUID().uuidString.lowercased(),
+            title: title,
+            reason: reason,
+            firstStep: firstStep,
+            notes: notes,
+            fireDate: fireDate,
+            recurrenceAnchorDate: scheduleChanged ? fireDate : existing?.recurrenceAnchorDate,
+            deadline: deadline,
+            durationMinutes: durationMinutes,
+            priority: priority,
+            repeatRule: repeatRule,
+            focusMode: focusMode,
+            status: status,
+            createdAt: existing?.createdAt ?? now,
+            completedAt: scheduleChanged ? nil : existing?.completedAt,
+            acceptedAt: scheduleChanged ? nil : existing?.acceptedAt,
+            snoozeCount: existing?.snoozeCount ?? 0,
+            timerEndDate: scheduleChanged ? nil : existing?.timerEndDate,
+            isEnabled: true
+        )
+        return try upsert(impulse, now: now)
+    }
+
+    // Compatibility helper for the original single-reminder UI.
     static func update(_ impulse: VitaImpulse) {
-        guard let data = try? JSONEncoder().encode(impulse) else { return }
+        _ = try? upsert(impulse)
+    }
+
+    @discardableResult
+    static func delete(id: String) -> Bool {
+        var impulses = all()
+        let oldCount = impulses.count
+        impulses.removeAll { $0.id == id }
+        guard impulses.count != oldCount else { return false }
+        persist(impulses)
+        return true
+    }
+
+    // Compatibility helper for the original single-reminder UI.
+    static func disable() {
+        guard let impulse = load() else { return }
+        _ = try? disable(id: impulse.id)
+    }
+
+    @discardableResult
+    static func disable(id: String) throws -> VitaImpulse {
+        try mutate(id: id) { impulse in
+            impulse.isEnabled = false
+            impulse.timerEndDate = nil
+        }
+    }
+
+    @discardableResult
+    static func accept(id: String, now: Date = .now) throws -> VitaImpulse {
+        try mutate(id: id) { impulse in
+            impulse.status = .accepted
+            impulse.acceptedAt = now
+            if let timerEndDate = impulse.timerEndDate, timerEndDate <= now {
+                impulse.timerEndDate = nil
+            }
+            impulse.isEnabled = true
+        }
+    }
+
+    @discardableResult
+    static func reconcileExpiredTimers(now: Date = .now) -> [String] {
+        var impulses = all()
+        var expiredIDs: [String] = []
+        for index in impulses.indices {
+            guard impulses[index].status == .running,
+                  let timerEndDate = impulses[index].timerEndDate,
+                  timerEndDate <= now else { continue }
+            expiredIDs.append(impulses[index].id)
+            impulses[index].timerEndDate = nil
+            impulses[index].status = .accepted
+        }
+        if !expiredIDs.isEmpty {
+            persist(impulses)
+        }
+        return expiredIDs
+    }
+
+    @discardableResult
+    static func snooze(id: String, until: Date, now: Date = .now) throws -> VitaImpulse {
+        guard until > now else { throw VitaImpulseError.invalidSnooze }
+        return try mutate(id: id) { impulse in
+            if let deadline = impulse.deadline, until > deadline {
+                throw VitaImpulseError.invalidSnooze
+            }
+            let replacesPendingChoice = impulse.status == .snoozed && impulse.fireDate > now
+            impulse.fireDate = until
+            impulse.status = .snoozed
+            if !replacesPendingChoice {
+                impulse.snoozeCount += 1
+            }
+            impulse.timerEndDate = nil
+            impulse.isEnabled = true
+        }
+    }
+
+    @discardableResult
+    static func startTimer(
+        id: String,
+        durationMinutes: Int? = nil,
+        focusMode: VitaImpulseFocusMode? = nil,
+        now: Date = .now
+    ) throws -> VitaImpulse {
+        var impulses = all()
+        guard let selectedIndex = impulses.firstIndex(where: { $0.id == id }) else {
+            throw VitaImpulseError.notFound
+        }
+        let selectedDuration = durationMinutes ?? impulses[selectedIndex].durationMinutes
+        guard durationRange.contains(selectedDuration) else {
+            throw VitaImpulseError.invalidDuration
+        }
+
+        for index in impulses.indices where index != selectedIndex {
+            if impulses[index].timerEndDate != nil || impulses[index].status == .running {
+                impulses[index].timerEndDate = nil
+                impulses[index].status = impulses[index].acceptedAt == nil ? .scheduled : .accepted
+            }
+        }
+        impulses[selectedIndex].durationMinutes = selectedDuration
+        if let focusMode {
+            impulses[selectedIndex].focusMode = focusMode
+        }
+        impulses[selectedIndex].status = .running
+        impulses[selectedIndex].acceptedAt = impulses[selectedIndex].acceptedAt ?? now
+        impulses[selectedIndex].timerEndDate = now.addingTimeInterval(TimeInterval(selectedDuration * 60))
+        impulses[selectedIndex].isEnabled = true
+        persist(impulses)
+        return impulses[selectedIndex]
+    }
+
+    @discardableResult
+    static func cancelTimer(id: String) throws -> VitaImpulse {
+        try mutate(id: id) { impulse in
+            impulse.timerEndDate = nil
+            impulse.status = impulse.acceptedAt == nil ? .scheduled : .accepted
+        }
+    }
+
+    @discardableResult
+    static func complete(
+        id: String,
+        now: Date = .now,
+        calendar: Calendar = .current
+    ) throws -> VitaImpulse {
+        try mutate(id: id) { impulse in
+            impulse.completedAt = now
+            impulse.timerEndDate = nil
+            guard impulse.repeatRule != .none else {
+                impulse.status = .completed
+                impulse.isEnabled = false
+                return
+            }
+
+            let oldAnchorDate = impulse.recurrenceAnchorDate
+            let nextFireDate = try nextFireDate(
+                after: oldAnchorDate,
+                repeatRule: impulse.repeatRule,
+                now: now,
+                calendar: calendar
+            )
+            if let deadline = impulse.deadline {
+                impulse.deadline = deadline.addingTimeInterval(nextFireDate.timeIntervalSince(oldAnchorDate))
+            }
+            impulse.fireDate = nextFireDate
+            impulse.recurrenceAnchorDate = nextFireDate
+            impulse.status = .scheduled
+            impulse.acceptedAt = nil
+            impulse.snoozeCount = 0
+            impulse.isEnabled = true
+        }
+    }
+
+    private static func mutate(
+        id: String,
+        change: (inout VitaImpulse) throws -> Void
+    ) throws -> VitaImpulse {
+        var impulses = all()
+        guard let index = impulses.firstIndex(where: { $0.id == id }) else {
+            throw VitaImpulseError.notFound
+        }
+        try change(&impulses[index])
+        persist(impulses)
+        return impulses[index]
+    }
+
+    private static func trim(_ impulse: inout VitaImpulse) {
+        impulse.id = impulse.id.trimmingCharacters(in: .whitespacesAndNewlines)
+        impulse.title = impulse.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        impulse.reason = impulse.reason.trimmingCharacters(in: .whitespacesAndNewlines)
+        impulse.firstStep = impulse.firstStep.trimmingCharacters(in: .whitespacesAndNewlines)
+        impulse.notes = impulse.notes.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func validate(_ impulse: VitaImpulse) throws {
+        guard !impulse.title.isEmpty else { throw VitaImpulseError.missingTitle }
+        guard !impulse.firstStep.isEmpty else { throw VitaImpulseError.missingFirstStep }
+        guard durationRange.contains(impulse.durationMinutes) else { throw VitaImpulseError.invalidDuration }
+        if let deadline = impulse.deadline, deadline <= impulse.fireDate {
+            throw VitaImpulseError.invalidDeadline
+        }
+    }
+
+    private static func nextFireDate(
+        after fireDate: Date,
+        repeatRule: VitaImpulseRepeat,
+        now: Date,
+        calendar: Calendar
+    ) throws -> Date {
+        var candidate = fireDate
+        repeat {
+            switch repeatRule {
+            case .none:
+                return candidate
+            case .daily, .weekdays:
+                guard let next = calendar.date(byAdding: .day, value: 1, to: candidate) else {
+                    throw VitaImpulseError.invalidDate
+                }
+                candidate = next
+                if repeatRule == .weekdays {
+                    while calendar.isDateInWeekend(candidate) {
+                        guard let weekday = calendar.date(byAdding: .day, value: 1, to: candidate) else {
+                            throw VitaImpulseError.invalidDate
+                        }
+                        candidate = weekday
+                    }
+                }
+            case .weekly:
+                guard let next = calendar.date(byAdding: .day, value: 7, to: candidate) else {
+                    throw VitaImpulseError.invalidDate
+                }
+                candidate = next
+            case .monthly:
+                guard let next = calendar.date(byAdding: .month, value: 1, to: candidate) else {
+                    throw VitaImpulseError.invalidDate
+                }
+                candidate = next
+            }
+        } while candidate <= now
+        return candidate
+    }
+
+    private static func sorted(_ impulses: [VitaImpulse]) -> [VitaImpulse] {
+        impulses.sorted {
+            if $0.fireDate != $1.fireDate { return $0.fireDate < $1.fireDate }
+            return $0.createdAt < $1.createdAt
+        }
+    }
+
+    private static func persist(_ impulses: [VitaImpulse]) {
+        guard let data = try? JSONEncoder().encode(sorted(impulses)) else { return }
+        defaults?.set(data, forKey: key)
+    }
+}
+
+enum VitaImpulsePendingActionKind: String, Codable, Equatable {
+    case accept
+    case snooze
+}
+
+struct VitaImpulsePendingAction: Codable, Equatable {
+    var type: VitaImpulsePendingActionKind
+    var impulseID: String
+    var requestedAt: Date
+    var snoozeUntil: Date?
+}
+
+enum VitaImpulsePendingActionStore {
+    private static let key = "vitaImpulsePendingAction"
+
+    static var defaults: UserDefaults? { UserDefaults(suiteName: FocusAppGroup.id) }
+
+    static func set(
+        type: VitaImpulsePendingActionKind,
+        impulseID: String,
+        snoozeUntil: Date? = nil,
+        requestedAt: Date = .now
+    ) {
+        let action = VitaImpulsePendingAction(
+            type: type,
+            impulseID: impulseID,
+            requestedAt: requestedAt,
+            snoozeUntil: snoozeUntil
+        )
+        guard let data = try? JSONEncoder().encode(action) else { return }
         defaults?.set(data, forKey: key)
     }
 
-    static func disable() {
-        guard var impulse = load() else { return }
-        impulse.isEnabled = false
-        update(impulse)
+    static func load() -> VitaImpulsePendingAction? {
+        guard let data = defaults?.data(forKey: key) else { return nil }
+        return try? JSONDecoder().decode(VitaImpulsePendingAction.self, from: data)
+    }
+
+    static func consume() -> VitaImpulsePendingAction? {
+        let action = load()
+        clear()
+        return action
+    }
+
+    static func clear() {
+        defaults?.removeObject(forKey: key)
     }
 }
 
