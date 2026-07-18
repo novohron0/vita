@@ -8,9 +8,13 @@ SAFARI_APP="$ROOT/focus/safari/Vita Focus/Shared (App)"
 SAFARI_EXT="$ROOT/focus/safari/Vita Focus/Shared (Extension)/Resources"
 ASSET="$SAFARI_APP/Assets.xcassets/AppIcon.appiconset"
 PY="$ROOT/focus/scripts/prepare-extension-icons.py"
+MAC_PY="$ROOT/focus/scripts/make-vita-icon.py"
+MAC_SRC="${TMPDIR:-/tmp}/vita-focus-mac-icon-$$.png"
+trap 'rm -f "$MAC_SRC"' EXIT
 
 [ -f "$SRC" ] || { echo "missing $SRC"; exit 1; }
 python3 "$PY" "$SRC" "$EXT/icons"
+python3 "$MAC_PY" --mac "$SRC" "$MAC_SRC"
 cp "$SRC" "$SAFARI_APP/Resources/Icon.png"
 
 LARGE="$SAFARI_APP/Assets.xcassets/LargeIcon.imageset"
@@ -22,20 +26,22 @@ fi
 
 if [ -d "$ASSET" ]; then
   sips -z 1024 1024 "$SRC" --out "$ASSET/universal-icon-1024@1x.png" >/dev/null
-  sips -z 16 16 "$SRC" --out "$ASSET/mac-icon-16@1x.png" >/dev/null
-  sips -z 32 32 "$SRC" --out "$ASSET/mac-icon-16@2x.png" >/dev/null
-  sips -z 32 32 "$SRC" --out "$ASSET/mac-icon-32@1x.png" >/dev/null
-  sips -z 64 64 "$SRC" --out "$ASSET/mac-icon-32@2x.png" >/dev/null
-  sips -z 128 128 "$SRC" --out "$ASSET/mac-icon-128@1x.png" >/dev/null
-  sips -z 256 256 "$SRC" --out "$ASSET/mac-icon-128@2x.png" >/dev/null
-  sips -z 256 256 "$SRC" --out "$ASSET/mac-icon-256@1x.png" >/dev/null
-  sips -z 512 512 "$SRC" --out "$ASSET/mac-icon-256@2x.png" >/dev/null
-  sips -z 512 512 "$SRC" --out "$ASSET/mac-icon-512@1x.png" >/dev/null
-  sips -z 1024 1024 "$SRC" --out "$ASSET/mac-icon-512@2x.png" >/dev/null
+  sips -z 16 16 "$MAC_SRC" --out "$ASSET/mac-icon-16@1x.png" >/dev/null
+  sips -z 32 32 "$MAC_SRC" --out "$ASSET/mac-icon-16@2x.png" >/dev/null
+  sips -z 32 32 "$MAC_SRC" --out "$ASSET/mac-icon-32@1x.png" >/dev/null
+  sips -z 64 64 "$MAC_SRC" --out "$ASSET/mac-icon-32@2x.png" >/dev/null
+  sips -z 128 128 "$MAC_SRC" --out "$ASSET/mac-icon-128@1x.png" >/dev/null
+  sips -z 256 256 "$MAC_SRC" --out "$ASSET/mac-icon-128@2x.png" >/dev/null
+  sips -z 256 256 "$MAC_SRC" --out "$ASSET/mac-icon-256@1x.png" >/dev/null
+  sips -z 512 512 "$MAC_SRC" --out "$ASSET/mac-icon-256@2x.png" >/dev/null
+  sips -z 512 512 "$MAC_SRC" --out "$ASSET/mac-icon-512@1x.png" >/dev/null
+  sips -z 1024 1024 "$MAC_SRC" --out "$ASSET/mac-icon-512@2x.png" >/dev/null
 fi
 
 if [ -d "$SAFARI_EXT" ]; then
   cp "$EXT/icons/icon128.png" "$SAFARI_EXT/icon.png"
+  cp "$EXT/icons/"*.png "$SAFARI_EXT/icons/"
+  cp "$EXT/popup/icon.png" "$SAFARI_EXT/popup/icon.png"
 fi
 
 echo "icons synced (safari-safe, no blue tint)"

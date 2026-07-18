@@ -87,6 +87,11 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
 #if os(iOS)
         self.webView.scrollView.isScrollEnabled = true
         self.webView.scrollView.alwaysBounceVertical = true
+        self.webView.scrollView.keyboardDismissMode = .interactive
+        self.webView.allowsLinkPreview = false
+        self.webView.isOpaque = false
+        self.webView.backgroundColor = .clear
+        self.webView.scrollView.backgroundColor = .clear
 #endif
 
         self.webView.configuration.userContentController.add(self, name: "controller")
