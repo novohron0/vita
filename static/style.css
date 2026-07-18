@@ -1055,6 +1055,114 @@ main   { animation: fadeUp .7s cubic-bezier(.22,1,.36,1) both; }
 .showcase-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .showcase-actions .btn { margin: 0; padding: 10px 8px; font-size: 12px; text-align: center; text-decoration: none; }
 
+/* профили и коллекционные теги */
+.profile-editor-card { padding: 16px; }
+.profile-editor-head, .member-hero {
+  display: flex; align-items: center; gap: 14px; margin-bottom: 16px;
+}
+.profile-editor-title, .member-copy { min-width: 0; flex: 1; }
+.profile-editor-title h2, .member-copy h1 {
+  margin: 5px 0 1px; overflow: hidden; color: var(--text); font-size: 22px;
+  font-weight: 780; letter-spacing: -.45px; text-overflow: ellipsis; white-space: nowrap;
+}
+.account-state {
+  display: inline-flex; align-items: center; gap: 6px; color: var(--text-muted);
+  font-size: 11px; font-weight: 700; letter-spacing: .35px; text-transform: uppercase;
+}
+.account-state i { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px rgba(52, 199, 89, .7); }
+.profile-handle { color: var(--accent); font-size: 13px; font-weight: 650; text-decoration: none; }
+.profile-avatar {
+  position: relative; flex: none; display: grid; place-items: center; overflow: hidden;
+  border: 1px solid var(--glass-border); border-radius: 50%; color: var(--text-2);
+  background: linear-gradient(145deg, var(--glass-bg-lift), var(--glass-bg-soft));
+  box-shadow: var(--glass-inset), 0 8px 24px rgba(0, 0, 0, .2);
+}
+.profile-avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.profile-avatar b { font-size: .4em; font-weight: 800; text-transform: uppercase; }
+.profile-avatar-large { width: 82px; height: 82px; font-size: 82px; }
+.profile-avatar-large i {
+  position: absolute; right: 1px; bottom: 1px; z-index: 2; display: grid; place-items: center;
+  width: 24px; height: 24px; border: 2px solid var(--body-base); border-radius: 50%;
+  color: #fff; background: #6f5cff; font: 700 16px/1 -apple-system, system-ui, sans-serif;
+}
+.profile-avatar-small { width: 38px; height: 38px; font-size: 38px; }
+.profile-avatar-member { width: 96px; height: 96px; font-size: 96px; }
+.avatar-picker { position: relative; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.avatar-file-input {
+  position: absolute; width: 1px; height: 1px; overflow: hidden; margin: -1px; padding: 0;
+  border: 0; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
+}
+.avatar-picker:focus-within .profile-avatar { outline: 2px solid var(--accent); outline-offset: 3px; }
+.avatar-picker:active .profile-avatar { transform: scale(.97); }
+.profile-fields { display: grid; gap: 14px; }
+.profile-editor-card .primary { width: 100%; }
+.profile-editor-card .primary:disabled { cursor: wait; opacity: .5; transform: none; }
+.profile-status { min-height: 18px; margin: 8px 2px 0; }
+.profile-status.err { color: #ff6b81; }
+
+.tags-card .library-head { align-items: flex-start; }
+.tags-card .library-head .hint { margin-top: 5px; line-height: 1.45; }
+.tag-collection { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.vita-tag {
+  position: relative; display: flex; align-items: center; gap: 10px; min-width: 0; overflow: hidden;
+  padding: 11px; border: 1px solid var(--glass-border); border-radius: 14px;
+  background: var(--glass-bg-soft); box-shadow: var(--glass-inset);
+}
+.vita-tag > span:last-child { min-width: 0; display: grid; gap: 2px; }
+.vita-tag-icon {
+  flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px;
+  color: var(--tag-color, var(--text-2)); background: color-mix(in srgb, var(--tag-color, #aaa) 14%, transparent);
+  font-size: 16px; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tag-color, #aaa) 24%, transparent);
+}
+.vita-tag b { overflow: hidden; font-size: 13px; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+.vita-tag small { color: var(--tag-color, var(--text-muted)); font-size: 10px; font-weight: 700; letter-spacing: .35px; text-transform: uppercase; }
+.vita-tag em { color: var(--text-muted); font-size: 10px; font-style: normal; line-height: 1.3; }
+.vita-tag.is-locked { filter: grayscale(.75); opacity: .48; }
+.rarity-common { --tag-color: #a5a5ad; }
+.rarity-rare { --tag-color: #4aa8ff; }
+.rarity-epic { --tag-color: #b56cff; }
+.rarity-legendary { --tag-color: #ffad32; }
+.vita-tag.rarity-legendary {
+  background: linear-gradient(120deg, rgba(255, 173, 50, .12), var(--glass-bg-soft) 52%, rgba(255, 225, 145, .08));
+  border-color: rgba(255, 173, 50, .28);
+}
+
+.showcase-author {
+  display: flex; align-items: center; gap: 9px; min-width: 0; margin-bottom: 11px;
+  padding-bottom: 11px; border-bottom: 1px solid var(--glass-border); color: inherit; text-decoration: none;
+}
+.showcase-author-copy { min-width: 0; display: grid; gap: 1px; }
+.showcase-author-copy b { overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.showcase-author-copy small { color: var(--text-muted); font-size: 10px; }
+.author-tags { margin-left: auto; display: flex; justify-content: flex-end; gap: 4px; min-width: 0; }
+.author-tag {
+  max-width: 92px; overflow: hidden; padding: 4px 7px; border: 1px solid color-mix(in srgb, var(--tag-color) 28%, transparent);
+  border-radius: 999px; color: var(--tag-color); background: color-mix(in srgb, var(--tag-color) 10%, transparent);
+  font-size: 9px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.member-page { padding-top: 10px; }
+.member-card { padding: 18px; }
+.member-copy h1 { font-size: 26px; }
+.member-bio { margin: 3px 0 16px; color: var(--text-2); font-size: 15px; line-height: 1.55; white-space: pre-wrap; }
+.member-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.member-actions .btn, .member-actions button { width: 100%; margin: 0; padding: 11px 9px; font-size: 13px; text-align: center; text-decoration: none; }
+.member-error { padding: 22px; text-align: center; }
+.member-error h1 { margin-bottom: 8px; font-size: 22px; }
+.member-error .btn { display: block; margin-top: 16px; text-decoration: none; }
+
+@media (max-width: 420px) {
+  .tag-collection { grid-template-columns: 1fr; }
+  .author-tags .author-tag:nth-child(n+3) { display: none; }
+}
+
+@media (max-width: 350px) {
+  .profile-avatar-large { width: 70px; height: 70px; font-size: 70px; }
+  .profile-avatar-member { width: 78px; height: 78px; font-size: 78px; }
+  .author-tags { display: none; }
+  .member-actions { grid-template-columns: 1fr; }
+}
+
 /* fallback без backdrop-filter */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   :root {

@@ -1333,6 +1333,12 @@ struct VitaProfileBundle: Decodable {
         let theme: String?
         let dotStyle: String?
         let dotColor: String?
+
+        init(theme: String? = nil, dotStyle: String? = nil, dotColor: String? = nil) {
+            self.theme = theme
+            self.dotStyle = dotStyle
+            self.dotColor = dotColor
+        }
     }
 
     struct Goal: Decodable {
@@ -1340,25 +1346,85 @@ struct VitaProfileBundle: Decodable {
         let title: String
     }
 
+    struct Tag: Decodable, Equatable {
+        let id: String
+        let name: String
+        let description: String
+        let icon: String
+        let rarity: String
+        let earnedAt: String?
+
+        private enum CodingKeys: String, CodingKey {
+            case id, name, description, icon, rarity, earnedAt
+        }
+
+        init(from decoder: Decoder) throws {
+            if let single = try? decoder.singleValueContainer(),
+               let value = try? single.decode(String.self) {
+                id = value
+                name = value
+                description = ""
+                icon = ""
+                rarity = "common"
+                earnedAt = nil
+                return
+            }
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            let decodedID = try container.decodeIfPresent(String.self, forKey: .id) ?? ""
+            let decodedName = try container.decodeIfPresent(String.self, forKey: .name) ?? decodedID
+            id = decodedID.isEmpty ? decodedName : decodedID
+            name = decodedName.isEmpty ? decodedID : decodedName
+            description = try container.decodeIfPresent(String.self, forKey: .description) ?? ""
+            icon = try container.decodeIfPresent(String.self, forKey: .icon) ?? ""
+            rarity = try container.decodeIfPresent(String.self, forKey: .rarity) ?? "common"
+            earnedAt = try container.decodeIfPresent(String.self, forKey: .earnedAt)
+        }
+    }
+
     let code: String
+    let handle: String?
+    let name: String?
+    let bio: String?
+    let avatar: String?
+    let tags: [Tag]
     let settings: Settings
     let goals: [Goal]
+
+    private enum CodingKeys: String, CodingKey {
+        case code, handle, name, bio, avatar, tags, settings, goals
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        code = try container.decode(String.self, forKey: .code)
+        handle = try container.decodeIfPresent(String.self, forKey: .handle)
+        name = try container.decodeIfPresent(String.self, forKey: .name)
+        bio = try container.decodeIfPresent(String.self, forKey: .bio)
+        avatar = try container.decodeIfPresent(String.self, forKey: .avatar)
+        tags = try container.decodeIfPresent([Tag].self, forKey: .tags) ?? []
+        settings = try container.decodeIfPresent(Settings.self, forKey: .settings) ?? Settings()
+        goals = try container.decodeIfPresent([Goal].self, forKey: .goals) ?? []
+    }
 }
 
 enum VitaProfileError: LocalizedError {
-    case invalidCode, notFound, invalidResponse
+    case invalidCode, invalidToken, unauthorized, notFound, invalidResponse, server(String)
 
     var errorDescription: String? {
         switch self {
         case .invalidCode: return "Вставь десятизначный Vita ID из личного кабинета"
+        case .invalidToken: return "Не удалось подготовить аккаунт на этом устройстве"
+        case .unauthorized: return "Аккаунт не найден на этом устройстве"
         case .notFound: return "Vita ID не найден"
         case .invalidResponse: return "Не удалось загрузить данные Vita ID"
+        case .server(let message): return message
         }
     }
 }
 
 enum VitaProfileStore {
     private static let codeKey = "vitaProfileCode"
+    private static let ownerTokenKey = "vitaProfileOwnerToken"
     private static let alphabet = CharacterSet(charactersIn: "abcdefghjkmnpqrstuvwxyz23456789")
 
     static var defaults: UserDefaults? { UserDefaults(suiteName: FocusAppGroup.id) }
@@ -1366,6 +1432,11 @@ enum VitaProfileStore {
     static var code: String? {
         guard let raw = defaults?.string(forKey: codeKey) else { return nil }
         return normalized(raw)
+    }
+
+    static var ownerToken: String? {
+        guard let raw = defaults?.string(forKey: ownerTokenKey) else { return nil }
+        return normalizedOwnerToken(raw)
     }
 
     static func normalized(_ raw: String) -> String? {
@@ -1380,7 +1451,39 @@ enum VitaProfileStore {
         return code
     }
 
-    static func disconnect() { defaults?.removeObject(forKey: codeKey) }
+    static func normalizedOwnerToken(_ raw: String) -> String? {
+        let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard (20...200).contains(value.count),
+              value.unicodeScalars.allSatisfy({ !CharacterSet.controlCharacters.contains($0) }) else { return nil }
+        return value
+    }
+
+    static func makeOwnerToken() -> String {
+        (UUID().uuidString + UUID().uuidString)
+            .replacingOccurrences(of: "-", with: "")
+            .lowercased()
+    }
+
+    @discardableResult
+    static func save(ownerToken raw: String) -> String? {
+        guard let ownerToken = normalizedOwnerToken(raw) else { return nil }
+        defaults?.set(ownerToken, forKey: ownerTokenKey)
+        return ownerToken
+    }
+
+    @discardableResult
+    static func saveSession(code rawCode: String, ownerToken rawToken: String) -> Bool {
+        guard let code = normalized(rawCode),
+              let ownerToken = normalizedOwnerToken(rawToken) else { return false }
+        defaults?.set(code, forKey: codeKey)
+        defaults?.set(ownerToken, forKey: ownerTokenKey)
+        return true
+    }
+
+    static func disconnect() {
+        defaults?.removeObject(forKey: codeKey)
+        defaults?.removeObject(forKey: ownerTokenKey)
+    }
 
     static func apply(_ settings: VitaProfileBundle.Settings) {
         if let theme = settings.theme,
@@ -1393,39 +1496,182 @@ enum VitaProfileStore {
 }
 
 enum VitaProfileClient {
+    private static let apiRoot = "https://vitadots.ru"
+
+    static func register(ownerToken rawToken: String, name: String = "") async throws -> VitaProfileBundle {
+        guard let ownerToken = VitaProfileStore.normalizedOwnerToken(rawToken) else {
+            throw VitaProfileError.invalidToken
+        }
+        return try await sendProfileJSON(
+            path: "/api/profile",
+            method: "POST",
+            payload: ["ownerToken": ownerToken, "name": name]
+        )
+    }
+
+    static func connect(code rawCode: String, ownerToken rawToken: String) async throws -> VitaProfileBundle {
+        guard let code = VitaProfileStore.normalized(rawCode) else { throw VitaProfileError.invalidCode }
+        guard let ownerToken = VitaProfileStore.normalizedOwnerToken(rawToken) else {
+            throw VitaProfileError.invalidToken
+        }
+        return try await sendProfileJSON(
+            path: "/api/profile/connect",
+            method: "POST",
+            payload: ["ownerToken": ownerToken, "profileCode": code]
+        )
+    }
+
+    static func fetchCurrent(ownerToken rawToken: String) async throws -> VitaProfileBundle {
+        guard let ownerToken = VitaProfileStore.normalizedOwnerToken(rawToken) else {
+            throw VitaProfileError.invalidToken
+        }
+        return try await sendProfileJSON(
+            path: "/api/me",
+            method: "POST",
+            payload: ["ownerToken": ownerToken]
+        )
+    }
+
+    static func update(
+        ownerToken rawToken: String,
+        handle: String,
+        name: String,
+        bio: String
+    ) async throws -> VitaProfileBundle {
+        guard let ownerToken = VitaProfileStore.normalizedOwnerToken(rawToken) else {
+            throw VitaProfileError.invalidToken
+        }
+        return try await sendProfileJSON(
+            path: "/api/profile",
+            method: "PATCH",
+            payload: ["ownerToken": ownerToken, "handle": handle, "name": name, "bio": bio]
+        )
+    }
+
+    static func uploadAvatar(ownerToken rawToken: String, jpegData: Data) async throws -> VitaProfileBundle {
+        guard let ownerToken = VitaProfileStore.normalizedOwnerToken(rawToken),
+              let url = URL(string: apiRoot + "/api/profile/avatar") else {
+            throw VitaProfileError.invalidToken
+        }
+        let boundary = "VitaBoundary-\(UUID().uuidString)"
+        var body = Data()
+        body.appendMultipartField(name: "ownerToken", value: ownerToken, boundary: boundary)
+        body.appendMultipartFile(
+            name: "file",
+            filename: "avatar.jpg",
+            mimeType: "image/jpeg",
+            data: jpegData,
+            boundary: boundary
+        )
+        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 30
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.setValue(ownerToken, forHTTPHeaderField: "X-Vita-Token")
+        request.httpBody = body
+        return try await profileResponse(for: request)
+    }
+
     static func fetch(code raw: String) async throws -> VitaProfileBundle {
         guard let code = VitaProfileStore.normalized(raw),
-              let url = URL(string: "https://vitadots.ru/api/profile/\(code)/bundle") else {
+              let url = URL(string: apiRoot + "/api/profile/\(code)/bundle") else {
             throw VitaProfileError.invalidCode
         }
         var request = URLRequest(url: url)
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.timeoutInterval = 15
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse else { throw VitaProfileError.invalidResponse }
-        guard (200..<300).contains(http.statusCode) else {
-            throw http.statusCode == 404 ? VitaProfileError.notFound : VitaProfileError.invalidResponse
-        }
-        guard let bundle = try? JSONDecoder().decode(VitaProfileBundle.self, from: data) else {
-            throw VitaProfileError.invalidResponse
-        }
-        return bundle
+        return try await profileResponse(for: request)
     }
 
     static func saveCurrentSettings() async {
-        guard let code = VitaProfileStore.code,
-              let url = URL(string: "https://vitadots.ru/api/profile/\(code)/settings") else { return }
         let settings: [String: String] = [
             "theme": VitaWidgetThemeStore.load().rawValue,
             "dotStyle": VitaDotStyleStore.load().rawValue,
             "dotColor": VitaDotColorStore.load(),
         ]
+        let path: String
+        let payload: [String: Any]
+        if let ownerToken = VitaProfileStore.ownerToken {
+            path = "/api/profile/settings"
+            payload = ["ownerToken": ownerToken, "settings": settings]
+        } else if let code = VitaProfileStore.code {
+            path = "/api/profile/\(code)/settings"
+            payload = ["settings": settings]
+        } else {
+            return
+        }
+        guard let url = URL(string: apiRoot + path) else { return }
         var request = URLRequest(url: url)
         request.httpMethod = "PUT"
         request.timeoutInterval = 15
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try? JSONSerialization.data(withJSONObject: ["settings": settings])
+        request.httpBody = try? JSONSerialization.data(withJSONObject: payload)
         _ = try? await URLSession.shared.data(for: request)
+    }
+
+    private static func sendProfileJSON(
+        path: String,
+        method: String,
+        payload: [String: Any]
+    ) async throws -> VitaProfileBundle {
+        guard let url = URL(string: apiRoot + path) else { throw VitaProfileError.invalidResponse }
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.timeoutInterval = 20
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+        return try await profileResponse(for: request)
+    }
+
+    private static func profileResponse(for request: URLRequest) async throws -> VitaProfileBundle {
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await URLSession.shared.data(for: request)
+        } catch {
+            throw VitaProfileError.server("Нет связи с Vita — попробуй ещё раз")
+        }
+        guard let http = response as? HTTPURLResponse else { throw VitaProfileError.invalidResponse }
+        guard (200..<300).contains(http.statusCode) else {
+            if http.statusCode == 401 { throw VitaProfileError.unauthorized }
+            if http.statusCode == 404 { throw VitaProfileError.notFound }
+            if let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let detail = object["detail"] as? String,
+               !detail.isEmpty {
+                throw VitaProfileError.server(detail)
+            }
+            throw VitaProfileError.invalidResponse
+        }
+        do {
+            return try JSONDecoder().decode(VitaProfileBundle.self, from: data)
+        } catch {
+            throw VitaProfileError.invalidResponse
+        }
+    }
+}
+
+private extension Data {
+    mutating func appendMultipartField(name: String, value: String, boundary: String) {
+        append("--\(boundary)\r\n".data(using: .utf8)!)
+        append("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n".data(using: .utf8)!)
+        append("\(value)\r\n".data(using: .utf8)!)
+    }
+
+    mutating func appendMultipartFile(
+        name: String,
+        filename: String,
+        mimeType: String,
+        data: Data,
+        boundary: String
+    ) {
+        append("--\(boundary)\r\n".data(using: .utf8)!)
+        append("Content-Disposition: form-data; name=\"\(name)\"; filename=\"\(filename)\"\r\n".data(using: .utf8)!)
+        append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)
+        append(data)
+        append("\r\n".data(using: .utf8)!)
     }
 }
 

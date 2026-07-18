@@ -1,6 +1,15 @@
 (function () {
   const TOKEN_KEY = 'vitaOwnerToken';
 
+  async function responseData(response, fallback) {
+    let data;
+    try { data = await response.json(); }
+    catch { data = {}; }
+    const detail = typeof data.detail === 'string' ? data.detail : fallback;
+    if (!response.ok) throw new Error(detail);
+    return data;
+  }
+
   function makeToken() {
     const bytes = new Uint8Array(24);
     crypto.getRandomValues(bytes);
@@ -22,9 +31,7 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ownerToken: token(), name })
     });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.detail || 'Не удалось открыть Vita ID');
-    return data;
+    return responseData(response, 'Не удалось создать профиль Vita');
   }
 
   async function library() {
@@ -33,9 +40,7 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ownerToken: token() })
     });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.detail || 'Не удалось загрузить кабинет');
-    return data;
+    return responseData(response, 'Не удалось загрузить кабинет');
   }
 
   async function connect(profileCode) {
@@ -44,11 +49,38 @@
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ownerToken: nextToken, profileCode })
     });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.detail || 'Не удалось подключить Vita ID');
+    const data = await responseData(response, 'Не удалось подключить Vita ID');
     localStorage.setItem(TOKEN_KEY, nextToken);
     return data;
   }
 
-  window.VitaID = { token, ensure, library, connect };
+  async function updateProfile(values) {
+    const response = await fetch('/api/profile', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ownerToken: token(),
+        name: values.name || '',
+        handle: (values.handle || '').replace(/^@+/, ''),
+        bio: values.bio || ''
+      })
+    });
+    return responseData(response, 'Не удалось сохранить профиль');
+  }
+
+  async function uploadAvatar(file) {
+    const form = new FormData();
+    form.append('ownerToken', token());
+    form.append('file', file);
+    const response = await fetch('/api/profile/avatar', { method: 'POST', body: form });
+    return responseData(response, 'Не удалось загрузить фото');
+  }
+
+  async function member(handle) {
+    const clean = String(handle || '').trim().replace(/^@+/, '');
+    const response = await fetch(`/api/member/${encodeURIComponent(clean)}`);
+    return responseData(response, 'Профиль не найден');
+  }
+
+  window.VitaID = { token, ensure, library, connect, updateProfile, uploadAvatar, member };
 })();

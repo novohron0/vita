@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/png" href="/static/img/favicon.png">
+<link rel="apple-touch-icon" href="/static/img/apple-touch.png">
+<meta name="description" content="Публичный профиль участника Vita">
+<title>Профиль — Vita</title>
+<script src="/static/theme.js?v=2"></script>
+<script src="/static/vita-id.js?v=2"></script>
+<link rel="stylesheet" href="/static/style.css?v=25">
+</head>
+<body>
+<header>
+  <a class="logo" href="/">⠿ vita</a>
+  <nav class="nav">
+    <a href="/">Обои</a><a href="/goals">Цели</a><a href="/feed">Лента</a>
+    <a href="/me">Моя Vita</a><a href="/focus">Фокус</a>
+  </nav>
+</header>
+
+<main class="member-page">
+  <section id="memberCard" class="library-card member-card" aria-busy="true">
+    <div class="member-hero">
+      <span class="profile-avatar profile-avatar-member">
+        <img id="memberAvatar" alt="" hidden>
+        <b id="memberAvatarFallback" aria-hidden="true">V</b>
+      </span>
+      <div class="member-copy">
+        <span class="account-state"><i></i>Участник Vita</span>
+        <h1 id="memberName">Загружаем…</h1>
+        <p id="memberHandle" class="profile-handle"></p>
+      </div>
+    </div>
+    <p id="memberBio" class="member-bio" hidden></p>
+    <div class="member-actions">
+      <a class="btn primary" href="/feed">Смотреть ленту</a>
+      <button id="shareMember" type="button" class="secondary">Поделиться</button>
+    </div>
+  </section>
+
+  <section id="memberTagsCard" class="library-card tags-card" hidden>
+    <div class="library-head"><div><h2>Коллекция тегов</h2><p class="hint">Редкость — это история пути, а не игровое преимущество.</p></div></div>
+    <div id="memberTags" class="tag-collection"></div>
+  </section>
+
+  <section id="memberError" class="library-card member-error" hidden>
+    <h1>Профиль не найден</h1>
+    <p class="hint">Проверь @handle или вернись в ленту.</p>
+    <a class="btn primary" href="/feed">Открыть ленту</a>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = value => { const node = document.createElement('div'); node.textContent = value ?? ''; return node.innerHTML; };
+const rarityNames = { common: 'Обычный', rare: 'Редкий', epic: 'Эпический', legendary: 'Легендарный' };
+const safeMediaUrl = value => {
+  try {
+    const url = new URL(String(value || ''), location.origin);
+    return url.origin === location.origin || url.protocol === 'https:' ? url.href : '';
+  } catch { return ''; }
+};
+
+function pathHandle() {
+  const match = location.pathname.match(/^\/u\/([^/]+)\/?$/);
+  if (!match) return '';
+  try { return decodeURIComponent(match[1]).replace(/^@+/, ''); }
+  catch { return ''; }
+}
+
+function renderTags(values) {
+  const tags = Array.isArray(values) ? values : [];
+  $('memberTagsCard').hidden = !tags.length;
+  $('memberTags').innerHTML = tags.map(value => {
+    const tag = typeof value === 'string' ? { name: value } : (value || {});
+    const rarity = Object.prototype.hasOwnProperty.call(rarityNames, tag.rarity) ? tag.rarity : 'common';
+    return `<article class="vita-tag rarity-${rarity}">
+      <span class="vita-tag-icon" aria-hidden="true">${esc(String(tag.icon || tag.glyph || '◆').slice(0, 4))}</span>
+      <span><b>${esc(tag.name || tag.title || tag.id || 'Тег')}</b><small>${rarityNames[rarity]}</small>${tag.description ? `<em>${esc(tag.description)}</em>` : ''}</span>
+    </article>`;
+  }).join('');
+}
+
+function renderMember(payload) {
+  const data = payload.profile || payload;
+  const handle = String(data.handle || pathHandle()).replace(/^@+/, '');
+  const name = String(data.name || (handle ? `@${handle}` : 'Участник Vita'));
+  const avatar = safeMediaUrl(data.avatar);
+  $('memberName').textContent = name;
+  $('memberHandle').textContent = handle ? `@${handle}` : '';
+  $('memberAvatarFallback').textContent = (name || handle || 'V').trim().charAt(0).toUpperCase() || 'V';
+  $('memberAvatar').hidden = !avatar;
+  if (avatar) $('memberAvatar').src = avatar;
+  const bio = String(data.bio || '');
+  $('memberBio').hidden = !bio;
+  $('memberBio').textContent = bio;
+  document.title = `${name} — Vita`;
+  $('memberCard').setAttribute('aria-busy', 'false');
+  renderTags(data.tags);
+}
+
+$('memberAvatar').addEventListener('error', event => {
+  event.currentTarget.hidden = true;
+  event.currentTarget.removeAttribute('src');
+});
+
+$('shareMember').addEventListener('click', async event => {
+  const button = event.currentTarget;
+  try {
+    if (navigator.share) {
+      await navigator.share({ title: document.title, url: location.href });
+      button.textContent = '✓ Готово';
+    } else {
+      try { await navigator.clipboard.writeText(location.href); }
+      catch { window.prompt('Скопируй ссылку', location.href); }
+      button.textContent = '✓ Ссылка скопирована';
+    }
+    setTimeout(() => { button.textContent = 'Поделиться'; }, 1600);
+  } catch (error) {
+    if (error && error.name !== 'AbortError') window.prompt('Скопируй ссылку', location.href);
+  }
+});
+
+(async () => {
+  const handle = pathHandle();
+  if (!handle) {
+    $('memberCard').hidden = true;
+    $('memberError').hidden = false;
+    return;
+  }
+  try { renderMember(await VitaID.member(handle)); }
+  catch {
+    $('memberCard').hidden = true;
+    $('memberTagsCard').hidden = true;
+    $('memberError').hidden = false;
+  }
+})();
+</script>
+</body>
+</html>

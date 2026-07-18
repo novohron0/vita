@@ -23,11 +23,20 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
 
     @IBOutlet var webView: WKWebView!
 #if os(iOS)
+    private enum PhotoPickerPurpose {
+        case widgetPhoto
+        case profileAvatar
+    }
+
     private var habitObserver: NSObjectProtocol?
     private var appActiveObserver: NSObjectProtocol?
     private var impulseObserver: NSObjectProtocol?
     private var webContentReady = false
     private var appInterfaceStyle: UIUserInterfaceStyle = .unspecified
+    private var photoPickerPurpose = PhotoPickerPurpose.widgetPhoto
+    private var profileBundle: VitaProfileBundle?
+    private var profileRequestInFlight = false
+    private var allowsProfileBootstrap = true
 
     override var preferredStatusBarStyle: UIStatusBarStyle {
         switch appInterfaceStyle {
@@ -115,7 +124,11 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         pushGoalDotsState(to: webView)
         pushWidgetTheme(to: webView)
         pushImpulseState(to: webView)
-        pushProfileState(to: webView)
+        pushProfileState(
+            to: webView,
+            status: VitaProfileStore.code == nil ? "Создаём твой аккаунт…" : "Обновляем профиль…"
+        )
+        bootstrapProfile(in: webView)
         refreshActiveHabit(in: webView)
         if FocusDeepLinks.consumeGoalHighlight() {
             highlightGoals(in: webView)
@@ -221,6 +234,10 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
                 pickWidgetPhoto()
                 return
             }
+            if action == "pick-profile-avatar" {
+                pickProfileAvatar()
+                return
+            }
             if action == "save-impulse" {
                 saveImpulse(
                     id: payload["id"] as? String,
@@ -279,9 +296,20 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
                 connectProfile(payload["code"] as? String ?? "", in: webView)
                 return
             }
+            if action == "save-profile" {
+                saveProfile(
+                    handle: payload["handle"] as? String ?? "",
+                    name: payload["name"] as? String ?? "",
+                    bio: payload["bio"] as? String ?? "",
+                    in: webView
+                )
+                return
+            }
             if action == "disconnect-profile" {
+                profileBundle = nil
+                allowsProfileBootstrap = false
                 VitaProfileStore.disconnect()
-                pushProfileState(to: webView, status: "Vita ID отключён")
+                pushProfileState(to: webView, status: "Аккаунт отключён на этом устройстве")
                 return
             }
         }
@@ -524,6 +552,7 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
             pushWidgetTheme(to: webView, status: "Фото недоступны", isError: true)
             return
         }
+        photoPickerPurpose = .widgetPhoto
         let picker = UIImagePickerController()
         picker.sourceType = .photoLibrary
         picker.delegate = self
@@ -557,9 +586,13 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
             pushProfileState(to: webView, status: VitaProfileError.invalidCode.localizedDescription, isError: true)
             return
         }
+        guard !profileRequestInFlight else { return }
+        let ownerToken = VitaProfileStore.makeOwnerToken()
+        profileRequestInFlight = true
+        pushProfileState(to: webView, status: "Подключаем аккаунт…")
         Task { [weak self, weak webView] in
             do {
-                let bundle = try await VitaProfileClient.fetch(code: code)
+                let bundle = try await VitaProfileClient.connect(code: code, ownerToken: ownerToken)
                 var snapshot: VitaHabitSnapshot?
                 if let goal = bundle.goals.first {
                     _ = try VitaHabitStore.activate(goal.code)
@@ -567,22 +600,141 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
                 }
                 await MainActor.run {
                     guard let self, let webView else { return }
-                    _ = VitaProfileStore.save(code: bundle.code)
-                    VitaProfileStore.apply(bundle.settings)
-                    if let snapshot { VitaHabitStore.save(snapshot) }
-                    WidgetCenter.shared.reloadAllTimelines()
-                    self.pushProfileState(to: webView, status: "Vita ID подключён", goalCount: bundle.goals.count)
-                    self.pushHabitState(to: webView)
-                    self.pushWidgetTheme(to: webView)
-                    self.highlightGoals(in: webView)
+                    self.profileRequestInFlight = false
+                    self.allowsProfileBootstrap = true
+                    self.acceptProfileBundle(
+                        bundle,
+                        ownerToken: ownerToken,
+                        snapshot: snapshot,
+                        status: "Аккаунт подключён",
+                        in: webView
+                    )
                 }
             } catch {
                 await MainActor.run {
                     guard let self, let webView else { return }
+                    self.profileRequestInFlight = false
                     self.pushProfileState(to: webView, status: error.localizedDescription, isError: true)
                 }
             }
         }
+    }
+
+    private func bootstrapProfile(in webView: WKWebView) {
+        guard allowsProfileBootstrap, !profileRequestInFlight else { return }
+        let storedOwnerToken = VitaProfileStore.ownerToken
+        let ownerToken = storedOwnerToken ?? VitaProfileStore.makeOwnerToken()
+        _ = VitaProfileStore.save(ownerToken: ownerToken)
+        let code = VitaProfileStore.code
+        profileRequestInFlight = true
+        Task { [weak self, weak webView] in
+            do {
+                let bundle: VitaProfileBundle
+                if storedOwnerToken != nil, let code {
+                    do {
+                        bundle = try await VitaProfileClient.fetchCurrent(ownerToken: ownerToken)
+                    } catch VitaProfileError.unauthorized {
+                        // A previous first-run request may have failed after the
+                        // token was stored locally but before the server paired it.
+                        bundle = try await VitaProfileClient.connect(code: code, ownerToken: ownerToken)
+                    }
+                } else if let code {
+                    bundle = try await VitaProfileClient.connect(code: code, ownerToken: ownerToken)
+                } else {
+                    bundle = try await VitaProfileClient.register(ownerToken: ownerToken)
+                }
+                var snapshot: VitaHabitSnapshot?
+                if VitaHabitStore.activeCode == nil, let goal = bundle.goals.first {
+                    _ = try? VitaHabitStore.activate(goal.code)
+                    snapshot = try? await VitaHabitClient.fetch(code: goal.code)
+                }
+                await MainActor.run {
+                    guard let self, let webView else { return }
+                    self.profileRequestInFlight = false
+                    self.acceptProfileBundle(
+                        bundle,
+                        ownerToken: ownerToken,
+                        snapshot: snapshot,
+                        status: code == nil ? "Аккаунт создан" : nil,
+                        in: webView
+                    )
+                }
+            } catch {
+                await MainActor.run {
+                    guard let self, let webView else { return }
+                    self.profileRequestInFlight = false
+                    self.pushProfileState(to: webView, status: error.localizedDescription, isError: true)
+                }
+            }
+        }
+    }
+
+    private func saveProfile(handle: String, name: String, bio: String, in webView: WKWebView) {
+        guard let ownerToken = VitaProfileStore.ownerToken else {
+            bootstrapProfile(in: webView)
+            return
+        }
+        guard !profileRequestInFlight else { return }
+        profileRequestInFlight = true
+        pushProfileState(to: webView, status: "Сохраняем профиль…")
+        Task { [weak self, weak webView] in
+            do {
+                let bundle = try await VitaProfileClient.update(
+                    ownerToken: ownerToken,
+                    handle: handle,
+                    name: name,
+                    bio: bio
+                )
+                await MainActor.run {
+                    guard let self, let webView else { return }
+                    self.profileRequestInFlight = false
+                    self.profileBundle = bundle
+                    self.pushProfileState(to: webView, status: "Профиль сохранён")
+                }
+            } catch {
+                await MainActor.run {
+                    guard let self, let webView else { return }
+                    self.profileRequestInFlight = false
+                    self.pushProfileState(to: webView, status: error.localizedDescription, isError: true)
+                }
+            }
+        }
+    }
+
+    private func pickProfileAvatar() {
+        guard VitaProfileStore.ownerToken != nil else {
+            pushProfileState(to: webView, status: "Сначала дождись создания аккаунта", isError: true)
+            return
+        }
+        guard UIImagePickerController.isSourceTypeAvailable(.photoLibrary) else {
+            pushProfileState(to: webView, status: "Фото недоступны", isError: true)
+            return
+        }
+        photoPickerPurpose = .profileAvatar
+        let picker = UIImagePickerController()
+        picker.sourceType = .photoLibrary
+        picker.delegate = self
+        present(picker, animated: true)
+    }
+
+    private func acceptProfileBundle(
+        _ bundle: VitaProfileBundle,
+        ownerToken: String,
+        snapshot: VitaHabitSnapshot?,
+        status: String?,
+        in webView: WKWebView
+    ) {
+        guard VitaProfileStore.saveSession(code: bundle.code, ownerToken: ownerToken) else {
+            pushProfileState(to: webView, status: VitaProfileError.invalidResponse.localizedDescription, isError: true)
+            return
+        }
+        profileBundle = bundle
+        VitaProfileStore.apply(bundle.settings)
+        if let snapshot { VitaHabitStore.save(snapshot) }
+        WidgetCenter.shared.reloadAllTimelines()
+        pushProfileState(to: webView, status: status, goalCount: bundle.goals.count)
+        pushHabitState(to: webView)
+        pushWidgetTheme(to: webView)
     }
 
     private func pushProfileState(
@@ -592,10 +744,26 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         goalCount: Int? = nil
     ) {
         let code = VitaProfileStore.code
+        let bundle = profileBundle
         var payload: [String: Any] = [
             "connected": code != nil,
             "code": code ?? "",
-            "goals": goalCount ?? (VitaHabitStore.activeCode == nil ? 0 : 1),
+            "goals": goalCount ?? bundle?.goals.count ?? (VitaHabitStore.activeCode == nil ? 0 : 1),
+            "loading": profileRequestInFlight,
+            "handle": bundle?.handle ?? "",
+            "name": bundle?.name ?? "",
+            "bio": bundle?.bio ?? "",
+            "avatar": bundle?.avatar ?? "",
+            "tags": (bundle?.tags ?? []).map { tag in
+                [
+                    "id": tag.id,
+                    "name": tag.name,
+                    "description": tag.description,
+                    "icon": tag.icon,
+                    "rarity": tag.rarity,
+                    "earnedAt": tag.earnedAt ?? "",
+                ]
+            },
         ]
         if let status { payload["status"] = status; payload["isError"] = isError }
         guard let data = try? JSONSerialization.data(withJSONObject: payload),
@@ -1037,23 +1205,63 @@ extension ViewController: UIImagePickerControllerDelegate, UINavigationControlle
         _ picker: UIImagePickerController,
         didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
     ) {
+        let purpose = photoPickerPurpose
+        photoPickerPurpose = .widgetPhoto
         picker.dismiss(animated: true)
         guard let image = info[.originalImage] as? UIImage,
               let data = widgetPhotoData(image) else {
-            pushWidgetTheme(to: webView, status: "Не удалось обработать фото", isError: true)
+            if purpose == .profileAvatar {
+                pushProfileState(to: webView, status: "Не удалось обработать фото", isError: true)
+            } else {
+                pushWidgetTheme(to: webView, status: "Не удалось обработать фото", isError: true)
+            }
             return
         }
-        do {
-            try VitaWidgetThemeStore.savePhotoData(data)
-            WidgetCenter.shared.reloadAllTimelines()
-            Task { await VitaProfileClient.saveCurrentSettings() }
-            pushWidgetTheme(to: webView, status: "Фото установлено", theme: .photo)
-        } catch {
-            pushWidgetTheme(to: webView, status: "Не удалось сохранить фото", isError: true)
+
+        switch purpose {
+        case .widgetPhoto:
+            do {
+                try VitaWidgetThemeStore.savePhotoData(data)
+                WidgetCenter.shared.reloadAllTimelines()
+                Task { await VitaProfileClient.saveCurrentSettings() }
+                pushWidgetTheme(to: webView, status: "Фото установлено", theme: .photo)
+            } catch {
+                pushWidgetTheme(to: webView, status: "Не удалось сохранить фото", isError: true)
+            }
+        case .profileAvatar:
+            guard let ownerToken = VitaProfileStore.ownerToken,
+                  !profileRequestInFlight else { return }
+            profileRequestInFlight = true
+            pushProfileState(to: webView, status: "Загружаем аватар…")
+            Task { [weak self, weak webView] in
+                do {
+                    let bundle = try await VitaProfileClient.uploadAvatar(
+                        ownerToken: ownerToken,
+                        jpegData: data
+                    )
+                    await MainActor.run {
+                        guard let self, let webView else { return }
+                        self.profileRequestInFlight = false
+                        self.profileBundle = bundle
+                        self.pushProfileState(to: webView, status: "Аватар обновлён")
+                    }
+                } catch {
+                    await MainActor.run {
+                        guard let self, let webView else { return }
+                        self.profileRequestInFlight = false
+                        self.pushProfileState(
+                            to: webView,
+                            status: error.localizedDescription,
+                            isError: true
+                        )
+                    }
+                }
+            }
         }
     }
 
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+        photoPickerPurpose = .widgetPhoto
         picker.dismiss(animated: true)
     }
 

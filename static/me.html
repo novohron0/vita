@@ -7,8 +7,8 @@
 <link rel="apple-touch-icon" href="/static/img/apple-touch.png">
 <title>Моя Vita</title>
 <script src="/static/theme.js?v=2"></script>
-<script src="/static/vita-id.js?v=1"></script>
-<link rel="stylesheet" href="/static/style.css?v=24">
+<script src="/static/vita-id.js?v=2"></script>
+<link rel="stylesheet" href="/static/style.css?v=25">
 </head>
 <body>
 <header>
@@ -21,15 +21,51 @@
 
 <main>
   <div class="field"><span class="goal-title" style="text-transform:none">Моя Vita</span></div>
-  <p class="hint" style="margin-top:-8px">Все созданные цели, обои и настройки — в одном месте.</p>
+  <p class="hint" style="margin-top:-8px">Vita создаёт твой аккаунт автоматически. Имя, аватар и коллекция тегов будут жить здесь.</p>
+
+  <section class="library-card profile-editor-card">
+    <div class="profile-editor-head">
+      <label class="avatar-picker" for="profileAvatar" title="Изменить аватар" aria-label="Изменить аватар">
+        <span class="profile-avatar profile-avatar-large">
+          <img id="profileAvatarImage" alt="" hidden>
+          <b id="profileAvatarFallback" aria-hidden="true">V</b>
+          <i aria-hidden="true">＋</i>
+        </span>
+        <input id="profileAvatar" class="avatar-file-input" type="file" accept="image/jpeg,image/png,image/webp" aria-label="Изменить аватар" disabled>
+      </label>
+      <div class="profile-editor-title">
+        <span id="accountState" class="account-state"><i></i>Создаём аккаунт…</span>
+        <h2 id="profilePreviewName">Твоя Vita</h2>
+        <a id="publicProfileLink" class="profile-handle" href="#" hidden></a>
+      </div>
+    </div>
+    <div class="profile-fields">
+      <label class="field">Имя
+        <input id="profileName" minlength="2" maxlength="40" autocomplete="name" placeholder="Как тебя зовут">
+      </label>
+      <label class="field">Твой @handle
+        <input id="profileHandle" minlength="3" maxlength="24" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="vita_friend">
+      </label>
+      <label class="field">О себе
+        <textarea id="profileBio" maxlength="280" rows="3" placeholder="Что тебе важно и к чему ты идёшь"></textarea>
+      </label>
+    </div>
+    <button id="saveProfile" type="button" class="primary" disabled>Сохранить профиль</button>
+    <p id="profileStatus" class="hint profile-status" role="status" aria-live="polite"></p>
+  </section>
+
+  <section class="library-card tags-card">
+    <div class="library-head"><div><h2>Коллекция тегов</h2><p class="hint">Редкость показывает пройденный путь и не даёт преимуществ.</p></div></div>
+    <div id="profileTags" class="tag-collection"><p class="hint">Первый тег появится за первый шаг.</p></div>
+  </section>
 
   <section class="library-card vita-id-card">
-    <span class="library-label">Твой приватный Vita ID</span>
-    <div class="vita-code-row"><b id="profileCode">создаём…</b><button id="copyProfile" class="secondary">Скопировать</button></div>
-    <p class="hint">Вставь этот код в Vita Focus, чтобы подключить цели и настройки. Не публикуй его в ленте.</p>
-    <details class="profile-connect"><summary>Уже есть Vita ID?</summary>
-      <div class="profile-connect-row"><input id="existingProfileCode" maxlength="10" placeholder="abcdefgh23"><button id="connectExisting" class="secondary">Войти</button></div>
-      <p class="hint" id="connectStatus"></p>
+    <span class="library-label">Приватный код восстановления</span>
+    <div class="vita-code-row"><b id="profileCode">создаём…</b><button id="copyProfile" type="button" class="secondary" disabled>Скопировать</button></div>
+    <p class="hint">Он подключает твои устройства к одному аккаунту. Никому его не показывай — в публичном профиле кода нет.</p>
+    <details class="profile-connect"><summary>Восстановить свой аккаунт</summary>
+      <div class="profile-connect-row"><input id="existingProfileCode" maxlength="10" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="abcdefgh23"><button id="connectExisting" type="button" class="secondary">Войти</button></div>
+      <p class="hint" id="connectStatus" role="status" aria-live="polite"></p>
     </details>
   </section>
 
@@ -77,29 +113,103 @@ const $ = id => document.getElementById(id);
 const esc = value => { const node = document.createElement('div'); node.textContent = value ?? ''; return node.innerHTML; };
 let profile = null;
 
+const rarityNames = { common: 'Обычный', rare: 'Редкий', epic: 'Эпический', legendary: 'Легендарный' };
+const safeCode = value => /^[a-z0-9]+$/i.test(String(value || '')) ? String(value) : '';
+const safeColor = value => /^#[0-9a-f]{6}$/i.test(String(value || '')) ? String(value) : '#a855f7';
+const cleanHandle = value => String(value || '').trim().replace(/^@+/, '');
+const safeMediaUrl = value => {
+  try {
+    const url = new URL(String(value || ''), location.origin);
+    return url.origin === location.origin || url.protocol === 'https:' ? url.href : '';
+  } catch { return ''; }
+};
+
+function normalizedTag(value) {
+  const tag = typeof value === 'string' ? { name: value } : (value || {});
+  const rarity = Object.prototype.hasOwnProperty.call(rarityNames, tag.rarity) ? tag.rarity : 'common';
+  const progress = Number(tag.progress);
+  const target = Number(tag.target ?? tag.threshold);
+  return {
+    name: String(tag.name || tag.title || tag.id || 'Тег'),
+    description: String(tag.description || ''),
+    icon: String(tag.icon || tag.glyph || '◆').slice(0, 4),
+    rarity,
+    earned: tag.earned !== false && tag.locked !== true,
+    progress: Number.isFinite(progress) ? Math.max(0, progress) : null,
+    target: Number.isFinite(target) && target > 0 ? target : null
+  };
+}
+
+function renderTags(values) {
+  const tags = Array.isArray(values) ? values.map(normalizedTag) : [];
+  $('profileTags').innerHTML = tags.length ? tags.map(tag => {
+    const progress = tag.target !== null && tag.progress !== null
+      ? ` · ${Math.min(tag.progress, tag.target)}/${tag.target}` : '';
+    return `<article class="vita-tag rarity-${tag.rarity}${tag.earned ? '' : ' is-locked'}">
+      <span class="vita-tag-icon" aria-hidden="true">${esc(tag.icon)}</span>
+      <span><b>${esc(tag.name)}</b><small>${rarityNames[tag.rarity]}${progress}</small>${tag.description ? `<em>${esc(tag.description)}</em>` : ''}</span>
+    </article>`;
+  }).join('') : '<p class="hint">Первый тег появится за первый шаг.</p>';
+}
+
+function renderIdentity(data, { preserveFields = false } = {}) {
+  const savedName = String(data.name || '');
+  const savedHandle = cleanHandle(data.handle);
+  const avatar = safeMediaUrl(data.avatar);
+  if (!preserveFields) {
+    $('profileName').value = savedName;
+    $('profileHandle').value = savedHandle;
+    $('profileBio').value = String(data.bio || '');
+  }
+  const name = preserveFields ? $('profileName').value.trim() : savedName;
+  const handle = preserveFields ? cleanHandle($('profileHandle').value) : savedHandle;
+  $('profilePreviewName').textContent = name || 'Твоя Vita';
+  $('profileAvatarFallback').textContent = (name || handle || 'V').trim().charAt(0).toUpperCase() || 'V';
+  $('profileAvatarImage').hidden = !avatar;
+  if (avatar) $('profileAvatarImage').src = avatar;
+  else $('profileAvatarImage').removeAttribute('src');
+  const publicLink = $('publicProfileLink');
+  publicLink.hidden = !savedHandle;
+  publicLink.textContent = savedHandle ? `@${savedHandle}` : '';
+  publicLink.href = savedHandle ? `/u/${encodeURIComponent(savedHandle)}` : '#';
+  $('accountState').innerHTML = '<i></i>Аккаунт готов';
+  $('saveProfile').disabled = false;
+  $('profileAvatar').disabled = false;
+  renderTags(data.tags);
+}
+
 function libraryItem(item, kind) {
   const isGoal = kind === 'goal';
-  const href = isGoal ? `/g/${item.code}` : `/s/${item.code}`;
+  const code = safeCode(item.code);
+  const href = isGoal ? `/g/${encodeURIComponent(code)}` : `/s/${encodeURIComponent(code)}`;
   const meta = isGoal ? `${item.done}/${item.days} дней` : `${item.mode} · ${item.shape}`;
   return `<div class="library-item">
-    <i style="background:${item.color || '#a855f7'}"></i>
-    <div><b>${esc(item.title)}</b><span>${esc(meta)} · ${item.code}</span></div>
+    <i style="background:${safeColor(item.color)}"></i>
+    <div><b>${esc(item.title)}</b><span>${esc(meta)} · ${esc(code)}</span></div>
     <a href="${href}">Открыть</a>
-    <button class="publish-item" data-kind="${kind}" data-code="${item.code}" data-title="${encodeURIComponent(item.title)}">В ленту</button>
+    <button class="publish-item" data-kind="${isGoal ? 'goal' : 'wallpaper'}" data-code="${esc(code)}" data-title="${encodeURIComponent(String(item.title || ''))}">В ленту</button>
   </div>`;
 }
 
 function render(data) {
   profile = data;
-  $('profileCode').textContent = data.code;
-  $('goalsList').innerHTML = data.goals.length ? data.goals.map(item => libraryItem(item, 'goal')).join('') : '<p class="hint">Пока нет целей.</p>';
-  $('wallpapersList').innerHTML = data.wallpapers.length ? data.wallpapers.map(item => libraryItem(item, 'wallpaper')).join('') : '<p class="hint">Пока нет сохранённых обоев.</p>';
+  renderIdentity(data);
+  $('profileCode').textContent = String(data.code || '—');
+  $('copyProfile').disabled = !safeCode(data.code);
+  const goals = Array.isArray(data.goals) ? data.goals : [];
+  const wallpapers = Array.isArray(data.wallpapers) ? data.wallpapers : [];
+  const posts = Array.isArray(data.posts) ? data.posts : [];
+  $('goalsList').innerHTML = goals.length ? goals.map(item => libraryItem(item, 'goal')).join('') : '<p class="hint">Пока нет целей.</p>';
+  $('wallpapersList').innerHTML = wallpapers.length ? wallpapers.map(item => libraryItem(item, 'wallpaper')).join('') : '<p class="hint">Пока нет сохранённых обоев.</p>';
   const settings = data.settings || {};
   $('widgetTheme').value = settings.theme || 'graphite';
   $('dotStyle').value = settings.dotStyle || 'goal';
   if (/^#[0-9a-f]{6}$/i.test(settings.dotColor || '')) $('dotColor').value = settings.dotColor;
-  $('postsCard').hidden = !data.posts.length;
-  $('postsList').innerHTML = data.posts.map(post => `<div class="library-item"><div><b>${esc(post.title)}</b><span>${post.kind} · код ${post.sourceCode}</span></div><a href="/feed#post-${post.code}">Открыть</a></div>`).join('');
+  $('postsCard').hidden = !posts.length;
+  $('postsList').innerHTML = posts.map(post => {
+    const postCode = safeCode(post.code), sourceCode = safeCode(post.sourceCode);
+    return `<div class="library-item"><div><b>${esc(post.title)}</b><span>${esc(post.kind)} · код ${esc(sourceCode)}</span></div><a href="/feed#post-${encodeURIComponent(postCode)}">Открыть</a></div>`;
+  }).join('');
   document.querySelectorAll('.publish-item').forEach(button => button.addEventListener('click', () => openPublish(button)));
 }
 
@@ -115,8 +225,80 @@ function openPublish(button) {
 }
 
 $('closePublish').addEventListener('click', () => { $('publishCard').hidden = true; });
+$('saveProfile').addEventListener('click', async () => {
+  const button = $('saveProfile');
+  const status = $('profileStatus');
+  const name = $('profileName').value.trim();
+  const handle = cleanHandle($('profileHandle').value).toLowerCase();
+  if (name.length < 2 || name.length > 40) {
+    status.textContent = 'Имя: от 2 до 40 символов';
+    status.classList.add('err');
+    return;
+  }
+  if (!/^[a-z0-9_]{3,24}$/.test(handle)) {
+    status.textContent = 'Handle: 3–24 латинских буквы, цифры или _';
+    status.classList.add('err');
+    return;
+  }
+  button.disabled = true;
+  status.textContent = 'Сохраняем…';
+  status.classList.remove('err');
+  try {
+    const data = await VitaID.updateProfile({
+      name,
+      handle,
+      bio: $('profileBio').value.trim()
+    });
+    profile = { ...profile, ...(data.profile || data) };
+    renderIdentity(profile);
+    status.textContent = '✓ Профиль сохранён';
+  } catch (error) {
+    status.textContent = error.message;
+    status.classList.add('err');
+  }
+  button.disabled = false;
+});
+
+$('profileAvatar').addEventListener('change', async event => {
+  const input = event.currentTarget;
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const status = $('profileStatus');
+  if (!file.type.startsWith('image/')) {
+    status.textContent = 'Выбери картинку';
+    status.classList.add('err');
+    input.value = '';
+    return;
+  }
+  if (file.size > 8 * 1024 * 1024) {
+    status.textContent = 'Фото должно быть не больше 8 МБ';
+    status.classList.add('err');
+    input.value = '';
+    return;
+  }
+  status.classList.remove('err');
+  status.textContent = 'Загружаем фото…';
+  try {
+    const data = await VitaID.uploadAvatar(file);
+    profile = { ...profile, ...(data.profile || data) };
+    renderIdentity(profile, { preserveFields: true });
+    status.textContent = '✓ Аватар обновлён';
+  } catch (error) {
+    status.textContent = error.message;
+    status.classList.add('err');
+  }
+  input.value = '';
+});
+
+$('profileAvatarImage').addEventListener('error', event => {
+  event.currentTarget.hidden = true;
+  event.currentTarget.removeAttribute('src');
+});
+
 $('copyProfile').addEventListener('click', async () => {
-  try { await navigator.clipboard.writeText(profile.code); } catch { window.prompt('Скопируй Vita ID', profile.code); }
+  const code = safeCode(profile && profile.code);
+  if (!code) return;
+  try { await navigator.clipboard.writeText(code); } catch { window.prompt('Скопируй Vita ID', code); }
   $('copyProfile').textContent = '✓ Скопировано';
   setTimeout(() => { $('copyProfile').textContent = 'Скопировать'; }, 1400);
 });

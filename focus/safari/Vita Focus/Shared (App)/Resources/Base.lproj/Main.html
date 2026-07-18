@@ -2,7 +2,7 @@
 <html lang="ru" data-app-appearance="dark" data-app-appearance-mode="system">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: https://vitadots.ru">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>Vita Focus</title>
     <link rel="stylesheet" href="../Style.css">
@@ -101,6 +101,30 @@
                 <p>Аккаунт, внешний вид и помощь — всё личное здесь.</p>
             </section>
 
+            <section class="step-card vita-profile-card" data-app-tab-content="me" hidden>
+                <div class="profile-identity">
+                    <button id="pickProfileAvatar" type="button" class="profile-avatar-button" aria-label="Выбрать аватар">
+                        <img id="profileAvatar" alt="" hidden>
+                        <span id="profileAvatarFallback" aria-hidden="true">V</span>
+                        <i aria-hidden="true">＋</i>
+                    </button>
+                    <div>
+                        <span class="impulse-eyebrow">Твой аккаунт</span>
+                        <h2 id="profileDisplayName" class="step-title">Создаём профиль…</h2>
+                        <p id="profilePublicHandle" class="profile-public-handle">Публичный ник появится здесь</p>
+                    </div>
+                </div>
+                <div class="profile-fields">
+                    <label><span>Имя</span><input id="profileName" type="text" maxlength="40" autocomplete="name" placeholder="Как тебя называть"></label>
+                    <label><span>Ник</span><span class="profile-handle-field"><i aria-hidden="true">@</i><input id="profileHandle" type="text" maxlength="24" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="vita_name"></span></label>
+                    <label><span>О себе</span><textarea id="profileBio" maxlength="280" rows="3" placeholder="Пара слов о себе"></textarea></label>
+                </div>
+                <button id="saveProfile" type="button" class="primary">Сохранить профиль</button>
+                <div class="profile-tags-head"><strong>Теги</strong><span>Выдаёт Vita</span></div>
+                <div id="profileTags" class="profile-tags" aria-live="polite"></div>
+                <p id="profileStatus" class="habit-status" role="status" aria-live="polite"></p>
+            </section>
+
             <section class="step-card app-theme-card" data-app-tab-content="me" hidden>
                 <div class="step-head">
                     <div>
@@ -117,16 +141,16 @@
 
             <details id="vitaIDDetails" class="step-card settings-card vita-id-settings" data-app-tab-content="me" hidden>
                 <summary>
-                    <span><strong>Vita ID</strong><small id="vitaIDSummary">Подключи личный кабинет</small></span>
+                    <span><strong>Приватный Vita ID</strong><small id="vitaIDSummary">Код восстановления аккаунта</small></span>
                     <i class="chevron" aria-hidden="true">›</i>
                 </summary>
                 <div class="settings-content">
-                    <p class="step-text">Один код подключает цели и настройки с vitadots.ru.</p>
+                    <p class="step-text">Сохрани код в надёжном месте. Он восстанавливает профиль, цели и настройки на другом устройстве.</p>
                     <label class="habit-code-field"><span>Приватный Vita ID</span>
                         <input id="vitaIDCode" type="text" maxlength="10" autocomplete="off" autocapitalize="none" placeholder="abcdefgh23">
                     </label>
-                    <button id="connectVitaID" type="button" class="primary">Подключить всё</button>
-                    <button id="disconnectVitaID" type="button" class="text-action" hidden>Отключить Vita ID</button>
+                    <button id="connectVitaID" type="button" class="primary">Восстановить по коду</button>
+                    <button id="disconnectVitaID" type="button" class="text-action" hidden>Выйти на этом устройстве</button>
                     <p id="vitaIDStatus" class="habit-status" role="status" aria-live="polite"></p>
                 </div>
             </details>

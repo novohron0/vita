@@ -10,11 +10,11 @@ from datetime import date, timedelta
 from html import escape as esc
 from pathlib import Path
 
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
-from PIL import Image
+from PIL import Image, ImageOps
 
 from .render import SHAPES, render_goal, render_wallpaper
 
@@ -25,6 +25,56 @@ DATA.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA / "vita.db"
 
 CODE_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"
+HANDLE_RE = re.compile(r"[a-z0-9_]{3,24}")
+
+# Starter tags are issued only by the server. The rarity roll is intentionally
+# simple and auditable: 70% common, 22% rare, 7% epic, 1% legendary.
+STARTER_TAGS = {
+    "common": (
+        {
+            "id": "first_step",
+            "name": "Первый шаг",
+            "description": "Начал свой путь в Vita",
+            "icon": "🌱",
+        },
+        {
+            "id": "vita_beginner",
+            "name": "Новичок Vita",
+            "description": "Создал свой Vita ID",
+            "icon": "●",
+        },
+    ),
+    "rare": (
+        {
+            "id": "blue_spark",
+            "name": "Синяя искра",
+            "description": "Редкий стартовый знак",
+            "icon": "💧",
+        },
+        {
+            "id": "night_runner",
+            "name": "Ночной ход",
+            "description": "Редкий знак решительного старта",
+            "icon": "🌙",
+        },
+    ),
+    "epic": (
+        {
+            "id": "violet_pulse",
+            "name": "Фиолетовый импульс",
+            "description": "Эпический стартовый знак",
+            "icon": "🔮",
+        },
+    ),
+    "legendary": (
+        {
+            "id": "golden_origin",
+            "name": "Золотое начало",
+            "description": "Легендарный стартовый знак Vita",
+            "icon": "✦",
+        },
+    ),
+}
 
 # авто-модерация ленты: ссылки и явный спам в названии цели
 FEED_TITLE_BLOCK = re.compile(
@@ -53,14 +103,71 @@ def db() -> sqlite3.Connection:
     conn.execute(
         "CREATE TABLE IF NOT EXISTS profiles("
         "code TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE, "
-        "name TEXT NOT NULL DEFAULT '', settings TEXT NOT NULL DEFAULT '{}', "
+        "handle TEXT NOT NULL DEFAULT '', name TEXT NOT NULL DEFAULT '', "
+        "bio TEXT NOT NULL DEFAULT '', avatar_id TEXT NOT NULL DEFAULT '', "
+        "settings TEXT NOT NULL DEFAULT '{}', "
         "created TEXT NOT NULL DEFAULT (datetime('now')))"
     )
+    for col in (
+        "handle TEXT NOT NULL DEFAULT ''",
+        "bio TEXT NOT NULL DEFAULT ''",
+        "avatar_id TEXT NOT NULL DEFAULT ''",
+    ):
+        try:
+            conn.execute(f"ALTER TABLE profiles ADD COLUMN {col}")
+        except sqlite3.OperationalError:
+            pass
     conn.execute(
         "CREATE TABLE IF NOT EXISTS profile_devices("
         "profile_code TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE, "
         "created TEXT NOT NULL DEFAULT (datetime('now')), "
         "PRIMARY KEY(profile_code, token_hash))"
+    )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS profile_tags("
+        "profile_code TEXT NOT NULL, tag_id TEXT NOT NULL, name TEXT NOT NULL, "
+        "description TEXT NOT NULL DEFAULT '', icon TEXT NOT NULL DEFAULT '', "
+        "rarity TEXT NOT NULL, earned_at TEXT NOT NULL DEFAULT (datetime('now')), "
+        "PRIMARY KEY(profile_code, tag_id))"
+    )
+    # Backfill pre-account profiles without exposing their private Vita ID.
+    # The first pass also repairs a partially applied migration before adding
+    # the case-insensitive unique index. Later requests inspect only incomplete
+    # rows, because db() is opened on every request.
+    handle_index_exists = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'index' "
+        "AND name = 'profiles_handle_unique'"
+    ).fetchone() is not None
+    if handle_index_exists:
+        profile_rows = conn.execute(
+            "SELECT code, handle, name FROM profiles "
+            "WHERE COALESCE(trim(handle), '') = '' "
+            "OR COALESCE(trim(name), '') = ''"
+        ).fetchall()
+    else:
+        profile_rows = conn.execute(
+            "SELECT code, handle, name FROM profiles ORDER BY created, code"
+        ).fetchall()
+    seen_handles: set[str] = set()
+    for profile_code, raw_handle, raw_name in profile_rows:
+        handle = (raw_handle or "").strip().lower()
+        if HANDLE_RE.fullmatch(handle) is None or handle in seen_handles:
+            handle = _unique_profile_handle(conn)
+        if handle != raw_handle:
+            conn.execute("UPDATE profiles SET handle = ? WHERE code = ?", (handle, profile_code))
+        seen_handles.add(handle)
+        if not (raw_name or "").strip():
+            conn.execute("UPDATE profiles SET name = ? WHERE code = ?", (handle, profile_code))
+    for (profile_code,) in conn.execute(
+        "SELECT p.code FROM profiles p "
+        "WHERE NOT EXISTS ("
+        "SELECT 1 FROM profile_tags t WHERE t.profile_code = p.code"
+        ")"
+    ).fetchall():
+        _ensure_starter_tag(conn, profile_code)
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS profiles_handle_unique "
+        "ON profiles(handle COLLATE NOCASE)"
     )
     for col in (
         "fetches INTEGER NOT NULL DEFAULT 0",
@@ -165,6 +272,13 @@ class ProfileIn(BaseModel):
     name: str = ""
 
 
+class ProfileUpdateIn(BaseModel):
+    ownerToken: str = ""
+    name: str | None = None
+    handle: str | None = None
+    bio: str | None = None
+
+
 class ProfileConnectIn(BaseModel):
     ownerToken: str = ""
     profileCode: str = ""
@@ -217,6 +331,79 @@ def _gen_profile_code() -> str:
     return "".join(secrets.choice(CODE_ALPHABET) for _ in range(10))
 
 
+def _unique_profile_handle(conn: sqlite3.Connection) -> str:
+    for _ in range(32):
+        handle = f"vita_{_gen_code()}"
+        if conn.execute(
+            "SELECT 1 FROM profiles WHERE handle = ? COLLATE NOCASE", (handle,)
+        ).fetchone() is None:
+            return handle
+    raise HTTPException(503, "Не удалось подобрать имя профиля — попробуй ещё раз")
+
+
+def _starter_rarity() -> str:
+    roll = secrets.randbelow(100)
+    if roll < 70:
+        return "common"
+    if roll < 92:
+        return "rare"
+    if roll < 99:
+        return "epic"
+    return "legendary"
+
+
+def _ensure_starter_tag(conn: sqlite3.Connection, profile_code: str) -> None:
+    if conn.execute(
+        "SELECT 1 FROM profile_tags WHERE profile_code = ? LIMIT 1", (profile_code,)
+    ).fetchone():
+        return
+    rarity = _starter_rarity()
+    tag = secrets.choice(STARTER_TAGS[rarity])
+    conn.execute(
+        "INSERT INTO profile_tags(profile_code, tag_id, name, description, icon, rarity) "
+        "VALUES(?, ?, ?, ?, ?, ?)",
+        (profile_code, tag["id"], tag["name"], tag["description"], tag["icon"], rarity),
+    )
+
+
+def _profile_tags(conn: sqlite3.Connection, profile_code: str) -> list[dict]:
+    return [
+        {
+            "id": tag_id,
+            "name": name,
+            "description": description,
+            "icon": icon,
+            "rarity": rarity,
+            "earnedAt": earned_at,
+        }
+        for tag_id, name, description, icon, rarity, earned_at in conn.execute(
+            "SELECT tag_id, name, description, icon, rarity, earned_at "
+            "FROM profile_tags WHERE profile_code = ? ORDER BY earned_at, tag_id",
+            (profile_code,),
+        )
+    ]
+
+
+def _avatar_url(avatar_id: str) -> str:
+    return f"/media/avatar/{avatar_id}.jpg" if avatar_id else ""
+
+
+def _normalize_handle(raw: str) -> str:
+    handle = raw.strip().lower().removeprefix("@")
+    if HANDLE_RE.fullmatch(handle) is None:
+        raise HTTPException(422, "Ник: 3–24 символа, только латиница, цифры и _")
+    return handle
+
+
+def _normalize_profile_name(raw: str) -> str:
+    name = " ".join(raw.strip().split())
+    if not (2 <= len(name) <= 40):
+        raise HTTPException(422, "Имя должно быть от 2 до 40 символов")
+    if FEED_TITLE_BLOCK.search(name):
+        raise HTTPException(422, "В имени не должно быть ссылок или рекламы")
+    return name
+
+
 def _token_hash(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
@@ -239,12 +426,17 @@ def _profile_for_token(conn: sqlite3.Connection, token: str, create: bool = Fals
         return None
     for _ in range(8):
         code = _gen_profile_code()
+        handle = _unique_profile_handle(conn)
         try:
-            conn.execute("INSERT INTO profiles(code, token_hash) VALUES(?, ?)", (code, digest))
+            conn.execute(
+                "INSERT INTO profiles(code, token_hash, handle, name) VALUES(?, ?, ?, ?)",
+                (code, digest, handle, handle),
+            )
             conn.execute(
                 "INSERT INTO profile_devices(profile_code, token_hash) VALUES(?, ?)",
                 (code, digest),
             )
+            _ensure_starter_tag(conn, code)
             return code
         except sqlite3.IntegrityError:
             continue
@@ -314,12 +506,12 @@ def _feed_items(conn: sqlite3.Connection, limit: int = 60) -> list[dict]:
 
 def _feed_posts(conn: sqlite3.Connection, limit: int = 60) -> list[dict]:
     rows = conn.execute(
-        "SELECT code, kind, source_code, title, description, image_id, created "
+        "SELECT code, kind, source_code, title, description, image_id, created, owner_code "
         "FROM feed_posts WHERE hidden = 0 ORDER BY created DESC LIMIT ?",
         (min(max(limit, 1), 100),),
     ).fetchall()
     posts = []
-    for code, kind, source, title, description, image_id, created in rows:
+    for code, kind, source, title, description, image_id, created, owner_code in rows:
         if not _feed_title_ok(title):
             continue
         target = f"/c/{source}" if kind in ("goal", "widget") else f"/s/{source}"
@@ -327,6 +519,7 @@ def _feed_posts(conn: sqlite3.Connection, limit: int = 60) -> list[dict]:
             "code": code, "kind": kind, "sourceCode": source, "title": title,
             "description": description, "image": f"/media/post/{image_id}.jpg" if image_id else "",
             "target": target, "created": created,
+            "author": _public_profile_payload(conn, profile_code=owner_code),
         })
     return posts
 
@@ -341,9 +534,40 @@ def _completed_for_challenge(conn: sqlite3.Connection, code: str, root: str | No
     ).fetchone()[0]
 
 
+def _public_profile_payload(
+    conn: sqlite3.Connection,
+    *,
+    profile_code: str | None = None,
+    handle: str | None = None,
+) -> dict:
+    if profile_code is not None:
+        row = conn.execute(
+            "SELECT code, handle, name, bio, avatar_id FROM profiles WHERE code = ?",
+            (profile_code,),
+        ).fetchone()
+    else:
+        row = conn.execute(
+            "SELECT code, handle, name, bio, avatar_id FROM profiles "
+            "WHERE handle = ? COLLATE NOCASE",
+            (handle or "",),
+        ).fetchone()
+    if row is None:
+        raise HTTPException(404, "Профиль не найден")
+    code, public_handle, name, bio, avatar_id = row
+    return {
+        "handle": public_handle,
+        "name": name,
+        "bio": bio,
+        "avatar": _avatar_url(avatar_id),
+        "tags": _profile_tags(conn, code),
+    }
+
+
 def _profile_payload(conn: sqlite3.Connection, profile_code: str) -> dict:
     row = conn.execute(
-        "SELECT name, settings, created FROM profiles WHERE code = ?", (profile_code,)
+        "SELECT handle, name, bio, avatar_id, settings, created "
+        "FROM profiles WHERE code = ?",
+        (profile_code,),
     ).fetchone()
     if row is None:
         raise HTTPException(404, "Vita ID не найден")
@@ -388,12 +612,21 @@ def _profile_payload(conn: sqlite3.Connection, profile_code: str) -> dict:
         )
     ]
     try:
-        settings = json.loads(row[1] or "{}")
+        settings = json.loads(row[4] or "{}")
     except json.JSONDecodeError:
         settings = {}
     return {
-        "code": profile_code, "name": row[0], "settings": settings,
-        "goals": goals, "wallpapers": wallpapers, "posts": posts, "created": row[2],
+        "code": profile_code,
+        "handle": row[0],
+        "name": row[1],
+        "bio": row[2],
+        "avatar": _avatar_url(row[3]),
+        "tags": _profile_tags(conn, profile_code),
+        "settings": settings,
+        "goals": goals,
+        "wallpapers": wallpapers,
+        "posts": posts,
+        "created": row[5],
     }
 
 
@@ -478,6 +711,20 @@ def post_image(image_id: str):
     if not path.exists():
         raise HTTPException(404, "Картинка не найдена")
     return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/media/avatar/{image_id}.jpg")
+def avatar_image(image_id: str):
+    if not re.fullmatch(r"[a-z0-9]{10}", image_id):
+        raise HTTPException(404, "Аватар не найден")
+    path = DATA / "avatars" / f"{image_id}.jpg"
+    if not path.exists():
+        raise HTTPException(404, "Аватар не найден")
+    return FileResponse(
+        path,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+    )
 
 
 @app.post("/api/link")
@@ -658,14 +905,112 @@ def cabinet_page():
     return FileResponse(ROOT / "static" / "me.html", headers={"Cache-Control": "no-cache"})
 
 
+@app.get("/u/{handle}")
+def member_page(handle: str):
+    return FileResponse(ROOT / "static" / "member.html", headers={"Cache-Control": "no-cache"})
+
+
 @app.post("/api/profile")
 def ensure_profile(profile: ProfileIn):
+    name = _normalize_profile_name(profile.name) if profile.name.strip() else ""
     with db() as conn:
         code = _profile_for_token(conn, profile.ownerToken, create=True)
-        name = profile.name.strip()[:40]
         if name:
             conn.execute("UPDATE profiles SET name = ? WHERE code = ?", (name, code))
         return _profile_payload(conn, code)
+
+
+@app.patch("/api/profile")
+def update_profile(profile: ProfileUpdateIn):
+    with db() as conn:
+        code = _profile_for_token(conn, profile.ownerToken)
+        if code is None:
+            raise HTTPException(401, "Нет доступа к Vita ID")
+
+        fields: dict[str, str] = {}
+        if profile.name is not None:
+            fields["name"] = _normalize_profile_name(profile.name)
+        if profile.handle is not None:
+            handle = _normalize_handle(profile.handle)
+            occupied = conn.execute(
+                "SELECT 1 FROM profiles WHERE handle = ? COLLATE NOCASE AND code != ?",
+                (handle, code),
+            ).fetchone()
+            if occupied:
+                raise HTTPException(409, "Этот ник уже занят")
+            fields["handle"] = handle
+        if profile.bio is not None:
+            bio = profile.bio.strip()
+            if len(bio) > 280:
+                raise HTTPException(422, "Описание — максимум 280 символов")
+            if FEED_TITLE_BLOCK.search(bio):
+                raise HTTPException(422, "В описании не должно быть ссылок или рекламы")
+            fields["bio"] = bio
+
+        if fields:
+            assignments = ", ".join(f"{key} = ?" for key in fields)
+            try:
+                conn.execute(
+                    f"UPDATE profiles SET {assignments} WHERE code = ?",
+                    (*fields.values(), code),
+                )
+            except sqlite3.IntegrityError as error:
+                raise HTTPException(409, "Этот ник уже занят") from error
+        return _profile_payload(conn, code)
+
+
+@app.post("/api/profile/avatar")
+async def upload_profile_avatar(
+    ownerToken: str = Form(""),
+    file: UploadFile = File(...),
+):
+    with db() as conn:
+        code = _profile_for_token(conn, ownerToken)
+        if code is None:
+            raise HTTPException(401, "Нет доступа к Vita ID")
+
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(422, "Нужна картинка")
+    raw = await file.read(8 * 1024 * 1024 + 1)
+    if len(raw) > 8 * 1024 * 1024:
+        raise HTTPException(422, "Слишком большой файл — до 8 МБ")
+    try:
+        image = Image.open(io.BytesIO(raw))
+        if image.width * image.height > 40_000_000:
+            raise ValueError("image is too large")
+        image = ImageOps.exif_transpose(image).convert("RGB")
+        image = ImageOps.fit(image, (512, 512), method=Image.Resampling.LANCZOS)
+    except Exception:
+        raise HTTPException(422, "Не получилось прочитать картинку")
+
+    avatar_dir = DATA / "avatars"
+    avatar_dir.mkdir(parents=True, exist_ok=True)
+    for _ in range(16):
+        avatar_id = _gen_profile_code()
+        avatar_path = avatar_dir / f"{avatar_id}.jpg"
+        if not avatar_path.exists():
+            break
+    else:
+        raise HTTPException(503, "Не удалось сохранить аватар — попробуй ещё раз")
+    image.save(avatar_path, "JPEG", quality=90, optimize=True)
+
+    old_avatar_id = ""
+    try:
+        with db() as conn:
+            code = _profile_for_token(conn, ownerToken)
+            if code is None:
+                raise HTTPException(401, "Нет доступа к Vita ID")
+            row = conn.execute("SELECT avatar_id FROM profiles WHERE code = ?", (code,)).fetchone()
+            old_avatar_id = row[0] if row else ""
+            conn.execute("UPDATE profiles SET avatar_id = ? WHERE code = ?", (avatar_id, code))
+            payload = _profile_payload(conn, code)
+    except Exception:
+        avatar_path.unlink(missing_ok=True)
+        raise
+
+    if old_avatar_id and old_avatar_id != avatar_id:
+        (avatar_dir / f"{old_avatar_id}.jpg").unlink(missing_ok=True)
+    return payload
 
 
 @app.post("/api/profile/connect")
@@ -701,13 +1046,28 @@ def profile_library(owner: OwnerIn):
         return _profile_payload(conn, code)
 
 
+@app.get("/api/member/{handle}")
+def public_profile(handle: str):
+    value = handle.strip().lower()
+    if HANDLE_RE.fullmatch(value) is None:
+        raise HTTPException(404, "Профиль не найден")
+    with db() as conn:
+        return _public_profile_payload(conn, handle=value)
+
+
 @app.get("/api/profile/{code}/bundle")
 def profile_bundle(code: str):
     """Read-only bundle for pairing Vita Focus with a private Vita ID."""
     with db() as conn:
         payload = _profile_payload(conn, code.lower())
     return {
-        "code": payload["code"], "settings": payload["settings"],
+        "code": payload["code"],
+        "handle": payload["handle"],
+        "name": payload["name"],
+        "bio": payload["bio"],
+        "avatar": payload["avatar"],
+        "tags": payload["tags"],
+        "settings": payload["settings"],
         "goals": payload["goals"],
     }
 

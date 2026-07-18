@@ -399,25 +399,97 @@ document.querySelectorAll(".cancel-habit-edit").forEach((button) => {
 document.querySelectorAll(".open-goals").forEach((button) => button.addEventListener("click", () => post("open-goals")));
 document.querySelectorAll(".open-active-habit").forEach((button) => button.addEventListener("click", () => post("open-active-habit")));
 
+function profileAvatarURL(value) {
+    const raw = String(value || "").trim();
+    const pathPattern = /^\/media\/avatar\/[a-z0-9]{10}\.jpg$/;
+    if (pathPattern.test(raw)) return `https://vitadots.ru${raw}`;
+    if (/^https:\/\/vitadots\.ru\/media\/avatar\/[a-z0-9]{10}\.jpg$/.test(raw)) return raw;
+    return "";
+}
+
+function renderProfileTags(tags) {
+    const root = document.getElementById("profileTags");
+    if (!root) return;
+    root.replaceChildren();
+    const allowedRarities = new Set(["common", "rare", "epic", "legendary"]);
+    (Array.isArray(tags) ? tags : []).forEach((tag) => {
+        if (!tag || typeof tag !== "object") return;
+        const item = document.createElement("span");
+        item.className = "profile-tag";
+        const rarity = allowedRarities.has(tag.rarity) ? tag.rarity : "common";
+        item.dataset.rarity = rarity;
+        item.title = String(tag.description || "");
+        const icon = document.createElement("span");
+        icon.className = "profile-tag-icon";
+        icon.textContent = String(tag.icon || "◆");
+        const name = document.createElement("span");
+        name.textContent = String(tag.name || "Тег Vita");
+        item.append(icon, name);
+        root.append(item);
+    });
+}
+
+let vitaProfileFieldsDirty = false;
+
 function showVitaProfileState(state) {
     if (!state || typeof state !== "object") return;
+    if (!state.connected || ["Профиль сохранён", "Аккаунт подключён", "Аккаунт создан"].includes(state.status)) {
+        vitaProfileFieldsDirty = false;
+    }
     const code = document.getElementById("vitaIDCode");
     if (code && state.code && document.activeElement !== code) code.value = state.code;
     const summary = document.getElementById("vitaIDSummary");
     if (summary) summary.textContent = state.connected
-        ? `${state.code} · ${Number(state.goals) || 0} целей`
-        : "Подключи личный кабинет";
+        ? `Код восстановления · ${Number(state.goals) || 0} целей`
+        : "Код восстановления аккаунта";
     const disconnect = document.getElementById("disconnectVitaID");
     if (disconnect) disconnect.hidden = !state.connected;
     const connect = document.getElementById("connectVitaID");
-    if (connect) { connect.disabled = false; connect.textContent = state.connected ? "Обновить данные" : "Подключить всё"; }
+    if (connect) {
+        connect.disabled = Boolean(state.loading);
+        connect.textContent = state.connected ? "Восстановить другой аккаунт" : "Восстановить по коду";
+    }
+    const name = document.getElementById("profileName");
+    const handle = document.getElementById("profileHandle");
+    const bio = document.getElementById("profileBio");
+    if (!vitaProfileFieldsDirty) {
+        if (name && document.activeElement !== name) name.value = String(state.name || "");
+        if (handle && document.activeElement !== handle) handle.value = String(state.handle || "");
+        if (bio && document.activeElement !== bio) bio.value = String(state.bio || "");
+    }
+    const displayName = document.getElementById("profileDisplayName");
+    if (displayName) displayName.textContent = state.name || state.handle || (state.loading ? "Создаём профиль…" : "Твой профиль");
+    const publicHandle = document.getElementById("profilePublicHandle");
+    if (publicHandle) publicHandle.textContent = state.handle ? `@${state.handle}` : "Выбери публичный ник";
+    const avatar = document.getElementById("profileAvatar");
+    const avatarFallback = document.getElementById("profileAvatarFallback");
+    const avatarURL = profileAvatarURL(state.avatar);
+    if (avatar) {
+        avatar.hidden = !avatarURL;
+        if (avatarURL && avatar.src !== avatarURL) avatar.src = avatarURL;
+    }
+    if (avatarFallback) {
+        avatarFallback.hidden = Boolean(avatarURL);
+        avatarFallback.textContent = String(state.name || state.handle || "V").trim().charAt(0).toUpperCase() || "V";
+    }
+    renderProfileTags(state.tags);
+    const save = document.getElementById("saveProfile");
+    const pickAvatar = document.getElementById("pickProfileAvatar");
+    if (save) save.disabled = Boolean(state.loading) || !state.connected;
+    if (pickAvatar) pickAvatar.disabled = Boolean(state.loading) || !state.connected;
     const status = document.getElementById("vitaIDStatus");
     if (status) {
         status.textContent = state.status || "";
         status.classList.toggle("is-error", Boolean(state.isError));
         status.classList.toggle("is-success", Boolean(state.status) && !state.isError);
     }
-    if (state.isError) document.getElementById("vitaIDDetails")?.setAttribute("open", "");
+    const profileStatus = document.getElementById("profileStatus");
+    if (profileStatus) {
+        profileStatus.textContent = state.status || "";
+        profileStatus.classList.toggle("is-error", Boolean(state.isError));
+        profileStatus.classList.toggle("is-success", Boolean(state.status) && !state.isError);
+    }
+    if (state.isError && !state.connected) document.getElementById("vitaIDDetails")?.setAttribute("open", "");
 }
 
 document.getElementById("connectVitaID")?.addEventListener("click", () => {
@@ -434,6 +506,35 @@ document.getElementById("connectVitaID")?.addEventListener("click", () => {
 });
 
 document.getElementById("disconnectVitaID")?.addEventListener("click", () => post({ action: "disconnect-profile" }));
+document.getElementById("pickProfileAvatar")?.addEventListener("click", () => post({ action: "pick-profile-avatar" }));
+["profileName", "profileHandle", "profileBio"].forEach((id) => {
+    document.getElementById(id)?.addEventListener("input", () => { vitaProfileFieldsDirty = true; });
+});
+document.getElementById("saveProfile")?.addEventListener("click", () => {
+    const handle = (document.getElementById("profileHandle")?.value || "").trim().replace(/^@/, "").toLowerCase();
+    const name = (document.getElementById("profileName")?.value || "").trim();
+    const bio = (document.getElementById("profileBio")?.value || "").trim();
+    const status = document.getElementById("profileStatus");
+    if (!/^[a-z0-9_]{3,24}$/.test(handle)) {
+        if (status) {
+            status.textContent = "Ник: 3–24 символа, только латиница, цифры и _";
+            status.classList.add("is-error");
+        }
+        return;
+    }
+    if (name.length < 2) {
+        if (status) {
+            status.textContent = "Имя должно быть от 2 до 40 символов";
+            status.classList.add("is-error");
+        }
+        return;
+    }
+    if (status) {
+        status.textContent = "Сохраняем…";
+        status.classList.remove("is-error", "is-success");
+    }
+    post({ action: "save-profile", handle, name, bio });
+});
 
 function impulseLocalDate(iso) {
     const date = iso ? new Date(iso) : new Date(Date.now() + 60 * 60 * 1000);

@@ -7,7 +7,7 @@
   <link rel="apple-touch-icon" href="/static/img/apple-touch.png">
 <title>Vita — лента челленджей</title>
 <script src="/static/theme.js?v=2"></script>
-<link rel="stylesheet" href="/static/style.css?v=24">
+<link rel="stylesheet" href="/static/style.css?v=25">
 </head>
 <body>
 <header>
@@ -40,6 +40,21 @@ const list = document.getElementById('list');
 const topEl = document.getElementById('top');
 const postsEl = document.getElementById('posts');
 const esc = s => { const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; };
+const safeCode = value => /^[a-z0-9]+$/i.test(String(value || '')) ? String(value) : '';
+const safeColor = value => /^#[0-9a-f]{6}$/i.test(String(value || '')) ? String(value) : '#a855f7';
+const cleanHandle = value => String(value || '').trim().replace(/^@+/, '');
+const safeMediaUrl = value => {
+  try {
+    const url = new URL(String(value || ''), location.origin);
+    return url.origin === location.origin || url.protocol === 'https:' ? url.href : '';
+  } catch { return ''; }
+};
+const safeTarget = value => {
+  try {
+    const url = new URL(String(value || ''), location.origin);
+    return url.origin === location.origin && /^\/(c|s)\/[a-z0-9]+$/i.test(url.pathname) ? url.pathname : '#';
+  } catch { return '#'; }
+};
 const plural = (n, one, few, many) => {
   const m10 = n % 10, m100 = n % 100;
   if (m10 === 1 && m100 !== 11) return one;
@@ -48,6 +63,7 @@ const plural = (n, one, few, many) => {
 };
 
 function dots(color, base) {
+  color = safeColor(color);
   const cells = [];
   for (let i = 0; i < 6; i++) {
     const on = i < 4;
@@ -60,11 +76,14 @@ function dots(color, base) {
 }
 
 function meta(it) {
-  const dayW = plural(it.days, 'день', 'дня', 'дней');
-  const peerW = plural(it.peers, 'делает', 'делают', 'делают');
-  const doneW = plural(it.completed, 'закрыл', 'закрыли', 'закрыли');
-  let s = `${it.days} ${dayW} · <span class="fc-peers">🔥 ${it.peers} ${peerW}</span>`;
-  if (it.completed > 0) s += ` · <span class="fc-done">✓ ${it.completed} ${doneW}</span>`;
+  const days = Math.max(0, Number(it.days) || 0);
+  const peers = Math.max(0, Number(it.peers) || 0);
+  const completed = Math.max(0, Number(it.completed) || 0);
+  const dayW = plural(days, 'день', 'дня', 'дней');
+  const peerW = plural(peers, 'делает', 'делают', 'делают');
+  const doneW = plural(completed, 'закрыл', 'закрыли', 'закрыли');
+  let s = `${days} ${dayW} · <span class="fc-peers">🔥 ${peers} ${peerW}</span>`;
+  if (completed > 0) s += ` · <span class="fc-done">✓ ${completed} ${doneW}</span>`;
   return s;
 }
 
@@ -72,7 +91,7 @@ function card(it, idx, opts = {}) {
   const base = idx * 70;
   const rank = opts.rank ? `<span class="fc-rank">${opts.rank}</span>` : '';
   const cls = opts.top ? 'fc fc-top' : 'fc';
-  return `<a class="${cls}" style="--i:${base}ms" href="/c/${it.code}">
+  return `<a class="${cls}" style="--i:${base}ms" href="/c/${encodeURIComponent(safeCode(it.code))}">
     ${rank || dots(it.color, base + 180)}
     <div class="fc-body">
       <div class="fc-title">${esc(it.title)}</div>
@@ -82,17 +101,41 @@ function card(it, idx, opts = {}) {
   </a>`;
 }
 
+function authorRow(author) {
+  if (!author || typeof author !== 'object') return '';
+  const handle = cleanHandle(author.handle);
+  const publicHandle = /^[a-z0-9_]{3,24}$/i.test(handle) ? handle : '';
+  const name = String(author.name || (publicHandle ? `@${publicHandle}` : 'Участник Vita'));
+  const avatar = safeMediaUrl(author.avatar);
+  const initial = (name || publicHandle || 'V').trim().charAt(0).toUpperCase() || 'V';
+  const tags = Array.isArray(author.tags) ? author.tags.slice(0, 3) : [];
+  const tagHtml = tags.map(value => {
+    const tag = typeof value === 'string' ? { name: value } : (value || {});
+    const rarity = ['common', 'rare', 'epic', 'legendary'].includes(tag.rarity) ? tag.rarity : 'common';
+    return `<span class="author-tag rarity-${rarity}">${esc(tag.icon || tag.glyph || '◆')} ${esc(tag.name || tag.title || tag.id || 'Тег')}</span>`;
+  }).join('');
+  const body = `<span class="profile-avatar profile-avatar-small">${avatar ? `<img src="${esc(avatar)}" alt="">` : `<b aria-hidden="true">${esc(initial)}</b>`}</span>
+    <span class="showcase-author-copy"><b>${esc(name)}</b>${publicHandle ? `<small>@${esc(publicHandle)}</small>` : ''}</span>
+    ${tagHtml ? `<span class="author-tags">${tagHtml}</span>` : ''}`;
+  return publicHandle
+    ? `<a class="showcase-author" href="/u/${encodeURIComponent(publicHandle)}">${body}</a>`
+    : `<div class="showcase-author">${body}</div>`;
+}
+
 function postCard(post) {
   const kinds = { goal: 'Цель', wallpaper: 'Обои', widget: 'Виджет цели' };
-  const image = post.image ? `<img src="${post.image}" alt="" loading="lazy">` : '';
+  const postCode = safeCode(post.code), sourceCode = safeCode(post.sourceCode);
+  const imageUrl = safeMediaUrl(post.image);
+  const image = imageUrl ? `<img src="${esc(imageUrl)}" alt="${esc(post.title || 'Публикация Vita')}" loading="lazy">` : '';
   const description = post.description ? `<p>${esc(post.description)}</p>` : '';
-  return `<article class="showcase-card" id="post-${post.code}">
+  return `<article class="showcase-card" id="post-${esc(postCode)}">
     ${image}<div class="showcase-body">
-      <span class="showcase-kind">${kinds[post.kind] || 'Vita'} · код ${esc(post.sourceCode)}</span>
+      ${authorRow(post.author)}
+      <span class="showcase-kind">${kinds[post.kind] || 'Vita'} · код ${esc(sourceCode)}</span>
       <h2>${esc(post.title)}</h2>${description}
       <div class="showcase-actions">
-        <a class="btn primary" href="${post.target}">Открыть</a>
-        <button class="btn secondary copy-vita-code" data-code="${esc(post.sourceCode)}">Скопировать код</button>
+        <a class="btn primary" href="${safeTarget(post.target)}">Открыть</a>
+        <button class="btn secondary copy-vita-code" data-code="${esc(sourceCode)}">Скопировать код</button>
       </div>
     </div>
   </article>`;
@@ -101,8 +144,9 @@ function postCard(post) {
 (async () => {
   try {
     const r = await fetch('/api/feed');
+    if (!r.ok) throw new Error('Не удалось загрузить ленту');
     const j = await r.json();
-    const posts = j.posts || [];
+    const posts = Array.isArray(j.posts) ? j.posts : [];
     postsEl.innerHTML = posts.length
       ? `<div class="feed-top-h">Люди в Vita</div>${posts.map(postCard).join('')}`
       : '';
@@ -112,7 +156,7 @@ function postCard(post) {
       button.textContent = '✓ Код скопирован';
       setTimeout(() => { button.textContent = 'Скопировать код'; }, 1400);
     }));
-    const items = j.items || [];
+    const items = Array.isArray(j.items) ? j.items : [];
     if (!items.length) {
       topEl.innerHTML = '';
       list.innerHTML = posts.length ? '' : `<div class="feed-empty">
@@ -121,7 +165,8 @@ function postCard(post) {
         Создай цель и поделись ссылкой: как только кто-то подхватит её, она появится здесь.</div>`;
       return;
     }
-    const top = (j.top || items.slice(0, 3)).filter((it, i, a) => a.findIndex(x => x.code === it.code) === i);
+    const topItems = Array.isArray(j.top) ? j.top : items.slice(0, 3);
+    const top = topItems.filter((it, i, a) => a.findIndex(x => x.code === it.code) === i);
     if (top.length >= 2) {
       topEl.innerHTML = `<div class="feed-top-h">Топ недели</div><div class="feed-top">${
         top.map((it, i) => card(it, i, { top: true, rank: i + 1 })).join('')
