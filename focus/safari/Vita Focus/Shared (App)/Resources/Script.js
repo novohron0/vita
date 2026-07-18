@@ -47,6 +47,7 @@ function storeAppPreference(key, value) {
 }
 
 let activeAppTab = storedAppPreference(appTabStorageKey, appTabNames, "impulse");
+let appTabAnimationTimer = null;
 let appAppearanceMode = storedAppPreference(
     appAppearanceStorageKey,
     ["system", "light", "dark"],
@@ -58,9 +59,24 @@ function setAppTab(name, options = {}) {
     const changed = activeAppTab !== next;
     activeAppTab = next;
     document.body.dataset.appTab = next;
+    const nextContent = [];
     document.querySelectorAll("[data-app-tab-content]").forEach((element) => {
-        element.hidden = element.dataset.appTabContent !== next;
+        const active = element.dataset.appTabContent === next;
+        element.hidden = !active;
+        element.classList.remove("app-tab-entering");
+        if (active) nextContent.push(element);
     });
+    if (changed && !appReduceMotion.matches) {
+        if (appTabAnimationTimer) clearTimeout(appTabAnimationTimer);
+        nextContent.forEach((element) => {
+            void element.offsetWidth;
+            element.classList.add("app-tab-entering");
+        });
+        appTabAnimationTimer = setTimeout(() => {
+            nextContent.forEach((element) => element.classList.remove("app-tab-entering"));
+            appTabAnimationTimer = null;
+        }, 260);
+    }
     document.querySelectorAll("[data-app-tab]").forEach((button) => {
         const active = button.dataset.appTab === next;
         button.classList.toggle("is-active", active);
@@ -547,12 +563,19 @@ const impulseRepeatLabels = {
     none: "Один раз", daily: "Каждый день", weekdays: "По будням",
     weekly: "Каждую неделю", monthly: "Каждый месяц"
 };
+const impulseCompactRepeatLabels = {
+    daily: "Ежедневно", weekdays: "По будням",
+    weekly: "Еженедельно", monthly: "Ежемесячно"
+};
 const impulsePriorityLabels = { low: "Сила 1", medium: "Сила 2", high: "Сила 3" };
 const impulseStatusLabels = {
     scheduled: "Запланировано", accepted: "Принято", snoozed: "Отложено",
-    running: "Принято", completed: "Готово"
+    running: "В работе", completed: "Готово"
 };
 let impulseState = { items: [], folders: [] };
+const impulseOtherFolderID = "__vita_other__";
+let activeImpulseFolderID = null;
+const expandedImpulseIDs = new Set();
 let activeSheetImpulseID = "";
 let impulseSheetReturnFocus = null;
 let pendingImpulseFocusRestore = null;
@@ -561,6 +584,10 @@ let pendingImpulseDeleteID = "";
 let impulseDeleteTimer = null;
 let impulseSavePending = false;
 let impulseEditorStep = 1;
+let impulseCountdownTimer = null;
+const refreshedExpiredImpulseTimers = new Set();
+let impulseSheetCloseTimer = null;
+let handledPendingImpulseAction = "";
 
 function impulseDateLabel(value) {
     const date = new Date(value);
@@ -568,6 +595,60 @@ function impulseDateLabel(value) {
     return new Intl.DateTimeFormat("ru-RU", {
         day: "numeric", month: "short", hour: "2-digit", minute: "2-digit"
     }).format(date).replace(".", "");
+}
+
+function impulseCompactDate(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return { date: "Без даты", time: "—" };
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+    let dateLabel;
+    if (date.toDateString() === today.toDateString()) dateLabel = "Сегодня";
+    else if (date.toDateString() === tomorrow.toDateString()) dateLabel = "Завтра";
+    else {
+        dateLabel = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short" })
+            .format(date)
+            .replace(".", "");
+    }
+    const timeLabel = new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit" }).format(date);
+    return { date: dateLabel, time: timeLabel };
+}
+
+function impulseFolderCountLabel(count) {
+    const mod100 = count % 100;
+    const mod10 = count % 10;
+    const noun = mod100 >= 11 && mod100 <= 14
+        ? "папок"
+        : (mod10 === 1 ? "папка" : (mod10 >= 2 && mod10 <= 4 ? "папки" : "папок"));
+    return `${count} ${noun}`;
+}
+
+function impulseType(item) {
+    const value = item?.type || item?.kind;
+    return value === "task" ? "task" : "reminder";
+}
+
+function selectedImpulseType() {
+    return document.querySelector('input[name="impulseType"]:checked')?.value === "task" ? "task" : "reminder";
+}
+
+function impulseFolderKey(item) {
+    return impulseFolder(item?.folderID) ? String(item.folderID) : impulseOtherFolderID;
+}
+
+function impulseFolderName(id) {
+    if (id === impulseOtherFolderID) return "Другое";
+    return impulseFolder(id)?.name || "Папка";
+}
+
+function animateImpulsePane(element, direction) {
+    if (!element || appReduceMotion.matches) return;
+    const className = direction === "back" ? "is-entering-back" : "is-entering-forward";
+    element.classList.remove("is-entering-back", "is-entering-forward");
+    void element.offsetWidth;
+    element.classList.add(className);
+    element.addEventListener("animationend", () => element.classList.remove(className), { once: true });
 }
 
 function impulseItem(id) {
@@ -609,7 +690,7 @@ function renderImpulseFolderOptions() {
     const select = document.getElementById("impulseFolder");
     if (!select) return;
     const selected = select.value;
-    select.replaceChildren(new Option("Без папки", ""));
+    select.replaceChildren(new Option("Другое", ""));
     impulseState.folders.forEach((folder) => {
         select.append(new Option(folder.name || "Без названия", String(folder.id)));
     });
@@ -650,6 +731,88 @@ function renderImpulseFolders() {
         empty.textContent = "Пока нет папок";
         list.append(empty);
     }
+    renderImpulseFolderOverview();
+}
+
+function activeImpulseItems() {
+    return impulseState.items.filter((item) => (
+        item
+        && item.id != null
+        && item.enabled !== false
+        && !item.completed
+        && item.status !== "completed"
+    ));
+}
+
+function makeImpulseFolderTile(id, name, count, index, isOther = false) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `impulse-folder-tile${isOther ? " is-other" : ""}`;
+    button.dataset.impulseFolderOpen = id;
+    button.dataset.folderIndex = String(index % 6);
+    button.setAttribute("aria-label", `${name}, ${count}`);
+
+    const icon = document.createElement("span");
+    icon.className = "impulse-folder-icon";
+    icon.setAttribute("aria-hidden", "true");
+    icon.textContent = isOther ? "•••" : "▰";
+    const amount = document.createElement("span");
+    amount.className = "impulse-folder-count";
+    amount.textContent = String(count);
+    const title = document.createElement("span");
+    title.className = "impulse-folder-name";
+    title.textContent = name;
+    button.append(icon, amount, title);
+    return button;
+}
+
+function renderImpulseFolderOverview() {
+    const grid = document.getElementById("impulseFolderGrid");
+    if (!grid) return;
+    const active = activeImpulseItems();
+    const tiles = impulseState.folders.map((folder, index) => {
+        const count = active.filter((item) => impulseFolderKey(item) === String(folder.id)).length;
+        return makeImpulseFolderTile(String(folder.id), folder.name || "Без названия", count, index);
+    });
+    const otherCount = active.filter((item) => impulseFolderKey(item) === impulseOtherFolderID).length;
+    tiles.push(makeImpulseFolderTile(impulseOtherFolderID, "Другое", otherCount, tiles.length, true));
+    grid.replaceChildren(...tiles);
+}
+
+function openImpulseFolder(id, options = {}) {
+    const normalized = id === impulseOtherFolderID || impulseFolder(id) ? String(id) : impulseOtherFolderID;
+    activeImpulseFolderID = normalized;
+    const overview = document.getElementById("impulseFolderOverview");
+    const view = document.getElementById("impulseFolderView");
+    if (overview) overview.hidden = true;
+    if (view) {
+        view.hidden = false;
+        animateImpulsePane(view, options.direction || "forward");
+    }
+    renderImpulseList();
+    if (options.focus !== false) setTimeout(() => document.getElementById("backImpulseFolders")?.focus(), 0);
+}
+
+function closeImpulseFolder(options = {}) {
+    activeImpulseFolderID = null;
+    const overview = document.getElementById("impulseFolderOverview");
+    const view = document.getElementById("impulseFolderView");
+    if (view) view.hidden = true;
+    if (overview) {
+        overview.hidden = false;
+        animateImpulsePane(overview, "back");
+    }
+    renderImpulseFolderOverview();
+    if (options.focus !== false) setTimeout(() => document.querySelector("[data-impulse-folder-open]")?.focus(), 0);
+}
+
+function revealImpulse(item, options = {}) {
+    if (!item) return;
+    if (options.expand !== false) expandedImpulseIDs.add(String(item.id));
+    openImpulseFolder(impulseFolderKey(item), { focus: false });
+    if (options.focus !== false) {
+        setTimeout(() => impulseCard(item.id)?.querySelector(".impulse-item-summary")?.focus(), 0);
+    }
 }
 
 function setImpulseFoldersOpen(open) {
@@ -677,7 +840,7 @@ function impulseCard(id) {
 function focusImpulseReturnTarget(returnFocus) {
     if (!returnFocus) return;
     const card = impulseCard(returnFocus.impulseID);
-    const cardTarget = card?.querySelector("[data-impulse-action]");
+    const cardTarget = card?.querySelector(".impulse-item-summary") || card?.querySelector("[data-impulse-action]");
     const fallback = document.getElementById("newImpulse");
     const target = cardTarget || (returnFocus.element?.isConnected ? returnFocus.element : null) || fallback;
     if (target instanceof HTMLElement && !target.hidden) target.focus();
@@ -721,106 +884,236 @@ function armImpulseDelete(item, button) {
     }, 4000);
 }
 
+function appendImpulseDetail(container, label, value, className = "") {
+    if (!value) return;
+    const row = document.createElement("div");
+    row.className = `impulse-item-detail${className ? ` ${className}` : ""}`;
+    const name = document.createElement("span");
+    name.textContent = label;
+    const content = document.createElement("strong");
+    content.textContent = value;
+    row.append(name, content);
+    container.append(row);
+}
+
+function impulseCountdownLabel(endDate, now = Date.now()) {
+    const end = new Date(endDate).getTime();
+    if (Number.isNaN(end)) return "";
+    const total = Math.max(0, Math.ceil((end - now) / 1000));
+    const hours = Math.floor(total / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    const seconds = total % 60;
+    return hours > 0
+        ? `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`
+        : `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function syncImpulseCountdowns() {
+    let hasRunning = false;
+    const now = Date.now();
+    document.querySelectorAll("[data-timer-end]").forEach((button) => {
+        const end = new Date(button.dataset.timerEnd || "").getTime();
+        if (Number.isNaN(end)) return;
+        if (end <= now) {
+            button.textContent = "Время вышло";
+            button.setAttribute("aria-label", "Время задачи вышло");
+            button.classList.add("is-running");
+            const refreshKey = `${button.dataset.timerImpulseId || ""}:${button.dataset.timerEnd || ""}`;
+            if (!refreshedExpiredImpulseTimers.has(refreshKey)) {
+                refreshedExpiredImpulseTimers.add(refreshKey);
+                post({ action: "refresh-impulses" });
+            }
+            return;
+        }
+        hasRunning = true;
+        const left = impulseCountdownLabel(end, now);
+        button.textContent = `Идёт · ${left}`;
+        button.setAttribute("aria-label", `Задача идёт, осталось ${left}`);
+    });
+    if (!hasRunning && impulseCountdownTimer) {
+        clearInterval(impulseCountdownTimer);
+        impulseCountdownTimer = null;
+    }
+}
+
+function refreshImpulseCountdownTimer() {
+    syncImpulseCountdowns();
+    const hasRunning = Array.from(document.querySelectorAll("[data-timer-end]"))
+        .some((button) => new Date(button.dataset.timerEnd || "").getTime() > Date.now());
+    if (hasRunning && !impulseCountdownTimer) {
+        impulseCountdownTimer = setInterval(syncImpulseCountdowns, 1000);
+    } else if (!hasRunning && impulseCountdownTimer) {
+        clearInterval(impulseCountdownTimer);
+        impulseCountdownTimer = null;
+    }
+}
+
 function renderImpulseList() {
     const list = document.getElementById("impulseList");
     if (!list) return;
     list.replaceChildren();
     const items = impulseState.items.filter((item) => item && item.id != null);
-    items.forEach((item) => {
+    const folderItems = activeImpulseFolderID == null
+        ? []
+        : items.filter((item) => impulseFolderKey(item) === activeImpulseFolderID);
+
+    folderItems.forEach((item) => {
+        const id = String(item.id);
+        const expanded = expandedImpulseIDs.has(id);
+        const completed = item.completed || item.status === "completed";
+        const type = impulseType(item);
         const card = document.createElement("article");
         card.className = "impulse-item";
-        if (item.completed || item.status === "completed") card.classList.add("is-completed");
+        if (completed) card.classList.add("is-completed");
         if (item.enabled === false) card.classList.add("is-disabled");
-        card.dataset.impulseId = String(item.id);
+        if (expanded) card.classList.add("is-expanded");
+        card.dataset.impulseId = id;
 
-        const top = document.createElement("div");
-        top.className = "impulse-item-top";
-        const copy = document.createElement("div");
+        const summaryButton = document.createElement("button");
+        summaryButton.type = "button";
+        summaryButton.className = "impulse-item-summary";
+        summaryButton.dataset.impulseAction = "toggle";
+        summaryButton.setAttribute("aria-expanded", String(expanded));
+        summaryButton.setAttribute("aria-label", `${item.title || "Без названия"}, показать детали`);
+        const copy = document.createElement("span");
         const title = document.createElement("strong");
         title.className = "impulse-item-title";
         title.textContent = item.title || "Без названия";
-        const meta = document.createElement("p");
-        meta.className = "impulse-item-meta";
-        const repeat = impulseRepeatLabels[item.repeatRule] || impulseRepeatLabels.none;
-        const itemStatus = impulseStatusLabels[item.status];
-        meta.textContent = [itemStatus, impulseDateLabel(item.fireDate), repeat, item.usesAlarm ? "Будильник" : null].filter(Boolean).join(" · ");
-        copy.append(title, meta);
-        top.append(copy);
+        const compactMeta = document.createElement("span");
+        compactMeta.className = "impulse-item-compact-meta";
+        const compactDate = impulseCompactDate(item.fireDate);
+        const date = document.createElement("span");
+        date.textContent = compactDate.date;
+        const time = document.createElement("time");
+        time.dateTime = item.fireDate || "";
+        time.textContent = compactDate.time;
+        compactMeta.append(date, time);
+        const repeatLabel = impulseCompactRepeatLabels[item.repeatRule];
+        if (repeatLabel) {
+            const repeat = document.createElement("span");
+            repeat.className = "impulse-item-repeat";
+            repeat.textContent = repeatLabel;
+            compactMeta.append(repeat);
+        }
+        copy.append(title, compactMeta);
+        const chevron = document.createElement("span");
+        chevron.className = "impulse-item-chevron";
+        chevron.setAttribute("aria-hidden", "true");
+        chevron.textContent = "›";
+        summaryButton.append(copy, chevron);
+        card.append(summaryButton);
+
+        const detailsShell = document.createElement("div");
+        detailsShell.className = "impulse-item-details-shell";
+        detailsShell.setAttribute("aria-hidden", String(!expanded));
+        detailsShell.inert = !expanded;
+        const detailsInner = document.createElement("div");
+        detailsInner.className = "impulse-item-details-inner";
+        const details = document.createElement("div");
+        details.className = "impulse-item-details";
+        appendImpulseDetail(
+            details,
+            "Тип",
+            type === "task" ? `Задача · ${Number(item.durationMinutes) || 25} мин` : "Напоминание"
+        );
+        appendImpulseDetail(details, "Заметка", item.notes);
+        appendImpulseDetail(details, "Первый шаг", item.firstStep);
+        appendImpulseDetail(details, "Зачем", item.reason);
+        appendImpulseDetail(details, "Дедлайн", item.deadline ? impulseDateLabel(item.deadline) : "", "is-deadline");
+        appendImpulseDetail(details, "Предупреждение", item.deadlineAlertDate ? impulseDateLabel(item.deadlineAlertDate) : "");
+
         const badges = document.createElement("div");
         badges.className = "impulse-item-badges";
-        const folder = impulseFolder(item.folderID);
-        if (folder) {
-            const folderBadge = document.createElement("span");
-            folderBadge.className = "impulse-folder-badge";
-            folderBadge.textContent = folder.name || "Папка";
-            badges.append(folderBadge);
-        }
         if (impulsePriorityLabels[item.priority]) {
             const priority = document.createElement("span");
             priority.className = `impulse-priority priority-${item.priority}`;
             priority.textContent = impulsePriorityLabels[item.priority];
             badges.append(priority);
         }
-        if (badges.childElementCount) top.append(badges);
-        card.append(top);
-
-        if (item.notes) {
-            const notes = document.createElement("p");
-            notes.className = "impulse-item-notes";
-            notes.textContent = item.notes;
-            card.append(notes);
+        if (item.usesAlarm) {
+            const alarm = document.createElement("span");
+            alarm.className = "impulse-folder-badge";
+            alarm.textContent = "Будильник";
+            badges.append(alarm);
         }
-        if (item.firstStep) {
-            const step = document.createElement("p");
-            step.className = "impulse-item-step";
-            step.textContent = `Первый шаг: ${item.firstStep}`;
-            card.append(step);
+        const statusLabel = impulseStatusLabels[item.status];
+        if (statusLabel && item.status !== "scheduled") {
+            const status = document.createElement("span");
+            status.className = "impulse-folder-badge";
+            status.textContent = statusLabel;
+            badges.append(status);
         }
-        if (item.deadline) {
-            const deadline = document.createElement("p");
-            deadline.className = "impulse-item-deadline";
-            deadline.textContent = `Дедлайн · ${impulseDateLabel(item.deadline)}`;
-            card.append(deadline);
-        }
+        if (badges.childElementCount) details.append(badges);
 
         const actions = document.createElement("div");
         actions.className = "impulse-item-actions";
-        const actionButtons = item.completed || item.status === "completed"
-            ? [makeImpulseButton("Удалить", "delete", "text-action danger")]
-            : [
-                makeImpulseButton("Принять", "accept", "primary"),
-                makeImpulseButton("Изменить", "edit"),
-                makeImpulseButton("Готово", "complete"),
+        let actionButtons;
+        if (completed) {
+            actionButtons = [makeImpulseButton("Удалить", "delete", "text-action danger")];
+            actions.classList.add("completed-actions");
+        } else if (type === "task") {
+            const start = makeImpulseButton("Начать", "start", "primary");
+            const timerEnd = new Date(item.timerEndDate || "");
+            if (!Number.isNaN(timerEnd.getTime()) && timerEnd.getTime() > Date.now()) {
+                start.disabled = true;
+                start.classList.add("is-running");
+                start.dataset.timerEnd = timerEnd.toISOString();
+                start.dataset.timerImpulseId = id;
+            }
+            actionButtons = [
+                start,
+                makeImpulseButton("Отложить", "snooze"),
                 makeImpulseButton("Удалить", "delete", "text-action danger")
             ];
+        } else {
+            actionButtons = [
+                makeImpulseButton("Готово", "complete", "primary"),
+                makeImpulseButton("Изменить", "edit"),
+                makeImpulseButton("Удалить", "delete", "text-action danger")
+            ];
+        }
         const deleteButton = actionButtons.find((button) => button.dataset.impulseAction === "delete");
-        if (deleteButton && pendingImpulseDeleteID === String(item.id)) {
-            deleteButton.textContent = "Точно удалить?";
+        if (deleteButton && pendingImpulseDeleteID === id) {
+            deleteButton.textContent = "Точно?";
             deleteButton.classList.add("is-confirming");
         }
-        if (actionButtons.length === 1) actions.classList.add("completed-actions");
         actionButtons.forEach((button) => {
-            button.setAttribute("aria-label", `${button.textContent}: ${item.title || "импульс"}`);
+            if (!button.hasAttribute("aria-label")) {
+                button.setAttribute("aria-label", `${button.textContent}: ${item.title || "импульс"}`);
+            }
         });
         actions.append(...actionButtons);
-        card.append(actions);
+        details.append(actions);
+        detailsInner.append(details);
+        detailsShell.append(detailsInner);
+        card.append(detailsShell);
         list.append(card);
     });
 
-    const activeItems = items.filter((item) => item.enabled !== false && !item.completed && item.status !== "completed");
+    const activeItems = activeImpulseItems();
+    const activeInFolder = folderItems.filter((item) => item.enabled !== false && !item.completed && item.status !== "completed");
     const empty = document.getElementById("impulseEmpty");
-    if (empty) empty.hidden = items.length > 0;
+    if (empty) empty.hidden = folderItems.length > 0;
+    const title = document.getElementById("activeImpulseFolderTitle");
+    if (title && activeImpulseFolderID != null) title.textContent = impulseFolderName(activeImpulseFolderID);
+    const count = document.getElementById("activeImpulseFolderCount");
+    if (count) count.textContent = String(activeInFolder.length);
     const pill = document.getElementById("impulsePill");
     if (pill) {
         pill.classList.toggle("is-active", activeItems.length > 0);
         const label = pill.querySelector("span");
         if (label) label.textContent = String(activeItems.length);
     }
-    const next = activeItems
+    const next = activeInFolder
         .filter((item) => !Number.isNaN(new Date(item.fireDate).getTime()))
         .sort((a, b) => new Date(a.fireDate) - new Date(b.fireDate))[0];
     const summary = document.getElementById("impulseSummary");
-    if (summary) summary.textContent = next ? `Следующий · ${impulseDateLabel(next.fireDate)}` : "Мягко возвращает к важному";
+    if (summary) {
+        summary.textContent = activeImpulseFolderID == null
+            ? impulseFolderCountLabel(impulseState.folders.length + 1)
+            : (next ? `Следующий · ${impulseDateLabel(next.fireDate)}` : "В этой папке всё спокойно");
+    }
+    refreshImpulseCountdownTimer();
     restoreImpulseFocusAfterRender();
 }
 
@@ -844,6 +1137,12 @@ function fillImpulseEditor(item) {
     document.querySelectorAll('input[name="impulsePriority"]').forEach((input) => {
         input.checked = input.value === priority;
     });
+    const type = impulseType(item);
+    document.querySelectorAll('input[name="impulseType"]').forEach((input) => {
+        input.checked = input.value === type;
+    });
+    const duration = document.getElementById("impulseDuration");
+    if (duration) duration.value = String(Math.min(240, Math.max(1, Number(item?.durationMinutes) || 25)));
     const alarm = document.getElementById("impulseUsesAlarm");
     if (alarm) alarm.checked = item?.usesAlarm === true;
     const hasDeadline = document.getElementById("impulseHasDeadline");
@@ -862,9 +1161,20 @@ function fillImpulseEditor(item) {
     if (alertSelect) alertSelect.value = alertRule;
     const custom = document.getElementById("impulseDeadlineCustom");
     if (custom) custom.value = alertRule === "custom" && item?.deadlineAlertDate ? impulseLocalDate(item.deadlineAlertDate) : "";
+    updateImpulseTypeControls();
     updateImpulseDeadlineControls();
     const heading = document.getElementById("impulseEditorTitle");
     if (heading) heading.textContent = item ? "Изменить импульс" : "Новый импульс";
+}
+
+function updateImpulseTypeControls() {
+    const task = selectedImpulseType() === "task";
+    const duration = document.getElementById("impulseDurationWrap");
+    if (duration) duration.hidden = !task;
+    const heading = document.getElementById("impulseStepOneTitle");
+    if (heading) heading.textContent = task ? "Задача" : "Напоминание";
+    const progress = document.querySelector('[data-wizard-progress="1"] span');
+    if (progress) progress.textContent = task ? "Задача" : "Напоминание";
 }
 
 function updateImpulseDeadlineControls() {
@@ -889,7 +1199,14 @@ function impulseDeadlineAlertDate(deadline) {
 
 function renderImpulseEditorStep() {
     document.querySelectorAll("[data-impulse-step]").forEach((panel) => {
-        panel.hidden = Number(panel.dataset.impulseStep) !== impulseEditorStep;
+        const active = Number(panel.dataset.impulseStep) === impulseEditorStep;
+        panel.hidden = !active;
+        panel.classList.remove("is-entering");
+        if (active && !appReduceMotion.matches) {
+            void panel.offsetWidth;
+            panel.classList.add("is-entering");
+            panel.addEventListener("animationend", () => panel.classList.remove("is-entering"), { once: true });
+        }
     });
     document.querySelectorAll("[data-wizard-progress]").forEach((item) => {
         const step = Number(item.dataset.wizardProgress);
@@ -926,6 +1243,14 @@ function validateImpulseEditorStep(step) {
             setImpulseEditorStatus("Выбери дату и время в будущем", true);
             document.getElementById("impulseDate")?.focus();
             return false;
+        }
+        if (selectedImpulseType() === "task") {
+            const duration = Number(document.getElementById("impulseDuration")?.value || 0);
+            if (!Number.isInteger(duration) || duration < 1 || duration > 240) {
+                setImpulseEditorStatus("Время задачи — от 1 до 240 минут", true);
+                document.getElementById("impulseDuration")?.focus();
+                return false;
+            }
         }
     }
     if (step === 3 && document.getElementById("impulseHasDeadline")?.checked) {
@@ -976,9 +1301,14 @@ function validateImpulseEditorStep(step) {
     return true;
 }
 
-function openImpulseEditor(item = null) {
+function openImpulseEditor(item = null, presetFolderID = null) {
     renderImpulseFolderOptions();
     fillImpulseEditor(item);
+    if (!item) {
+        const folder = document.getElementById("impulseFolder");
+        const selected = presetFolderID || activeImpulseFolderID;
+        if (folder) folder.value = selected && selected !== impulseOtherFolderID && impulseFolder(selected) ? String(selected) : "";
+    }
     impulseEditorStep = 1;
     renderImpulseEditorStep();
     const editor = document.getElementById("impulseEditor");
@@ -1014,14 +1344,29 @@ function impulseDeadlineText(value) {
 function showImpulseSheetView(view) {
     const accept = document.getElementById("impulseAcceptView");
     const snooze = document.getElementById("impulseSnoozeView");
+    const isTask = impulseType(impulseItem(activeSheetImpulseID)) === "task";
     if (accept) accept.hidden = view !== "accept";
     if (snooze) snooze.hidden = view !== "snooze";
+    const back = document.getElementById("backToImpulseAccept");
+    if (back) back.hidden = view === "snooze" && isTask;
     const eyebrow = document.getElementById("impulseSheetEyebrow");
     if (eyebrow) eyebrow.textContent = view === "snooze" ? "Перед тем как отложить" : "Vita Импульс";
     if (view === "snooze") {
         const exact = document.getElementById("snoozeImpulseDate");
         if (exact) exact.value = impulseLocalDate(new Date(Date.now() + 30 * 60000).toISOString());
     }
+}
+
+function revealImpulseSheetLayer(sheet) {
+    if (!sheet) return;
+    if (impulseSheetCloseTimer) {
+        clearTimeout(impulseSheetCloseTimer);
+        impulseSheetCloseTimer = null;
+    }
+    sheet.hidden = false;
+    sheet.classList.remove("is-open");
+    if (appReduceMotion.matches) sheet.classList.add("is-open");
+    else requestAnimationFrame(() => requestAnimationFrame(() => sheet.classList.add("is-open")));
 }
 
 function openImpulseSheet(item, view = "accept") {
@@ -1047,7 +1392,7 @@ function openImpulseSheet(item, view = "accept") {
         sheetStatus.classList.remove("is-error", "is-success");
     }
     showImpulseSheetView(view);
-    if (sheet) sheet.hidden = false;
+    revealImpulseSheetLayer(sheet);
     const shell = document.querySelector(".shell");
     if (shell) {
         shell.setAttribute("aria-hidden", "true");
@@ -1059,29 +1404,37 @@ function openImpulseSheet(item, view = "accept") {
 
 function closeImpulseSheet() {
     const sheet = document.getElementById("impulseSheet");
-    if (sheet) sheet.hidden = true;
-    const shell = document.querySelector(".shell");
-    if (shell) {
-        shell.removeAttribute("aria-hidden");
-        shell.inert = false;
-    }
-    document.body.classList.remove("has-impulse-sheet");
-    activeSheetImpulseID = "";
-    pendingImpulseFocusRestore = impulseSheetReturnFocus;
-    focusImpulseReturnTarget(pendingImpulseFocusRestore);
-    if (impulseFocusRestoreTimer) clearTimeout(impulseFocusRestoreTimer);
-    impulseFocusRestoreTimer = setTimeout(() => {
-        pendingImpulseFocusRestore = null;
-        impulseFocusRestoreTimer = null;
-    }, 1200);
-    impulseSheetReturnFocus = null;
+    if (!sheet || sheet.hidden || impulseSheetCloseTimer) return;
+    sheet.classList.remove("is-open");
+    const finish = () => {
+        sheet.hidden = true;
+        const shell = document.querySelector(".shell");
+        if (shell) {
+            shell.removeAttribute("aria-hidden");
+            shell.inert = false;
+        }
+        document.body.classList.remove("has-impulse-sheet");
+        activeSheetImpulseID = "";
+        pendingImpulseFocusRestore = impulseSheetReturnFocus;
+        focusImpulseReturnTarget(pendingImpulseFocusRestore);
+        if (impulseFocusRestoreTimer) clearTimeout(impulseFocusRestoreTimer);
+        impulseFocusRestoreTimer = setTimeout(() => {
+            pendingImpulseFocusRestore = null;
+            impulseFocusRestoreTimer = null;
+        }, 1200);
+        impulseSheetReturnFocus = null;
+        impulseSheetCloseTimer = null;
+    };
+    if (appReduceMotion.matches) finish();
+    else impulseSheetCloseTimer = setTimeout(finish, 330);
 }
 
 function pendingImpulseAction(pending) {
     if (!pending) return null;
     const rawType = typeof pending === "string" ? pending : pending.type || pending.kind || pending.action;
     if (typeof rawType !== "string") return null;
-    const type = rawType.replace("-impulse", "");
+    let type = rawType.replace("-impulse", "");
+    if (type === "view") type = "open";
     const id = typeof pending === "object" ? pending.id || pending.impulseId : impulseState.pendingImpulseId;
     return { type, id };
 }
@@ -1094,6 +1447,9 @@ function showImpulseState(state) {
         items: Array.isArray(state.items) ? state.items : impulseState.items,
         folders: Array.isArray(state.folders) ? state.folders.filter((folder) => folder && folder.id != null) : impulseState.folders
     };
+    if (activeImpulseFolderID && activeImpulseFolderID !== impulseOtherFolderID && !impulseFolder(activeImpulseFolderID)) {
+        activeImpulseFolderID = impulseOtherFolderID;
+    }
     renderImpulseFolders();
     if (state.selectedFolderID != null) {
         const folder = document.getElementById("impulseFolder");
@@ -1127,13 +1483,32 @@ function showImpulseState(state) {
     setImpulseStatus(state.status || "", Boolean(state.isError), Boolean(state.status));
 
     const pending = pendingImpulseAction(state.pendingAction);
-    if (pending && (pending.type === "accept" || pending.type === "snooze")) {
-        setAppTab("impulse", { scroll: false });
-        const item = impulseItem(pending.id) || (typeof state.pendingAction === "object" ? state.pendingAction.item : null);
-        openImpulseSheet(item, pending.type);
+    if (!pending) handledPendingImpulseAction = "";
+    if (pending) {
         const snoozeUntil = typeof state.pendingAction === "object" ? state.pendingAction.snoozeUntil : null;
-        const exact = document.getElementById("snoozeImpulseDate");
-        if (pending.type === "snooze" && exact && snoozeUntil) exact.value = impulseLocalDate(snoozeUntil);
+        const pendingKey = `${pending.type}:${pending.id || ""}:${snoozeUntil || ""}`;
+        if (pendingKey !== handledPendingImpulseAction) {
+            handledPendingImpulseAction = pendingKey;
+            setAppTab("impulse", { scroll: false });
+            const item = impulseItem(pending.id) || (typeof state.pendingAction === "object" ? state.pendingAction.item : null);
+            if (pending.type === "open") revealImpulse(item);
+            if (pending.type === "edit") {
+                revealImpulse(item, { focus: false });
+                openImpulseEditor(item);
+            }
+            if (pending.type === "start") {
+                revealImpulse(item);
+                const timerEnd = new Date(item?.timerEndDate || "").getTime();
+                if (item && impulseType(item) === "task" && !(timerEnd > Date.now())) {
+                    post({ action: "start-impulse", id: item.id, durationMinutes: Number(item.durationMinutes) || 25 });
+                }
+            }
+            if (pending.type === "accept" || pending.type === "snooze") {
+                openImpulseSheet(item, pending.type);
+                const exact = document.getElementById("snoozeImpulseDate");
+                if (pending.type === "snooze" && exact && snoozeUntil) exact.value = impulseLocalDate(snoozeUntil);
+            }
+        }
     }
 }
 
@@ -1143,6 +1518,11 @@ document.getElementById("manageImpulseFolders")?.addEventListener("click", () =>
 });
 document.getElementById("closeImpulseFolders")?.addEventListener("click", () => setImpulseFoldersOpen(false));
 document.getElementById("newImpulseFolderFromEditor")?.addEventListener("click", () => setImpulseFoldersOpen(true));
+document.getElementById("impulseFolderGrid")?.addEventListener("click", (event) => {
+    const folder = event.target.closest("[data-impulse-folder-open]");
+    if (folder) openImpulseFolder(folder.dataset.impulseFolderOpen);
+});
+document.getElementById("backImpulseFolders")?.addEventListener("click", () => closeImpulseFolder());
 document.getElementById("createImpulseFolder")?.addEventListener("click", () => {
     const input = document.getElementById("impulseFolderName");
     const name = input?.value.trim() || "";
@@ -1182,8 +1562,11 @@ document.getElementById("impulseFolderList")?.addEventListener("click", (event) 
     }
 });
 
-document.getElementById("newImpulse")?.addEventListener("click", () => openImpulseEditor());
+document.getElementById("newImpulse")?.addEventListener("click", () => openImpulseEditor(null, activeImpulseFolderID));
 document.getElementById("cancelImpulseEdit")?.addEventListener("click", closeImpulseEditor);
+document.querySelectorAll('input[name="impulseType"]').forEach((input) => {
+    input.addEventListener("change", updateImpulseTypeControls);
+});
 document.getElementById("impulseEditorBack")?.addEventListener("click", () => {
     if (impulseEditorStep <= 1) return;
     impulseEditorStep -= 1;
@@ -1206,11 +1589,32 @@ document.getElementById("impulseList")?.addEventListener("click", (event) => {
     const item = impulseItem(card.dataset.impulseId);
     if (!item) return;
     switch (button.dataset.impulseAction) {
+    case "toggle": {
+        const id = String(item.id);
+        const expanded = !expandedImpulseIDs.has(id);
+        if (expanded) expandedImpulseIDs.add(id);
+        else expandedImpulseIDs.delete(id);
+        card.classList.toggle("is-expanded", expanded);
+        button.setAttribute("aria-expanded", String(expanded));
+        button.setAttribute("aria-label", `${item.title || "Без названия"}, ${expanded ? "скрыть" : "показать"} детали`);
+        const details = card.querySelector(".impulse-item-details-shell");
+        if (details) {
+            details.setAttribute("aria-hidden", String(!expanded));
+            details.inert = !expanded;
+        }
+        break;
+    }
     case "edit": openImpulseEditor(item); break;
     case "accept":
         post({ action: "accept-impulse", id: item.id });
         openImpulseSheet(item, "accept");
         break;
+    case "start":
+        button.disabled = true;
+        button.textContent = "Запускаем…";
+        post({ action: "start-impulse", id: item.id, durationMinutes: Number(item.durationMinutes) || 25 });
+        break;
+    case "snooze": openImpulseSheet(item, "snooze"); break;
     case "complete": post({ action: "complete-impulse", id: item.id }); break;
     case "delete":
         if (pendingImpulseDeleteID === String(item.id)) {
@@ -1243,6 +1647,8 @@ document.getElementById("impulseEditor")?.addEventListener("submit", (event) => 
     const notes = document.getElementById("impulseNotes")?.value.trim() || "";
     const reason = document.getElementById("impulseReason")?.value.trim() || "";
     const firstStep = document.getElementById("impulseStep")?.value.trim() || "";
+    const type = selectedImpulseType();
+    const durationMinutes = type === "task" ? Number(document.getElementById("impulseDuration")?.value || 0) : null;
     const fireValue = document.getElementById("impulseDate")?.value || "";
     const existing = id ? impulseItem(id) : null;
     const fireDate = existing?.fireDate && impulseLocalDate(existing.fireDate) === fireValue
@@ -1272,6 +1678,8 @@ document.getElementById("impulseEditor")?.addEventListener("submit", (event) => 
         notes,
         reason,
         firstStep,
+        type,
+        durationMinutes,
         fireDate: fireDate.toISOString(),
         deadline: deadlineDate ? deadlineDate.toISOString() : null,
         deadlineAlertDate: deadlineAlertDate ? deadlineAlertDate.toISOString() : null,

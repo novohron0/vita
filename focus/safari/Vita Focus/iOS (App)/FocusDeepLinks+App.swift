@@ -62,7 +62,7 @@ struct OpenYouTubeFocusIntent: AppIntent {
 @available(iOS 16.0, *)
 struct StartVitaImpulseIntent: AppIntent {
     static var title: LocalizedStringResource = "Начать Vita Импульс"
-    static var description = IntentDescription("Открывает ближайший импульс с его причиной, минимальным шагом и дедлайном.")
+    static var description = IntentDescription("Запускает ближайшую задачу или открывает ближайшее напоминание.")
     static var openAppWhenRun = true
 
     @available(iOS 26.0, *)
@@ -70,13 +70,93 @@ struct StartVitaImpulseIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
-        let next = VitaImpulseStore.all()
+        let active = VitaImpulseStore.all()
             .filter { $0.isEnabled && $0.status != .completed }
             .sorted { $0.fireDate < $1.fireDate }
-            .first
-        if let next {
-            _ = try? VitaImpulseStore.accept(id: next.id)
-            VitaImpulsePendingActionStore.set(type: .accept, impulseID: next.id)
+        if let task = active.first(where: { $0.type == .task }) {
+            let interruptedIDs = active.compactMap { impulse in
+                impulse.id != task.id && (impulse.status == .running || impulse.timerEndDate != nil)
+                    ? impulse.id
+                    : nil
+            }
+            if let started = try? VitaImpulseStore.startTimer(id: task.id) {
+                interruptedIDs.forEach { VitaImpulseNotifications.cancelTimer(for: $0) }
+                VitaImpulseDelivery.cancelReminder(for: task.id)
+                let timerError = await withCheckedContinuation { (continuation: CheckedContinuation<Error?, Never>) in
+                    VitaImpulseNotifications.scheduleTimer(started) { continuation.resume(returning: $0) }
+                }
+                if timerError == nil {
+                    VitaImpulsePendingActionStore.set(type: .start, impulseID: task.id)
+                } else {
+                    _ = try? VitaImpulseStore.cancelTimer(id: task.id)
+                    VitaImpulsePendingActionStore.set(type: .open, impulseID: task.id)
+                }
+            }
+        } else if let reminder = active.first {
+            VitaImpulsePendingActionStore.set(type: .open, impulseID: reminder.id)
+        }
+        NotificationCenter.default.post(name: .vitaImpulseActionRequested, object: nil)
+        return .result()
+    }
+}
+
+@available(iOS 26.0, *)
+struct VitaImpulseAlarmActionIntent: LiveActivityIntent {
+    static var title: LocalizedStringResource = "Действие Vita Импульса"
+    static var description = IntentDescription("Завершает напоминание или запускает таймер задачи из системного будильника.")
+    static var openAppWhenRun = false
+
+    @Parameter(title: "Импульс")
+    var impulseID: String
+
+    init() {}
+
+    init(impulseID: String) {
+        self.impulseID = impulseID
+    }
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        guard let impulse = VitaImpulseStore.load(id: impulseID), impulse.isActive else {
+            return .result()
+        }
+
+        if impulse.type == .task {
+            let interruptedIDs = VitaImpulseStore.all().compactMap { item in
+                item.id != impulseID && (item.status == .running || item.timerEndDate != nil)
+                    ? item.id
+                    : nil
+            }
+            let started = try VitaImpulseStore.startTimer(id: impulseID)
+            interruptedIDs.forEach { VitaImpulseNotifications.cancelTimer(for: $0) }
+            VitaImpulseDelivery.cancelReminder(for: impulseID)
+            let timerError = await withCheckedContinuation { (continuation: CheckedContinuation<Error?, Never>) in
+                VitaImpulseNotifications.scheduleTimer(started) { continuation.resume(returning: $0) }
+            }
+            if let timerError {
+                _ = try? VitaImpulseStore.cancelTimer(id: impulseID)
+                VitaImpulsePendingActionStore.set(type: .open, impulseID: impulseID)
+                NotificationCenter.default.post(name: .vitaImpulseActionRequested, object: nil)
+                throw timerError
+            }
+            VitaImpulsePendingActionStore.set(type: .start, impulseID: impulseID)
+        } else {
+            let completed = try VitaImpulseStore.complete(id: impulseID)
+            VitaImpulseDelivery.cancelAll(for: impulseID)
+            if completed.isActive {
+                let deliveryError = await withCheckedContinuation { (continuation: CheckedContinuation<Error?, Never>) in
+                    VitaImpulseDelivery.schedule(completed) { continuation.resume(returning: $0) }
+                }
+                if let deliveryError {
+                    VitaImpulsePendingActionStore.set(type: .open, impulseID: impulseID)
+                    NotificationCenter.default.post(name: .vitaImpulseActionRequested, object: nil)
+                    throw deliveryError
+                }
+            }
+        }
+
+        await MainActor.run {
+            NotificationCenter.default.post(name: .vitaImpulseActionRequested, object: nil)
         }
         return .result()
     }

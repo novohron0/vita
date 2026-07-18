@@ -10,6 +10,7 @@ import UserNotifications
 #if canImport(AlarmKit)
 import ActivityKit
 import AlarmKit
+import AppIntents
 import SwiftUI
 #endif
 
@@ -22,10 +23,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
         let center = UNUserNotificationCenter.current()
         center.delegate = self
         center.setNotificationCategories(VitaImpulseNotifications.categories)
-        for impulse in VitaImpulseStore.all() where impulse.timerEndDate != nil || impulse.status == .running {
-            _ = try? VitaImpulseStore.cancelTimer(id: impulse.id)
-            VitaImpulseNotifications.cancelTimer(for: impulse.id)
-        }
+        reconcileImpulseTimers()
         return true
     }
 
@@ -34,6 +32,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     }
 
     func applicationDidBecomeActive(_ application: UIApplication) {
+        reconcileImpulseTimers()
         if #available(iOS 16.0, *) {
             UNUserNotificationCenter.current().setBadgeCount(0)
         } else {
@@ -46,8 +45,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
-        guard let impulseID = (response.notification.request.content.userInfo[VitaImpulseNotifications.impulseIDKey] as? String)
-                ?? VitaImpulseStore.load()?.id,
+        reconcileImpulseTimers()
+        let notificationImpulseID = response.notification.request.content.userInfo[VitaImpulseNotifications.impulseIDKey] as? String
+        let legacyImpulses = notificationImpulseID == nil ? VitaImpulseStore.all() : []
+        let legacyImpulseID = legacyImpulses.count == 1 ? legacyImpulses[0].id : nil
+        guard let impulseID = notificationImpulseID ?? legacyImpulseID,
               let impulse = VitaImpulseStore.load(id: impulseID) else {
             completionHandler()
             return
@@ -55,21 +57,12 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
 
         let action = response.actionIdentifier
         if action == VitaImpulseStore.snoozeActionID || action == VitaImpulseStore.postponeActionID {
-            let now = Date()
-            let proposed = now.addingTimeInterval(10 * 60)
-            let snoozeUntil = impulse.deadline.map {
-                min(proposed, $0.addingTimeInterval(-1))
-            } ?? proposed
-            do {
-                let updated = try VitaImpulseStore.snooze(id: impulseID, until: snoozeUntil, now: now)
-                VitaImpulsePendingActionStore.set(type: .snooze, impulseID: impulseID, snoozeUntil: snoozeUntil)
-                notifyImpulseAction()
-                VitaImpulseDelivery.schedule(updated, completion: { _ in completionHandler() })
-            } catch {
-                VitaImpulsePendingActionStore.set(type: .accept, impulseID: impulseID)
-                notifyImpulseAction()
-                completionHandler()
-            }
+            VitaImpulsePendingActionStore.set(
+                type: impulse.type == .task ? .snooze : .open,
+                impulseID: impulseID
+            )
+            notifyImpulseAction()
+            completionHandler()
             return
         }
 
@@ -89,28 +82,51 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
             return
         }
 
-        if action == UNNotificationDismissActionIdentifier {
-            let now = Date()
-            let proposed = now.addingTimeInterval(10 * 60)
-            let snoozeUntil = impulse.deadline.map {
-                min(proposed, $0.addingTimeInterval(-1))
-            } ?? proposed
-            if snoozeUntil.timeIntervalSince(now) >= 5,
-               let updated = try? VitaImpulseStore.snooze(id: impulseID, until: snoozeUntil, now: now) {
+        if action == VitaImpulseStore.deleteActionID {
+            VitaImpulseDelivery.cancelAll(for: impulseID)
+            _ = VitaImpulseStore.delete(id: impulseID)
+            VitaImpulsePendingActionStore.clear()
+            notifyImpulseAction()
+            completionHandler()
+            return
+        }
+
+        if action == VitaImpulseStore.editActionID {
+            VitaImpulsePendingActionStore.set(type: .edit, impulseID: impulseID)
+            notifyImpulseAction()
+            completionHandler()
+            return
+        }
+
+        if action == VitaImpulseStore.startActionID || action == VitaImpulseStore.acceptActionID {
+            let interruptedIDs = VitaImpulseStore.all().compactMap { item in
+                item.id != impulseID && (item.status == .running || item.timerEndDate != nil)
+                    ? item.id
+                    : nil
+            }
+            guard let started = try? VitaImpulseStore.startTimer(id: impulseID) else {
+                VitaImpulsePendingActionStore.set(type: .open, impulseID: impulseID)
                 notifyImpulseAction()
-                VitaImpulseDelivery.schedule(updated, completion: { _ in completionHandler() })
-            } else {
+                completionHandler()
+                return
+            }
+            interruptedIDs.forEach { VitaImpulseNotifications.cancelTimer(for: $0) }
+            VitaImpulseDelivery.cancelReminder(for: impulseID)
+            VitaImpulsePendingActionStore.set(type: .start, impulseID: impulseID)
+            notifyImpulseAction()
+            VitaImpulseNotifications.scheduleTimer(started) { [weak self] error in
+                if error != nil {
+                    _ = try? VitaImpulseStore.cancelTimer(id: impulseID)
+                    VitaImpulsePendingActionStore.set(type: .open, impulseID: impulseID)
+                    self?.notifyImpulseAction()
+                }
                 completionHandler()
             }
             return
         }
 
-        if action == VitaImpulseStore.acceptActionID
-            || action == VitaImpulseStore.startActionID
-            || action == UNNotificationDefaultActionIdentifier {
-            _ = try? VitaImpulseStore.accept(id: impulseID)
-            VitaImpulseDelivery.cancelReminder(for: impulseID)
-            VitaImpulsePendingActionStore.set(type: .accept, impulseID: impulseID)
+        if action == UNNotificationDefaultActionIdentifier {
+            VitaImpulsePendingActionStore.set(type: .open, impulseID: impulseID)
             notifyImpulseAction()
         }
         completionHandler()
@@ -121,6 +137,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
+        reconcileImpulseTimers()
+        notifyImpulseAction()
         completionHandler([.banner, .sound, .badge])
     }
 
@@ -129,16 +147,31 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
             NotificationCenter.default.post(name: .vitaImpulseActionRequested, object: nil)
         }
     }
+
+    private func reconcileImpulseTimers() {
+        let expiredIDs = VitaImpulseStore.reconcileExpiredTimers()
+        for id in expiredIDs {
+            VitaImpulseDelivery.cancelAll(for: id)
+            if let impulse = VitaImpulseStore.load(id: id), impulse.isActive {
+                VitaImpulseDelivery.schedule(impulse, completion: { _ in })
+            }
+        }
+        for impulse in VitaImpulseStore.all()
+            where impulse.status == .running && (impulse.timerEndDate?.timeIntervalSinceNow ?? -1) > 0 {
+            VitaImpulseNotifications.scheduleTimer(impulse, completion: { _ in })
+        }
+    }
 }
 
 enum VitaImpulseNotifications {
     static let impulseIDKey = "vitaImpulseID"
     static let deadlineCategoryID = "VITA_IMPULSE_DEADLINE"
+    static let taskDeadlineCategoryID = "VITA_IMPULSE_TASK_DEADLINE"
 
     static var categories: Set<UNNotificationCategory> {
-        let accept = UNNotificationAction(
-            identifier: VitaImpulseStore.acceptActionID,
-            title: "Принять",
+        let start = UNNotificationAction(
+            identifier: VitaImpulseStore.startActionID,
+            title: "Начать",
             options: [.foreground]
         )
         let snooze = UNNotificationAction(
@@ -151,16 +184,50 @@ enum VitaImpulseNotifications {
             title: "Готово",
             options: []
         )
+        let edit = UNNotificationAction(
+            identifier: VitaImpulseStore.editActionID,
+            title: "Изменить",
+            options: [.foreground]
+        )
+        let delete = UNNotificationAction(
+            identifier: VitaImpulseStore.deleteActionID,
+            title: "Удалить",
+            options: [.destructive]
+        )
         return [
             UNNotificationCategory(
                 identifier: VitaImpulseStore.categoryID,
-                actions: [accept, snooze, complete],
+                actions: [start, snooze, complete],
                 intentIdentifiers: [],
                 options: [.customDismissAction]
             ),
             UNNotificationCategory(
+                identifier: VitaImpulseStore.reminderCategoryID,
+                actions: [complete, edit, delete],
+                intentIdentifiers: [],
+                options: []
+            ),
+            UNNotificationCategory(
+                identifier: VitaImpulseStore.taskCategoryID,
+                actions: [start, snooze, delete],
+                intentIdentifiers: [],
+                options: []
+            ),
+            UNNotificationCategory(
                 identifier: deadlineCategoryID,
-                actions: [complete, accept],
+                actions: [complete, edit, delete],
+                intentIdentifiers: [],
+                options: []
+            ),
+            UNNotificationCategory(
+                identifier: taskDeadlineCategoryID,
+                actions: [start, delete],
+                intentIdentifiers: [],
+                options: []
+            ),
+            UNNotificationCategory(
+                identifier: VitaImpulseStore.timerCategoryID,
+                actions: [delete],
                 intentIdentifiers: [],
                 options: []
             ),
@@ -229,6 +296,29 @@ enum VitaImpulseNotifications {
         )
     }
 
+    static func scheduleTimer(_ impulse: VitaImpulse, completion: @escaping (Error?) -> Void) {
+        let center = UNUserNotificationCenter.current()
+        let identifier = VitaImpulseStore.timerNotificationID(for: impulse.id)
+        center.removePendingNotificationRequests(withIdentifiers: [identifier])
+        guard impulse.type == .task,
+              impulse.status == .running,
+              let timerEndDate = impulse.timerEndDate,
+              timerEndDate.timeIntervalSinceNow >= 1 else {
+            completion(nil)
+            return
+        }
+        let content = baseContent(for: impulse)
+        content.title = "Время задачи вышло"
+        content.body = impulse.title
+        content.categoryIdentifier = VitaImpulseStore.timerCategoryID
+        center.add(request(
+            identifier: identifier,
+            content: content,
+            date: timerEndDate,
+            now: .now
+        ), withCompletionHandler: completion)
+    }
+
     static func cancelAll(for impulseID: String) {
         let identifiers = [
             VitaImpulseStore.notificationID,
@@ -251,7 +341,9 @@ enum VitaImpulseNotifications {
         let content = baseContent(for: impulse)
         content.title = reminderTitle(for: impulse)
         content.body = "Для начала \(impulse.firstStep)"
-        content.categoryIdentifier = VitaImpulseStore.categoryID
+        content.categoryIdentifier = impulse.type == .task
+            ? VitaImpulseStore.taskCategoryID
+            : VitaImpulseStore.reminderCategoryID
         return request(
             identifier: VitaImpulseStore.notificationID(for: impulse.id),
             content: content,
@@ -269,7 +361,9 @@ enum VitaImpulseNotifications {
         let content = baseContent(for: impulse)
         content.title = "Дедлайн!"
         content.body = "\(impulse.title) — до \(deadlineText(deadline))"
-        content.categoryIdentifier = deadlineCategoryID
+        content.categoryIdentifier = impulse.type == .task
+            ? taskDeadlineCategoryID
+            : deadlineCategoryID
         return request(
             identifier: VitaImpulseStore.deadlineNotificationID(for: impulse.id),
             content: content,
@@ -380,9 +474,18 @@ enum VitaImpulseAlarms {
             try? manager.cancel(id: id)
             let title = VitaImpulseNotifications.reminderTitle(for: impulse)
             let displayTitle: LocalizedStringResource = "\(title) — Для начала \(impulse.firstStep)"
+            let actionButton = AlarmButton(
+                text: impulse.type == .task ? "Начать" : "Готово",
+                textColor: .white,
+                systemImageName: impulse.type == .task ? "play.fill" : "checkmark"
+            )
             let alert: AlarmPresentation.Alert
             if #available(iOS 26.1, *) {
-                alert = .init(title: displayTitle)
+                alert = .init(
+                    title: displayTitle,
+                    secondaryButton: actionButton,
+                    secondaryButtonBehavior: .custom
+                )
             } else {
                 alert = .init(
                     title: displayTitle,
@@ -390,7 +493,9 @@ enum VitaImpulseAlarms {
                         text: "Выключить",
                         textColor: .white,
                         systemImageName: "stop.circle"
-                    )
+                    ),
+                    secondaryButton: actionButton,
+                    secondaryButtonBehavior: .custom
                 )
             }
             let attributes = AlarmAttributes(
@@ -404,6 +509,7 @@ enum VitaImpulseAlarms {
             let configuration = AlarmManager.AlarmConfiguration<VitaImpulseAlarmMetadata>.alarm(
                 schedule: .fixed(impulse.fireDate),
                 attributes: attributes,
+                secondaryIntent: VitaImpulseAlarmActionIntent(impulseID: impulse.id),
                 sound: .default
             )
             _ = try await manager.schedule(id: id, configuration: configuration)
@@ -465,7 +571,7 @@ enum VitaImpulseDelivery {
                     && current.usesAlarm
                     && current.fireDate.timeIntervalSinceNow >= 1
                 guard current == impulse, canStillScheduleAlarm else {
-                    schedule(
+                    finishStaleSchedule(
                         current,
                         includeLocalNotifications: includeLocalNotifications,
                         completion: completion
@@ -492,7 +598,7 @@ enum VitaImpulseDelivery {
                     && current.usesAlarm
                     && current.fireDate.timeIntervalSinceNow >= 1
                 guard current == impulse, canStillScheduleAlarm else {
-                    schedule(
+                    finishStaleSchedule(
                         current,
                         includeLocalNotifications: includeLocalNotifications,
                         completion: completion
@@ -514,6 +620,32 @@ enum VitaImpulseDelivery {
                 }
             }
         }
+    }
+
+    private static func finishStaleSchedule(
+        _ current: VitaImpulse,
+        includeLocalNotifications: Bool,
+        completion: @escaping (Error?) -> Void
+    ) {
+        if current.status == .running, current.timerEndDate != nil {
+            VitaImpulseAlarms.cancel(for: current.id)
+            if includeLocalNotifications {
+                VitaImpulseNotifications.scheduleTimer(current, completion: completion)
+            } else {
+                completion(nil)
+            }
+            return
+        }
+        guard current.isActive else {
+            cancelAll(for: current.id)
+            completion(nil)
+            return
+        }
+        schedule(
+            current,
+            includeLocalNotifications: includeLocalNotifications,
+            completion: completion
+        )
     }
 
     static func cancelAll(for impulseID: String) {

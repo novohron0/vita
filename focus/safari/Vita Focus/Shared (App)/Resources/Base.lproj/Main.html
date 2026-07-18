@@ -164,19 +164,18 @@
             <section class="step-card impulse-card" data-app-tab-content="impulse">
                 <div class="step-head">
                     <div>
-                        <h2 class="step-title">Vita Импульс</h2>
+                        <h2 class="step-title">Папки</h2>
                         <p id="impulseSummary" class="impulse-summary">Мягко возвращает к важному</p>
                     </div>
-                    <span id="impulsePill" class="status-pill"><i></i><span>0</span></span>
-                </div>
-
-                <div class="impulse-section-toolbar">
-                    <button id="manageImpulseFolders" type="button" class="secondary compact" aria-expanded="false" aria-controls="impulseFolderManager">Папки</button>
+                    <div class="impulse-head-actions">
+                        <span id="impulsePill" class="status-pill"><i></i><span>0</span></span>
+                        <button id="manageImpulseFolders" type="button" class="icon-button impulse-folder-menu" aria-expanded="false" aria-controls="impulseFolderManager" aria-label="Управлять папками">•••</button>
+                    </div>
                 </div>
 
                 <section id="impulseFolderManager" class="impulse-folder-manager" aria-labelledby="impulseFolderManagerTitle" hidden>
                     <div class="impulse-folder-manager-head">
-                        <strong id="impulseFolderManagerTitle">Папки напоминаний</strong>
+                        <strong id="impulseFolderManagerTitle">Папки импульсов</strong>
                         <button id="closeImpulseFolders" type="button" class="icon-button" aria-label="Закрыть папки">×</button>
                     </div>
                     <div class="impulse-folder-create">
@@ -187,13 +186,27 @@
                     <p id="impulseFolderStatus" class="habit-status" role="status" aria-live="polite"></p>
                 </section>
 
-                <div id="impulseList" class="impulse-list" aria-live="polite"></div>
-                <div id="impulseEmpty" class="impulse-empty">
-                    <span aria-hidden="true">↗</span>
-                    <strong>Первый импульс</strong>
-                    <p>Напоминание покажет твоё «зачем», первый шаг и дедлайн.</p>
+                <div id="impulseBrowser" class="impulse-browser">
+                    <section id="impulseFolderOverview" class="impulse-browser-pane is-active" aria-label="Папки импульсов">
+                        <div id="impulseFolderGrid" class="impulse-folder-grid" role="group" aria-label="Папки"></div>
+                    </section>
+                    <section id="impulseFolderView" class="impulse-browser-pane" aria-labelledby="activeImpulseFolderTitle" hidden>
+                        <header class="impulse-folder-view-head">
+                            <button id="backImpulseFolders" type="button" class="text-action impulse-folder-back" aria-label="Вернуться к папкам">‹ Папки</button>
+                            <div>
+                                <strong id="activeImpulseFolderTitle">Другое</strong>
+                                <span id="activeImpulseFolderCount">0</span>
+                            </div>
+                        </header>
+                        <div id="impulseList" class="impulse-list"></div>
+                        <div id="impulseEmpty" class="impulse-empty">
+                            <span aria-hidden="true">＋</span>
+                            <strong>Здесь пока пусто</strong>
+                            <p>Новый импульс появится в этой папке.</p>
+                        </div>
+                    </section>
                 </div>
-                <button id="newImpulse" type="button" class="primary">Создать импульс</button>
+                <button id="newImpulse" type="button" class="impulse-new-row"><span aria-hidden="true">＋</span> Новый импульс</button>
 
                 <form id="impulseEditor" class="impulse-editor" novalidate hidden>
                     <div class="impulse-editor-head">
@@ -212,6 +225,13 @@
                     <input id="impulseID" type="hidden">
                     <section class="impulse-wizard-step impulse-fields" data-impulse-step="1" aria-labelledby="impulseStepOneTitle">
                         <div><span class="impulse-eyebrow">Шаг 1</span><h3 id="impulseStepOneTitle">Напоминание</h3></div>
+                        <fieldset class="impulse-type" aria-label="Тип импульса">
+                            <legend>Тип</legend>
+                            <div>
+                                <label><input type="radio" name="impulseType" value="reminder" checked><span>Напоминание</span></label>
+                                <label><input type="radio" name="impulseType" value="task"><span>Задача</span></label>
+                            </div>
+                        </fieldset>
                         <label><span>Название</span><input id="impulseTitle" type="text" maxlength="80" autocomplete="off" aria-required="true" placeholder="Например, почитать 20 минут"></label>
                         <label><span>Заметки <em>необязательно</em></span><textarea id="impulseNotes" maxlength="400" rows="3" placeholder="Детали, место или ссылка"></textarea></label>
                         <div class="impulse-folder-picker">
@@ -238,6 +258,7 @@
                             <option value="weekly">Каждую неделю</option>
                             <option value="monthly">Каждый месяц</option>
                         </select></label>
+                        <label id="impulseDurationWrap" hidden><span>Время на задачу</span><span class="impulse-duration-field"><input id="impulseDuration" type="number" min="1" max="240" step="1" inputmode="numeric" value="25"><i>мин</i></span></label>
                         <label id="impulseAlarmControl" class="impulse-toggle" hidden><input id="impulseUsesAlarm" type="checkbox" disabled><span><b>Будильник</b><small>Более заметный сигнал в выбранное время</small></span></label>
                     </section>
 

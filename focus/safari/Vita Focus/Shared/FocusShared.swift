@@ -27,6 +27,11 @@ enum VitaImpulseFocusMode: String, Codable, CaseIterable {
     case workout
 }
 
+enum VitaImpulseType: String, Codable, CaseIterable {
+    case reminder
+    case task
+}
+
 enum VitaImpulseStatus: String, Codable, CaseIterable {
     case scheduled
     case accepted
@@ -47,6 +52,7 @@ struct VitaImpulse: Codable, Equatable, Identifiable {
     var deadline: Date?
     var deadlineAlertDate: Date?
     var usesAlarm: Bool
+    var type: VitaImpulseType
     var durationMinutes: Int
     var priority: VitaImpulsePriority
     var repeatRule: VitaImpulseRepeat
@@ -71,6 +77,7 @@ struct VitaImpulse: Codable, Equatable, Identifiable {
         deadline: Date? = nil,
         deadlineAlertDate: Date? = nil,
         usesAlarm: Bool = false,
+        type: VitaImpulseType = .reminder,
         durationMinutes: Int = 15,
         priority: VitaImpulsePriority = .none,
         repeatRule: VitaImpulseRepeat = .none,
@@ -94,6 +101,7 @@ struct VitaImpulse: Codable, Equatable, Identifiable {
         self.deadline = deadline
         self.deadlineAlertDate = deadlineAlertDate
         self.usesAlarm = usesAlarm
+        self.type = type
         self.durationMinutes = durationMinutes
         self.priority = priority
         self.repeatRule = repeatRule
@@ -109,7 +117,7 @@ struct VitaImpulse: Codable, Equatable, Identifiable {
 
     private enum CodingKeys: String, CodingKey {
         case id, title, reason, firstStep, notes, folderID, fireDate, recurrenceAnchorDate
-        case deadline, deadlineAlertDate, usesAlarm, durationMinutes
+        case deadline, deadlineAlertDate, usesAlarm, type, durationMinutes
         case priority, repeatRule, focusMode, status, createdAt, completedAt, acceptedAt
         case snoozeCount, timerEndDate, isEnabled
     }
@@ -142,6 +150,10 @@ struct VitaImpulse: Codable, Equatable, Identifiable {
         snoozeCount = try values.decodeIfPresent(Int.self, forKey: .snoozeCount) ?? 0
         timerEndDate = try values.decodeIfPresent(Date.self, forKey: .timerEndDate)
         isEnabled = try values.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? true
+        let explicitType = (try? values.decode(String.self, forKey: .type))
+            .flatMap(VitaImpulseType.init(rawValue:))
+        type = explicitType
+            ?? ((status == .running || timerEndDate != nil || focusMode != .none) ? .task : .reminder)
     }
 
     var notificationBody: String {
@@ -163,6 +175,7 @@ enum VitaImpulseError: LocalizedError {
     case invalidFolder
     case invalidSnooze
     case invalidDuration
+    case taskOnly
     case tooManyActive
     case notFound
 
@@ -176,6 +189,7 @@ enum VitaImpulseError: LocalizedError {
         case .invalidFolder: return "Папка не найдена"
         case .invalidSnooze: return "Выбери новое время до дедлайна"
         case .invalidDuration: return "Таймер может длиться от 1 до 240 минут"
+        case .taskOnly: return "Это действие доступно только для задачи"
         case .tooManyActive: return "Можно держать не больше \(VitaImpulseStore.maxActiveCount) активных импульсов"
         case .notFound: return "Импульс не найден"
         }
@@ -189,11 +203,17 @@ enum VitaImpulseStore {
     // Kept for already delivered notifications and callers from the first Impulse version.
     static let notificationID = "vita.impulse.active"
     static let categoryID = "VITA_IMPULSE"
+    static let reminderCategoryID = "VITA_IMPULSE_REMINDER"
+    static let taskCategoryID = "VITA_IMPULSE_TASK"
+    static let timerCategoryID = "VITA_IMPULSE_TIMER"
     static let startActionID = "VITA_IMPULSE_START"
     static let postponeActionID = "VITA_IMPULSE_POSTPONE"
     static let acceptActionID = startActionID
     static let snoozeActionID = postponeActionID
     static let completeActionID = "VITA_IMPULSE_COMPLETE"
+    static let doneActionID = completeActionID
+    static let editActionID = "VITA_IMPULSE_EDIT"
+    static let deleteActionID = "VITA_IMPULSE_DELETE"
 
     private static let key = "vitaImpulses"
     private static let legacyKey = "vitaImpulse"
@@ -284,6 +304,7 @@ enum VitaImpulseStore {
         notes: String,
         fireDate: Date,
         deadline: Date? = nil,
+        type: VitaImpulseType? = nil,
         durationMinutes: Int = 15,
         priority: VitaImpulsePriority = .none,
         repeatRule: VitaImpulseRepeat = .none,
@@ -305,6 +326,7 @@ enum VitaImpulseStore {
             folderID: existing?.folderID,
             deadlineAlertDate: legacyDeadlineAlert,
             usesAlarm: existing?.usesAlarm ?? false,
+            type: type,
             durationMinutes: durationMinutes,
             priority: priority,
             repeatRule: repeatRule,
@@ -325,6 +347,7 @@ enum VitaImpulseStore {
         folderID: String?,
         deadlineAlertDate: Date?,
         usesAlarm: Bool,
+        type: VitaImpulseType? = nil,
         durationMinutes: Int = 15,
         priority: VitaImpulsePriority = .none,
         repeatRule: VitaImpulseRepeat = .none,
@@ -354,6 +377,7 @@ enum VitaImpulseStore {
             deadline: deadline,
             deadlineAlertDate: deadlineAlertDate,
             usesAlarm: usesAlarm,
+            type: type ?? existing?.type ?? .reminder,
             durationMinutes: durationMinutes,
             priority: priority,
             repeatRule: repeatRule,
@@ -423,8 +447,19 @@ enum VitaImpulseStore {
                   let timerEndDate = impulses[index].timerEndDate,
                   timerEndDate <= now else { continue }
             expiredIDs.append(impulses[index].id)
-            impulses[index].timerEndDate = nil
-            impulses[index].status = .accepted
+            if impulses[index].type == .task {
+                do {
+                    try applyCompletion(to: &impulses[index], now: now, calendar: .current)
+                } catch {
+                    impulses[index].completedAt = now
+                    impulses[index].timerEndDate = nil
+                    impulses[index].status = .completed
+                    impulses[index].isEnabled = false
+                }
+            } else {
+                impulses[index].timerEndDate = nil
+                impulses[index].status = .accepted
+            }
         }
         if !expiredIDs.isEmpty {
             persist(impulses)
@@ -436,6 +471,7 @@ enum VitaImpulseStore {
     static func snooze(id: String, until: Date, now: Date = .now) throws -> VitaImpulse {
         guard until > now else { throw VitaImpulseError.invalidSnooze }
         return try mutate(id: id) { impulse in
+            guard impulse.type == .task else { throw VitaImpulseError.taskOnly }
             if let deadline = impulse.deadline, until >= deadline {
                 throw VitaImpulseError.invalidSnooze
             }
@@ -464,6 +500,9 @@ enum VitaImpulseStore {
         var impulses = all()
         guard let selectedIndex = impulses.firstIndex(where: { $0.id == id }) else {
             throw VitaImpulseError.notFound
+        }
+        guard impulses[selectedIndex].type == .task else {
+            throw VitaImpulseError.taskOnly
         }
         let selectedDuration = durationMinutes ?? impulses[selectedIndex].durationMinutes
         guard durationRange.contains(selectedDuration) else {
@@ -503,35 +542,43 @@ enum VitaImpulseStore {
         calendar: Calendar = .current
     ) throws -> VitaImpulse {
         try mutate(id: id) { impulse in
-            impulse.completedAt = now
-            impulse.timerEndDate = nil
-            guard impulse.repeatRule != .none else {
-                impulse.status = .completed
-                impulse.isEnabled = false
-                return
-            }
-
-            let oldAnchorDate = impulse.recurrenceAnchorDate
-            let nextFireDate = try nextFireDate(
-                after: oldAnchorDate,
-                repeatRule: impulse.repeatRule,
-                now: now,
-                calendar: calendar
-            )
-            let recurrenceOffset = nextFireDate.timeIntervalSince(oldAnchorDate)
-            if let deadline = impulse.deadline {
-                impulse.deadline = deadline.addingTimeInterval(recurrenceOffset)
-            }
-            if let deadlineAlertDate = impulse.deadlineAlertDate {
-                impulse.deadlineAlertDate = deadlineAlertDate.addingTimeInterval(recurrenceOffset)
-            }
-            impulse.fireDate = nextFireDate
-            impulse.recurrenceAnchorDate = nextFireDate
-            impulse.status = .scheduled
-            impulse.acceptedAt = nil
-            impulse.snoozeCount = 0
-            impulse.isEnabled = true
+            try applyCompletion(to: &impulse, now: now, calendar: calendar)
         }
+    }
+
+    private static func applyCompletion(
+        to impulse: inout VitaImpulse,
+        now: Date,
+        calendar: Calendar
+    ) throws {
+        impulse.completedAt = now
+        impulse.timerEndDate = nil
+        guard impulse.repeatRule != .none else {
+            impulse.status = .completed
+            impulse.isEnabled = false
+            return
+        }
+
+        let oldAnchorDate = impulse.recurrenceAnchorDate
+        let nextFireDate = try nextFireDate(
+            after: oldAnchorDate,
+            repeatRule: impulse.repeatRule,
+            now: now,
+            calendar: calendar
+        )
+        let recurrenceOffset = nextFireDate.timeIntervalSince(oldAnchorDate)
+        if let deadline = impulse.deadline {
+            impulse.deadline = deadline.addingTimeInterval(recurrenceOffset)
+        }
+        if let deadlineAlertDate = impulse.deadlineAlertDate {
+            impulse.deadlineAlertDate = deadlineAlertDate.addingTimeInterval(recurrenceOffset)
+        }
+        impulse.fireDate = nextFireDate
+        impulse.recurrenceAnchorDate = nextFireDate
+        impulse.status = .scheduled
+        impulse.acceptedAt = nil
+        impulse.snoozeCount = 0
+        impulse.isEnabled = true
     }
 
     private static func mutate(
@@ -768,6 +815,9 @@ enum VitaImpulseFolderStore {
 }
 
 enum VitaImpulsePendingActionKind: String, Codable, Equatable {
+    case open
+    case edit
+    case start
     case accept
     case snooze
 }

@@ -14,6 +14,11 @@ const popupPath = join(extensionDir, 'popup/popup.js');
 const registryPath = join(extensionDir, 'shared/registry.json');
 const manifestPath = join(extensionDir, 'manifest.json');
 const staticFocusPath = join(root, 'static/focus.html');
+const appResourcesDir = join(root, 'focus/safari/Vita Focus/Shared (App)/Resources');
+const appScriptPath = join(appResourcesDir, 'Script.js');
+const appMainPath = join(appResourcesDir, 'Base.lproj/Main.html');
+const appStylePath = join(appResourcesDir, 'Style.css');
+const appControllerPath = join(root, 'focus/safari/Vita Focus/Shared (App)/ViewController.swift');
 
 let passed = 0;
 let failed = 0;
@@ -295,6 +300,140 @@ test('popup persistence, cooldown, effective push, and static mode priority stay
   });
   assert.equal(thumbsWins.yt_blur, false, 'Text-only не снимает blur');
   assert.equal(thumbsWins.yt_recs, false, 'Text-only не снимает hidden recommendations');
+});
+
+test('Impulse keeps a virtual Other folder and drills into folder contents', () => {
+  const script = readFileSync(appScriptPath, 'utf8');
+  const main = readFileSync(appMainPath, 'utf8');
+  const folderIdentity = section(script, 'function impulseFolderKey(', 'function animateImpulsePane(');
+  const folderOverview = section(script, 'function renderImpulseFolderOverview(', 'function openImpulseFolder(');
+  const folderNavigation = section(script, 'function openImpulseFolder(', 'function revealImpulse(');
+  const listRender = section(script, 'function renderImpulseList(', 'function fillImpulseEditor(');
+
+  assert.match(script, /const\s+impulseOtherFolderID\s*=\s*"__vita_other__"/, 'Нет стабильного id виртуальной папки «Другое»');
+  assert.match(
+    folderIdentity,
+    /impulseFolder\(item\?\.folderID\)\s*\?\s*String\(item\.folderID\)\s*:\s*impulseOtherFolderID/,
+    'Нераспределённые или осиротевшие импульсы не попадают в «Другое»',
+  );
+  assert.match(folderIdentity, /id\s*===\s*impulseOtherFolderID[\s\S]*?return\s+"Другое"/, 'Виртуальная папка потеряла название');
+  assert.match(
+    folderOverview,
+    /tiles\.push\(makeImpulseFolderTile\(impulseOtherFolderID,\s*"Другое",\s*otherCount,\s*tiles\.length,\s*true\)\)/,
+    '«Другое» не добавляется последней плиткой рядом с пользовательскими папками',
+  );
+  assert.match(folderNavigation, /activeImpulseFolderID\s*=\s*normalized/, 'Открытая папка не сохраняется в состоянии UI');
+  assert.match(folderNavigation, /overview\.hidden\s*=\s*true[\s\S]*?view\.hidden\s*=\s*false[\s\S]*?renderImpulseList\(\)/, 'Drill-down не переключает обзор на список папки');
+  assert.match(
+    listRender,
+    /items\.filter\(\(item\)\s*=>\s*impulseFolderKey\(item\)\s*===\s*activeImpulseFolderID\)/,
+    'Открытая папка не фильтрует список импульсов',
+  );
+  assert.match(main, /id="impulseFolderOverview"[\s\S]*?id="impulseFolderView"[\s\S]*?id="backImpulseFolders"/, 'В HTML отсутствует доступный переход папка → список → назад');
+});
+
+test('Impulse folder rows stay compact and expose repeat labels through drill-down', () => {
+  const script = readFileSync(appScriptPath, 'utf8');
+  const repeatLabels = section(script, 'const impulseCompactRepeatLabels =', 'const impulsePriorityLabels =');
+  const listRender = section(script, 'function renderImpulseList(', 'function fillImpulseEditor(');
+
+  assert.match(repeatLabels, /daily:\s*"Ежедневно"/, 'Ежедневный повтор не имеет компактной подписи');
+  assert.match(repeatLabels, /weekdays:\s*"По будням"/, 'Повтор по будням не имеет компактной подписи');
+  assert.match(repeatLabels, /weekly:\s*"Еженедельно"/, 'Еженедельный повтор не имеет компактной подписи');
+  assert.match(repeatLabels, /monthly:\s*"Ежемесячно"/, 'Ежемесячный повтор не имеет компактной подписи');
+  assert.match(listRender, /summaryButton\.dataset\.impulseAction\s*=\s*"toggle"/, 'Компактная строка не раскрывается нажатием');
+  assert.match(listRender, /impulseCompactDate\(item\.fireDate\)[\s\S]*?compactMeta\.append\(date,\s*time\)/, 'Компактная строка не показывает дату и время');
+  assert.match(listRender, /impulseCompactRepeatLabels\[item\.repeatRule\][\s\S]*?repeat\.textContent\s*=\s*repeatLabel/, 'Компактная строка не показывает повтор');
+  assert.match(listRender, /detailsShell\.setAttribute\("aria-hidden",\s*String\(!expanded\)\)[\s\S]*?detailsShell\.inert\s*=\s*!expanded/, 'Свёрнутые детали остаются доступны фокусу');
+});
+
+test('Impulse action matrix differs for reminders and tasks without old Accept', () => {
+  const script = readFileSync(appScriptPath, 'utf8');
+  const listRender = section(script, 'function renderImpulseList(', 'function fillImpulseEditor(');
+  const actions = section(listRender, 'let actionButtons;', 'const deleteButton =');
+  const sheetView = section(script, 'function showImpulseSheetView(', 'function revealImpulseSheetLayer(');
+
+  assert.match(actions, /if\s*\(completed\)[\s\S]*?makeImpulseButton\("Удалить",\s*"delete"/, 'Завершённый импульс должен оставлять только удаление');
+  assert.match(
+    actions,
+    /else if\s*\(type\s*===\s*"task"\)[\s\S]*?makeImpulseButton\("Начать",\s*"start",\s*"primary"\)[\s\S]*?makeImpulseButton\("Отложить",\s*"snooze"\)[\s\S]*?makeImpulseButton\("Удалить",\s*"delete"/,
+    'У задачи должны быть действия «Начать / Отложить / Удалить»',
+  );
+  assert.match(
+    actions,
+    /else\s*\{[\s\S]*?makeImpulseButton\("Готово",\s*"complete",\s*"primary"\)[\s\S]*?makeImpulseButton\("Изменить",\s*"edit"\)[\s\S]*?makeImpulseButton\("Удалить",\s*"delete"/,
+    'У напоминания должны быть действия «Готово / Изменить / Удалить»',
+  );
+  assert.doesNotMatch(actions, /makeImpulseButton\("Принять"/, 'В карточки вернулось старое действие «Принять»');
+  assert.match(sheetView, /back\.hidden\s*=\s*view\s*===\s*"snooze"\s*&&\s*isTask/, 'Задача через «Назад» не должна открывать reminder-only действия');
+});
+
+test('Impulse save payload carries type and task duration into the native bridge', () => {
+  const script = readFileSync(appScriptPath, 'utf8');
+  const main = readFileSync(appMainPath, 'utf8');
+  const controller = readFileSync(appControllerPath, 'utf8');
+  const submit = section(
+    script,
+    'document.getElementById("impulseEditor")?.addEventListener("submit"',
+    'document.querySelectorAll("[data-sheet-close]")',
+  );
+
+  assert.match(main, /name="impulseType"\s+value="reminder"\s+checked/, 'В редакторе нет типа reminder по умолчанию');
+  assert.match(main, /name="impulseType"\s+value="task"/, 'В редакторе нельзя выбрать задачу');
+  assert.match(main, /id="impulseDuration"[^>]*min="1"[^>]*max="240"/, 'Время задачи не ограничено диапазоном 1…240 минут');
+  assert.match(submit, /const\s+type\s*=\s*selectedImpulseType\(\)/, 'Submit не читает выбранный тип');
+  assert.match(submit, /const\s+durationMinutes\s*=\s*type\s*===\s*"task"[\s\S]*?:\s*null/, 'Reminder ошибочно отправляет длительность задачи');
+  assert.match(submit, /action:\s*"save-impulse"[\s\S]*?\btype,\s*[\s\S]*?\bdurationMinutes,/, 'Save payload потерял type или durationMinutes');
+  assert.match(controller, /typeRaw:\s*payload\["type"\][\s\S]*?durationMinutes:\s*\(payload\["durationMinutes"\]/, 'Native bridge не принимает type и durationMinutes');
+});
+
+test('expired Impulse timers request one native refresh and reconciliation', () => {
+  const script = readFileSync(appScriptPath, 'utf8');
+  const controller = readFileSync(appControllerPath, 'utf8');
+  const countdown = section(script, 'function syncImpulseCountdowns(', 'function refreshImpulseCountdownTimer(');
+  const refreshBridge = section(controller, 'if action == "refresh-impulses"', 'if action == "snooze-impulse"');
+  const reconcile = section(controller, 'private func reconcileImpulseTimers(', 'private func completeImpulse(');
+
+  assert.match(script, /const\s+refreshedExpiredImpulseTimers\s*=\s*new Set\(\)/, 'Нет защиты от повторных refresh для одного истёкшего таймера');
+  assert.match(countdown, /if\s*\(end\s*<=\s*now\)/, 'Истечение таймера не распознаётся');
+  assert.match(countdown, /if\s*\(!refreshedExpiredImpulseTimers\.has\(refreshKey\)\)[\s\S]*?refreshedExpiredImpulseTimers\.add\(refreshKey\)[\s\S]*?post\(\{\s*action:\s*"refresh-impulses"\s*\}\)/, 'Истёкший таймер не запрашивает ровно одно обновление состояния');
+  assert.match(refreshBridge, /reconcileImpulseTimers\(in:\s*webView\)/, 'Native bridge не обрабатывает refresh-impulses');
+  assert.match(reconcile, /VitaImpulseStore\.reconcileExpiredTimers\(\)[\s\S]*?pushImpulseState\(to:\s*webView\)/, 'Native refresh не reconcile-ит таймеры и не возвращает новое состояние');
+});
+
+test('Impulse creation stays a bottom row and visible UI has no old Accept action', () => {
+  const script = readFileSync(appScriptPath, 'utf8');
+  const main = readFileSync(appMainPath, 'utf8');
+  const style = readFileSync(appStylePath, 'utf8');
+
+  assert.match(
+    main,
+    /<\/div>\s*<button id="newImpulse"[^>]*class="impulse-new-row"[^>]*>[\s\S]*?Новый импульс<\/button>\s*<form id="impulseEditor"/,
+    'Новая запись должна оставаться нижней строкой перед редактором',
+  );
+  assert.match(script, /getElementById\("newImpulse"\)\?\.addEventListener\("click",\s*\(\)\s*=>\s*openImpulseEditor\(null,\s*activeImpulseFolderID\)\)/, 'Нижняя строка не открывает редактор в текущей папке');
+  assert.match(style, /\.impulse-new-row\s*\{[\s\S]*?background:\s*transparent[\s\S]*?box-shadow:\s*none/, 'Нижняя строка снова выглядит как тяжёлая CTA-кнопка');
+  assert.doesNotMatch(main, />\s*Принять\s*</, 'В видимый HTML вернулось старое действие «Принять»');
+  assert.doesNotMatch(script, /(?:textContent\s*=|makeImpulseButton\()\s*"Принять"/, 'JS снова создаёт видимое действие «Принять»');
+});
+
+test('Impulse transitions keep reduced-motion hooks', () => {
+  const script = readFileSync(appScriptPath, 'utf8');
+  const style = readFileSync(appStylePath, 'utf8');
+  const paneAnimation = section(script, 'function animateImpulsePane(', 'function impulseItem(');
+  const reducedMotion = section(
+    style,
+    '@media (prefers-reduced-motion: reduce)',
+    '@media (prefers-reduced-transparency: reduce)',
+  );
+
+  assert.match(script, /matchMedia\("\(prefers-reduced-motion:\s*reduce\)"\)/, 'JS не учитывает reduced motion');
+  assert.match(paneAnimation, /if\s*\(!element\s*\|\|\s*appReduceMotion\.matches\)\s*return/, 'Folder animation запускается при reduced motion');
+  assert.match(style, /\.impulse-browser-pane\.is-entering-forward\s*\{\s*animation:/, 'Нет анимации перехода в папку');
+  assert.match(style, /\.impulse-item-details-shell\s*\{[\s\S]*?transition:/, 'Нет плавного раскрытия карточки');
+  assert.match(style, /\.impulse-sheet\s*\{[\s\S]*?transition:/, 'Нет плавного появления sheet');
+  assert.match(reducedMotion, /\.impulse-browser-pane[\s\S]*?animation:\s*none\s*!important/, 'Reduced motion не отключает навигационные анимации');
+  assert.match(reducedMotion, /\.impulse-item-details-shell[\s\S]*?\.impulse-sheet-backdrop[\s\S]*?transition:\s*none\s*!important/, 'Reduced motion не отключает переходы карточек и sheet');
 });
 
 for (const { name, body } of tests) {

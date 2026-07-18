@@ -255,6 +255,8 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
                     deadlineAlertRaw: payload["deadlineAlertDate"] as? String ?? "",
                     folderID: payload["folderID"] as? String,
                     usesAlarm: payload["usesAlarm"] as? Bool ?? false,
+                    typeRaw: payload["type"] as? String,
+                    durationMinutes: (payload["durationMinutes"] as? NSNumber)?.intValue,
                     priorityRaw: payload["priority"] as? String ?? "none",
                     repeatRaw: payload["repeatRule"] as? String ?? "none",
                     in: webView
@@ -279,6 +281,14 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
             }
             if action == "accept-impulse" {
                 acceptImpulse(payload["id"] as? String ?? "", in: webView)
+                return
+            }
+            if action == "start-impulse" {
+                startImpulse(payload["id"] as? String ?? "", in: webView)
+                return
+            }
+            if action == "refresh-impulses" {
+                reconcileImpulseTimers(in: webView)
                 return
             }
             if action == "snooze-impulse" {
@@ -787,6 +797,8 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         deadlineAlertRaw: String,
         folderID: String?,
         usesAlarm: Bool,
+        typeRaw: String?,
+        durationMinutes: Int?,
         priorityRaw: String,
         repeatRaw: String,
         in webView: WKWebView
@@ -805,6 +817,8 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
             pushImpulseState(to: webView, status: "Проверь время предупреждения", isError: true, saveResult: true)
             return
         }
+        let normalizedID = id?.isEmpty == true ? nil : id
+        let existing = normalizedID.flatMap { VitaImpulseStore.load(id: $0) }
         let normalizedFolderID = folderID?.isEmpty == false ? folderID : nil
         if let normalizedFolderID,
            !VitaImpulseFolderStore.list().contains(where: { $0.id == normalizedFolderID }) {
@@ -813,7 +827,7 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         }
         do {
             let impulse = try VitaImpulseStore.save(
-                id: id?.isEmpty == true ? nil : id,
+                id: normalizedID,
                 title: title,
                 reason: reason,
                 firstStep: firstStep,
@@ -823,7 +837,8 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
                 folderID: normalizedFolderID,
                 deadlineAlertDate: deadlineAlert,
                 usesAlarm: usesAlarm && VitaImpulseAlarms.isSupported,
-                durationMinutes: 15,
+                type: typeRaw.flatMap(VitaImpulseType.init(rawValue:)),
+                durationMinutes: durationMinutes ?? existing?.durationMinutes ?? 15,
                 priority: VitaImpulsePriority(rawValue: priorityRaw) ?? .none,
                 repeatRule: VitaImpulseRepeat(rawValue: repeatRaw) ?? .none,
                 focusMode: .none
@@ -907,6 +922,16 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         ) { [weak self, weak webView] error in
             DispatchQueue.main.async {
                 guard let self, let webView else { return }
+                guard let deliveredImpulse = VitaImpulseStore.load(id: impulse.id) else {
+                    self.pushImpulseState(
+                        to: webView,
+                        status: "Импульс уже удалён",
+                        isError: true,
+                        saveResult: true,
+                        savedImpulseID: impulse.id
+                    )
+                    return
+                }
                 if error is VitaImpulseDeliveryError {
                     guard notificationsGranted else {
                         _ = try? VitaImpulseStore.disable(id: impulse.id)
@@ -947,13 +972,17 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
                     return
                 }
                 let status: String
-                let alarmScheduled = impulse.usesAlarm
-                    && (impulse.status == .scheduled || impulse.status == .snoozed)
-                    && impulse.fireDate.timeIntervalSinceNow >= 1
+                let alarmScheduled = deliveredImpulse.usesAlarm
+                    && (deliveredImpulse.status == .scheduled || deliveredImpulse.status == .snoozed)
+                    && deliveredImpulse.fireDate.timeIntervalSinceNow >= 1
                 if alarmScheduled {
-                    status = !notificationsGranted && impulse.deadlineAlertDate != nil
-                        ? "Будильник сохранён · предупреждение дедлайна требует уведомлений"
-                        : "Будильник сохранён"
+                    if !notificationsGranted && deliveredImpulse.type == .task {
+                        status = "Будильник сохранён · таймер задачи требует уведомлений"
+                    } else if !notificationsGranted && deliveredImpulse.deadlineAlertDate != nil {
+                        status = "Будильник сохранён · предупреждение дедлайна требует уведомлений"
+                    } else {
+                        status = "Будильник сохранён"
+                    }
                 } else {
                     status = "Импульс сохранён"
                 }
@@ -976,6 +1005,46 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         } catch {
             pushImpulseState(to: webView, status: error.localizedDescription, isError: true)
         }
+    }
+
+    private func startImpulse(_ id: String, in webView: WKWebView) {
+        let interruptedIDs = VitaImpulseStore.all().compactMap { impulse in
+            impulse.id != id && (impulse.status == .running || impulse.timerEndDate != nil)
+                ? impulse.id
+                : nil
+        }
+        do {
+            let impulse = try VitaImpulseStore.startTimer(id: id)
+            interruptedIDs.forEach { VitaImpulseNotifications.cancelTimer(for: $0) }
+            VitaImpulseDelivery.cancelReminder(for: id)
+            VitaImpulsePendingActionStore.clear()
+            VitaImpulseNotifications.scheduleTimer(impulse) { [weak self, weak webView] error in
+                DispatchQueue.main.async {
+                    guard let self, let webView else { return }
+                    if error != nil {
+                        _ = try? VitaImpulseStore.cancelTimer(id: id)
+                    }
+                    self.pushImpulseState(
+                        to: webView,
+                        status: error == nil ? "Задача началась" : error?.localizedDescription,
+                        isError: error != nil
+                    )
+                }
+            }
+        } catch {
+            pushImpulseState(to: webView, status: error.localizedDescription, isError: true)
+        }
+    }
+
+    private func reconcileImpulseTimers(in webView: WKWebView) {
+        let expiredIDs = VitaImpulseStore.reconcileExpiredTimers()
+        for id in expiredIDs {
+            VitaImpulseDelivery.cancelAll(for: id)
+            if let impulse = VitaImpulseStore.load(id: id), impulse.isActive {
+                VitaImpulseDelivery.schedule(impulse, completion: { _ in })
+            }
+        }
+        pushImpulseState(to: webView)
     }
 
     private func snoozeImpulse(_ id: String, untilRaw: String, in webView: WKWebView) {
@@ -1117,6 +1186,8 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
             "fireDate": impulseDateString(impulse.fireDate),
             "priority": impulse.priority.rawValue,
             "repeatRule": impulse.repeatRule.rawValue,
+            "type": impulse.type.rawValue,
+            "durationMinutes": impulse.durationMinutes,
             "status": impulse.status.rawValue,
             "snoozeCount": impulse.snoozeCount,
             "enabled": impulse.isEnabled,
@@ -1126,6 +1197,9 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         if let deadline = impulse.deadline { payload["deadline"] = impulseDateString(deadline) }
         if let deadlineAlert = impulse.deadlineAlertDate {
             payload["deadlineAlertDate"] = impulseDateString(deadlineAlert)
+        }
+        if let timerEndDate = impulse.timerEndDate {
+            payload["timerEndDate"] = impulseDateString(timerEndDate)
         }
         return payload
     }
