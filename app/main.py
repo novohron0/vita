@@ -11,7 +11,7 @@ from html import escape as esc
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from PIL import Image, ImageOps
@@ -91,6 +91,31 @@ TRIAL_DAYS = 7
 REVIEW_DAYS = 7  # вторая неделя — автоматом за отзыв после использования
 # токен админки: /admin?token=... — боевой задаётся в .env, не публиковать
 ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN", "vt-dev")
+
+# --- «Сетевая блокировка» Vita Focus: тумблеры доменов через AdGuard Home ---
+# AGH живёт в соседнем контейнере (см. docker-compose), наружу торчит только
+# /dns-query через Caddy. Пустой NETBLOCK_TOKEN = фича выключена (всегда 403).
+AGH_URL = os.environ.get("AGH_URL", "http://172.17.0.1:8083")
+NETBLOCK_TOKEN = os.environ.get("NETBLOCK_TOKEN", "")
+NETBLOCK_DOH_URL = "https://vitadots.ru/dns-query"
+NETBLOCK_APPS: dict = {
+    "instagram": {"title": "Instagram", "domains": ["instagram.com", "cdninstagram.com", "instagr.am", "ig.me"]},
+    "tiktok": {"title": "TikTok", "domains": ["tiktok.com", "tiktokcdn.com", "tiktokv.com", "ttwstatic.com", "ibytedtos.com", "ibyteimg.com", "byteoversea.com", "musical.ly"]},
+    "youtube": {"title": "YouTube", "domains": ["youtube.com", "ytimg.com", "googlevideo.com", "youtu.be", "youtube-nocookie.com", "ggpht.com"]},
+    "x": {"title": "X (Twitter)", "domains": ["twitter.com", "x.com", "twimg.com", "t.co"]},
+    "vk": {"title": "ВКонтакте", "domains": ["vk.com", "vk.me", "vk.ru", "userapi.com", "vkuseraudio.net", "vkuservideo.net"]},
+    "telegram": {"title": "Telegram (частично)", "domains": ["telegram.org", "t.me", "telegram.me", "telesco.pe", "cdn-telegram.org"]},
+    "facebook": {"title": "Facebook", "domains": ["facebook.com", "fbcdn.net", "fb.com", "facebook.net", "fb.watch"]},
+    "reddit": {"title": "Reddit", "domains": ["reddit.com", "redd.it", "redditmedia.com", "redditstatic.com"]},
+    "snapchat": {"title": "Snapchat", "domains": ["snapchat.com", "sc-cdn.net", "snapads.com", "sc-static.net"]},
+    "pinterest": {"title": "Pinterest", "domains": ["pinterest.com", "pinimg.com", "pinterest.ru"]},
+}
+# Карточка живёт в WKWebView приложения (origin null) — нужен CORS.
+NETBLOCK_CORS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+}
 
 
 def db() -> sqlite3.Connection:
@@ -229,6 +254,11 @@ def db() -> sqlite3.Connection:
         "CREATE TABLE IF NOT EXISTS focus_wait("
         "contact TEXT PRIMARY KEY, "
         "created TEXT NOT NULL DEFAULT (datetime('now')))"
+    )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS netblock("
+        "app TEXT PRIMARY KEY, "
+        "blocked INTEGER NOT NULL DEFAULT 0)"
     )
     return conn
 
@@ -1553,6 +1583,138 @@ def admin_feed_hide(code: str, hide: int = 1, token: str = ""):
             (1 if hide else 0, key),
         )
     return {"code": code, "hidden": bool(hide)}
+
+
+# --- «Сетевая блокировка» Vita Focus ---
+
+def _netblock_check(token: str) -> None:
+    if not NETBLOCK_TOKEN or token != NETBLOCK_TOKEN:
+        raise HTTPException(403, "Неверный токен")
+
+
+def _netblock_state(conn: sqlite3.Connection) -> dict:
+    rows = dict(conn.execute("SELECT app, blocked FROM netblock").fetchall())
+    return {app_id: bool(rows.get(app_id, 0)) for app_id in NETBLOCK_APPS}
+
+
+def _netblock_apps_payload(state: dict) -> list:
+    return [
+        {"id": app_id, "title": NETBLOCK_APPS[app_id]["title"], "blocked": state[app_id]}
+        for app_id in NETBLOCK_APPS
+    ]
+
+
+def _netblock_push(state: dict) -> None:
+    """Собирает user-rules из включённых тумблеров и заливает в AdGuard Home."""
+    import urllib.request
+
+    rules = [
+        f"||{domain}^"
+        for app_id, blocked in state.items()
+        if blocked
+        for domain in NETBLOCK_APPS[app_id]["domains"]
+    ]
+    req = urllib.request.Request(
+        f"{AGH_URL}/control/filtering/set_rules",
+        data=json.dumps({"rules": rules}).encode(),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        resp.read()
+
+
+@app.options("/api/netblock/{_rest:path}")
+def netblock_options(_rest: str):
+    return Response(status_code=204, headers=NETBLOCK_CORS)
+
+
+@app.get("/api/netblock/state")
+def netblock_state(token: str = ""):
+    _netblock_check(token)
+    with db() as conn:
+        state = _netblock_state(conn)
+    return JSONResponse({"apps": _netblock_apps_payload(state)}, headers=NETBLOCK_CORS)
+
+
+class NetblockToggleIn(BaseModel):
+    token: str = ""
+    app: str
+    blocked: bool
+
+
+@app.post("/api/netblock/toggle")
+def netblock_toggle(nb: NetblockToggleIn):
+    _netblock_check(nb.token)
+    if nb.app not in NETBLOCK_APPS:
+        raise HTTPException(404, "Неизвестное приложение")
+    # Сначала применяем в DNS-фильтре, БД трогаем только после успеха —
+    # иначе тумблер в UI разойдётся с реальной блокировкой.
+    with db() as conn:
+        state = _netblock_state(conn)
+    state[nb.app] = nb.blocked
+    try:
+        _netblock_push(state)
+    except Exception:
+        raise HTTPException(502, "DNS-фильтр недоступен — тумблер не применился")
+    with db() as conn:
+        conn.execute(
+            "INSERT INTO netblock(app, blocked) VALUES(?, ?) "
+            "ON CONFLICT(app) DO UPDATE SET blocked = excluded.blocked",
+            (nb.app, 1 if nb.blocked else 0),
+        )
+    return JSONResponse({"apps": _netblock_apps_payload(state)}, headers=NETBLOCK_CORS)
+
+
+@app.get("/api/netblock/profile")
+def netblock_profile(pin: str = ""):
+    """DNS-профиль (.mobileconfig): DoH на наш фильтр + пароль на удаление."""
+    if not re.fullmatch(r"\d{4,6}", pin):
+        raise HTTPException(422, "PIN — 4–6 цифр")
+    import plistlib
+    import uuid as uuidlib
+
+    def stable_uuid(name: str) -> str:
+        return str(uuidlib.uuid5(uuidlib.NAMESPACE_DNS, f"netblock.vitadots.ru/{name}")).upper()
+
+    payload = {
+        "PayloadType": "Configuration",
+        "PayloadIdentifier": "ru.vitadots.netblock",
+        "PayloadUUID": stable_uuid("root"),
+        "PayloadVersion": 1,
+        "PayloadDisplayName": "Vita Блокировка",
+        "PayloadDescription": (
+            "DNS-фильтр Vita Focus: выключает ленты выбранных приложений. "
+            "Управление — тумблеры в Vita Focus. Снятие профиля — только по твоему PIN."
+        ),
+        "PayloadOrganization": "Vita",
+        "PayloadContent": [
+            {
+                "PayloadType": "com.apple.dnsSettings.managed",
+                "PayloadIdentifier": "ru.vitadots.netblock.dns",
+                "PayloadUUID": stable_uuid("dns"),
+                "PayloadVersion": 1,
+                "PayloadDisplayName": "Vita DNS-фильтр",
+                "DNSSettings": {
+                    "DNSProtocol": "HTTPS",
+                    "ServerURL": NETBLOCK_DOH_URL,
+                },
+            },
+            {
+                "PayloadType": "com.apple.profileRemovalPassword",
+                "PayloadIdentifier": "ru.vitadots.netblock.removalpin",
+                "PayloadUUID": stable_uuid("removalpin"),
+                "PayloadVersion": 1,
+                "PayloadDisplayName": "Пароль снятия профиля",
+                "RemovalPassword": pin,
+            },
+        ],
+    }
+    return Response(
+        plistlib.dumps(payload),
+        media_type="application/x-apple-aspen-config",
+        headers={"Content-Disposition": 'attachment; filename="vita-netblock.mobileconfig"'},
+    )
 
 
 app.mount("/static", StaticFiles(directory=ROOT / "static"), name="static")

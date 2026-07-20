@@ -14,3 +14,14 @@ services:
     volumes:
       # база ссылок и идей переживает пересборки
       - ./data:/app/data
+
+  # DNS-фильтр «Сетевой блокировки» Vita Focus. Наружу торчит только
+  # /dns-query через Caddy (~/yoy); админка и API — только с хоста.
+  adguard:
+    image: adguard/adguardhome:latest
+    restart: unless-stopped
+    ports:
+      - "172.17.0.1:8083:80"
+    volumes:
+      - ./data/adguard/work:/opt/adguardhome/work
+      - ./data/adguard/conf:/opt/adguardhome/conf
