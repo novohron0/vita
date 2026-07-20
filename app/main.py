@@ -1668,8 +1668,12 @@ def netblock_toggle(nb: NetblockToggleIn):
 
 @app.get("/api/netblock/profile")
 def netblock_profile(pin: str = ""):
-    """DNS-профиль (.mobileconfig): DoH на наш фильтр + пароль на удаление."""
-    if not re.fullmatch(r"\d{4,6}", pin):
+    """DNS-профиль (.mobileconfig): DoH на наш фильтр.
+
+    com.apple.profileRemovalPassword iOS принимает только на supervised-устройствах
+    (Apple Configurator), поэтому пароль на снятие добавляем лишь по явному ?pin=.
+    """
+    if pin and not re.fullmatch(r"\d{4,6}", pin):
         raise HTTPException(422, "PIN — 4–6 цифр")
     import plistlib
     import uuid as uuidlib
@@ -1677,29 +1681,26 @@ def netblock_profile(pin: str = ""):
     def stable_uuid(name: str) -> str:
         return str(uuidlib.uuid5(uuidlib.NAMESPACE_DNS, f"netblock.vitadots.ru/{name}")).upper()
 
-    payload = {
-        "PayloadType": "Configuration",
-        "PayloadIdentifier": "ru.vitadots.netblock",
-        "PayloadUUID": stable_uuid("root"),
-        "PayloadVersion": 1,
-        "PayloadDisplayName": "Vita Блокировка",
-        "PayloadDescription": (
-            "DNS-фильтр Vita Focus: выключает ленты выбранных приложений. "
-            "Управление — тумблеры в Vita Focus. Снятие профиля — только по твоему PIN."
-        ),
-        "PayloadOrganization": "Vita",
-        "PayloadContent": [
-            {
-                "PayloadType": "com.apple.dnsSettings.managed",
-                "PayloadIdentifier": "ru.vitadots.netblock.dns",
-                "PayloadUUID": stable_uuid("dns"),
-                "PayloadVersion": 1,
-                "PayloadDisplayName": "Vita DNS-фильтр",
-                "DNSSettings": {
-                    "DNSProtocol": "HTTPS",
-                    "ServerURL": NETBLOCK_DOH_URL,
-                },
+    description = (
+        "DNS-фильтр Vita Focus: выключает ленты выбранных приложений. "
+        "Управление — тумблеры в Vita Focus."
+    )
+    payload_content = [
+        {
+            "PayloadType": "com.apple.dnsSettings.managed",
+            "PayloadIdentifier": "ru.vitadots.netblock.dns",
+            "PayloadUUID": stable_uuid("dns"),
+            "PayloadVersion": 1,
+            "PayloadDisplayName": "Vita DNS-фильтр",
+            "DNSSettings": {
+                "DNSProtocol": "HTTPS",
+                "ServerURL": NETBLOCK_DOH_URL,
             },
+        },
+    ]
+    if pin:
+        description += " Снятие профиля — только по твоему PIN."
+        payload_content.append(
             {
                 "PayloadType": "com.apple.profileRemovalPassword",
                 "PayloadIdentifier": "ru.vitadots.netblock.removalpin",
@@ -1707,8 +1708,17 @@ def netblock_profile(pin: str = ""):
                 "PayloadVersion": 1,
                 "PayloadDisplayName": "Пароль снятия профиля",
                 "RemovalPassword": pin,
-            },
-        ],
+            }
+        )
+    payload = {
+        "PayloadType": "Configuration",
+        "PayloadIdentifier": "ru.vitadots.netblock",
+        "PayloadUUID": stable_uuid("root"),
+        "PayloadVersion": 1,
+        "PayloadDisplayName": "Vita Блокировка",
+        "PayloadDescription": description,
+        "PayloadOrganization": "Vita",
+        "PayloadContent": payload_content,
     }
     return Response(
         plistlib.dumps(payload),
