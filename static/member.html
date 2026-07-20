@@ -28,7 +28,7 @@
         <b id="memberAvatarFallback" aria-hidden="true">V</b>
       </span>
       <div class="member-copy">
-        <span class="account-state"><i></i>Участник Vita</span>
+        <span id="memberState" class="account-state"><i></i>Участник Vita</span>
         <h1 id="memberName">Загружаем…</h1>
         <p id="memberHandle" class="profile-handle"></p>
       </div>
@@ -97,6 +97,9 @@ function renderMember(payload) {
   $('memberBio').hidden = !bio;
   $('memberBio').textContent = bio;
   document.title = `${name} — Vita`;
+  if (data.developer) {
+    $('memberState').innerHTML = '<i></i>Разработчик Vita';
+  }
   $('memberCard').setAttribute('aria-busy', 'false');
   renderTags(data.tags);
 }

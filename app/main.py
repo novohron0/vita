@@ -26,6 +26,11 @@ DB_PATH = DATA / "vita.db"
 
 CODE_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"
 HANDLE_RE = re.compile(r"[a-z0-9_]{3,24}")
+# Тег (бывший «ник») — уникальный @идентификатор профиля.
+# Профиль с тегом владельца получает плашку «Разработчик Vita».
+DEVELOPER_HANDLE = "vit"
+# Зарезервированные теги выдаются только через /admin/handle.
+RESERVED_HANDLES = {DEVELOPER_HANDLE, "vita", "vitadots", "admin", "support"}
 
 # Starter tags are issued only by the server. The rarity roll is intentionally
 # simple and auditable: 70% common, 22% rare, 7% epic, 1% legendary.
@@ -421,7 +426,7 @@ def _avatar_url(avatar_id: str) -> str:
 def _normalize_handle(raw: str) -> str:
     handle = raw.strip().lower().removeprefix("@")
     if HANDLE_RE.fullmatch(handle) is None:
-        raise HTTPException(422, "Ник: 3–24 символа, только латиница, цифры и _")
+        raise HTTPException(422, "Тег: 3–24 символа, только латиница, цифры и _")
     return handle
 
 
@@ -589,7 +594,10 @@ def _public_profile_payload(
         "name": name,
         "bio": bio,
         "avatar": _avatar_url(avatar_id),
-        "tags": _profile_tags(conn, code),
+        # TODO(достижения): плашки-теги спрятаны до переработки в «достижения»;
+        # данные копятся в profile_tags, наружу пока не отдаём.
+        "tags": [],
+        "developer": (public_handle or "").lower() == DEVELOPER_HANDLE,
     }
 
 
@@ -651,7 +659,9 @@ def _profile_payload(conn: sqlite3.Connection, profile_code: str) -> dict:
         "name": row[1],
         "bio": row[2],
         "avatar": _avatar_url(row[3]),
-        "tags": _profile_tags(conn, profile_code),
+        # TODO(достижения): см. _public_profile_payload — плашки спрятаны.
+        "tags": [],
+        "developer": (row[0] or "").lower() == DEVELOPER_HANDLE,
         "settings": settings,
         "goals": goals,
         "wallpapers": wallpapers,
@@ -962,12 +972,18 @@ def update_profile(profile: ProfileUpdateIn):
             fields["name"] = _normalize_profile_name(profile.name)
         if profile.handle is not None:
             handle = _normalize_handle(profile.handle)
+            if handle in RESERVED_HANDLES:
+                current = conn.execute(
+                    "SELECT handle FROM profiles WHERE code = ?", (code,)
+                ).fetchone()
+                if current is None or (current[0] or "").lower() != handle:
+                    raise HTTPException(409, "Этот тег зарезервирован")
             occupied = conn.execute(
                 "SELECT 1 FROM profiles WHERE handle = ? COLLATE NOCASE AND code != ?",
                 (handle, code),
             ).fetchone()
             if occupied:
-                raise HTTPException(409, "Этот ник уже занят")
+                raise HTTPException(409, "Этот тег уже занят")
             fields["handle"] = handle
         if profile.bio is not None:
             bio = profile.bio.strip()
@@ -985,7 +1001,7 @@ def update_profile(profile: ProfileUpdateIn):
                     (*fields.values(), code),
                 )
             except sqlite3.IntegrityError as error:
-                raise HTTPException(409, "Этот ник уже занят") from error
+                raise HTTPException(409, "Этот тег уже занят") from error
         return _profile_payload(conn, code)
 
 
@@ -1407,6 +1423,7 @@ h1 {{ font-size: 20px; margin-bottom: 14px; }}
 .meta b {{ color:#d9d9de; }}
 .row {{ display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }}
 button {{ background:#232326; color:#f2f2f2; border:0; border-radius:9px; padding:7px 12px; font:inherit; cursor:pointer; }}
+input {{ background:#232326; color:#f2f2f2; border:0; border-radius:9px; padding:7px 10px; font:inherit; min-width:0; }}
 button:hover {{ background:#2f2f33; }}
 button.copy {{ background:#12261a; color:#7fd4a3; }}
 button.copy:hover {{ background:#173324; }}
@@ -1415,7 +1432,20 @@ button.hide {{ background:#2a1418; color:#ff6b81; }}
 button.show {{ background:#12261a; color:#7fd4a3; }}
 .expired {{ color:#ff6b81; }}
 a {{ color:#7fd4a3; }}
-</style></head><body><h1>⠿ vita — идеи ({count})</h1>{cards}
+</style></head><body><h1>⠿ vita — идеи ({count})</h1>
+<div class="card"><b>Подписка по тегу</b>
+<div class="row">
+  <input id="grantTag" placeholder="@тег" size="14">
+  <input id="grantDays" type="number" placeholder="дней (пусто — навсегда)" size="20">
+  <button onclick="grant()">Выдать</button>
+</div>
+<div class="row">
+  <input id="handleCode" placeholder="код профиля" size="14">
+  <input id="handleValue" placeholder="новый тег" size="14">
+  <button onclick="setHandle()">Назначить тег</button>
+</div>
+</div>
+{cards}
 <script>
 async function ext(code, days) {{
   await fetch(`/admin/extend?token={token}&code=${{code}}&days=${{days}}`, {{ method: 'POST' }});
@@ -1424,6 +1454,26 @@ async function ext(code, days) {{
 async function feedMod(code, hide) {{
   await fetch(`/admin/feed/hide?token={token}&code=${{code}}&hide=${{hide ? 1 : 0}}`, {{ method: 'POST' }});
   location.reload();
+}}
+async function adminPost(url, okText) {{
+  const r = await fetch(url, {{ method: 'POST' }});
+  let detail = '';
+  try {{ detail = (await r.json()).detail || ''; }} catch (e) {{}}
+  alert(r.ok ? okText : (detail || 'Ошибка'));
+}}
+async function grant() {{
+  const tag = document.getElementById('grantTag').value.trim();
+  if (!tag) return;
+  const days = document.getElementById('grantDays').value.trim() || '0';
+  await adminPost(`/admin/grant?token={token}&tag=${{encodeURIComponent(tag)}}&days=${{days}}`,
+    days === '0' ? 'Выдано навсегда' : `Выдано на ${{days}} дн.`);
+}}
+async function setHandle() {{
+  const code = document.getElementById('handleCode').value.trim();
+  const handle = document.getElementById('handleValue').value.trim();
+  if (!code || !handle) return;
+  await adminPost(`/admin/handle?token={token}&code=${{encodeURIComponent(code)}}&handle=${{encodeURIComponent(handle)}}`,
+    'Тег назначен');
 }}
 async function copyCard(btn) {{
   const text = btn.dataset.copy;
@@ -1566,6 +1616,56 @@ def admin_extend(code: str, days: int, token: str = ""):
             raise HTTPException(404, "Нет такой ссылки")
         new_until = _extend(conn, code, days, row[0])
     return {"code": code, "access_until": new_until}
+
+
+@app.post("/admin/grant")
+def admin_grant(tag: str, days: int = 0, token: str = ""):
+    """Подписка на обои по тегу: продлевает все обои профиля; days<=0 — навсегда."""
+    if token != ADMIN_TOKEN:
+        raise HTTPException(403, "Нет доступа")
+    handle = tag.strip().lower().removeprefix("@")
+    with db() as conn:
+        row = conn.execute(
+            "SELECT code FROM profiles WHERE handle = ? COLLATE NOCASE", (handle,)
+        ).fetchone()
+        if row is None:
+            raise HTTPException(404, "Нет профиля с таким тегом")
+        codes = [c for (c,) in conn.execute(
+            "SELECT code FROM links WHERE owner_code = ?", (row[0],)
+        )]
+        if not codes:
+            raise HTTPException(404, "У профиля нет обоев — пусть сначала создаст их")
+        if days <= 0:
+            conn.execute(
+                "UPDATE links SET access_until = NULL WHERE owner_code = ?", (row[0],)
+            )
+            until = None
+        else:
+            for code in codes:
+                current = conn.execute(
+                    "SELECT access_until FROM links WHERE code = ?", (code,)
+                ).fetchone()
+                until = _extend(conn, code, days, current[0])
+    return {"tag": handle, "wallpapers": len(codes), "access_until": until}
+
+
+@app.post("/admin/handle")
+def admin_set_handle(code: str, handle: str, token: str = ""):
+    """Назначить профилю тег вручную — единственный путь к зарезервированным (@vit)."""
+    if token != ADMIN_TOKEN:
+        raise HTTPException(403, "Нет доступа")
+    normalized = _normalize_handle(handle)
+    with db() as conn:
+        if conn.execute("SELECT 1 FROM profiles WHERE code = ?", (code,)).fetchone() is None:
+            raise HTTPException(404, "Нет такого профиля")
+        occupied = conn.execute(
+            "SELECT 1 FROM profiles WHERE handle = ? COLLATE NOCASE AND code != ?",
+            (normalized, code),
+        ).fetchone()
+        if occupied:
+            raise HTTPException(409, "Этот тег уже занят")
+        conn.execute("UPDATE profiles SET handle = ? WHERE code = ?", (normalized, code))
+    return {"code": code, "handle": normalized}
 
 
 @app.post("/admin/feed/hide")

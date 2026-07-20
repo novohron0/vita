@@ -21,7 +21,7 @@
 
 <main>
   <div class="field"><span class="goal-title" style="text-transform:none">Моя Vita</span></div>
-  <p class="hint" style="margin-top:-8px">Vita создаёт твой аккаунт автоматически. Имя, аватар и коллекция тегов будут жить здесь.</p>
+  <p class="hint" style="margin-top:-8px">Vita создаёт твой аккаунт автоматически. Имя, аватар и твой @тег живут здесь.</p>
 
   <section class="library-card profile-editor-card">
     <div class="profile-editor-head">
@@ -43,7 +43,7 @@
       <label class="field">Имя
         <input id="profileName" minlength="2" maxlength="40" autocomplete="name" placeholder="Как тебя зовут">
       </label>
-      <label class="field">Твой @handle
+      <label class="field">Твой @тег
         <input id="profileHandle" minlength="3" maxlength="24" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="vita_friend">
       </label>
       <label class="field">О себе
@@ -54,7 +54,8 @@
     <p id="profileStatus" class="hint profile-status" role="status" aria-live="polite"></p>
   </section>
 
-  <section class="library-card tags-card">
+  <!-- TODO(достижения): карточка плашек спрятана — вернётся как «Достижения». -->
+  <section class="library-card tags-card" hidden>
     <div class="library-head"><div><h2>Коллекция тегов</h2><p class="hint">Редкость показывает пройденный путь и не даёт преимуществ.</p></div></div>
     <div id="profileTags" class="tag-collection"><p class="hint">Первый тег появится за первый шаг.</p></div>
   </section>
