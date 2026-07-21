@@ -14,7 +14,7 @@
 <link rel="canonical" href="https://vitadots.ru/">
 <meta name="twitter:card" content="summary_large_image">
 <script src="/static/theme.js?v=2"></script>
-<link rel="stylesheet" href="/static/style.css?v=24">
+<link rel="stylesheet" href="/static/style.css?v=25">
 <style>
   .home-hero { animation: fadeUp .7s cubic-bezier(.22,1,.36,1) both; }
   .phone { animation: phoneReveal .85s cubic-bezier(.22,1,.36,1) both, phoneFloat 7s ease-in-out 1.1s infinite; }
@@ -100,11 +100,6 @@
   </div>
 
   <section class="controls">
-    <label class="field">Заголовок
-      <input id="title" maxlength="24" value="ТВОЙ МЕСЯЦ" autocomplete="off"
-        placeholder="пусто — обои без заголовка">
-    </label>
-
     <label class="field" id="birthRow" hidden>Дата рождения
       <input type="date" id="birth" value="2000-01-01">
     </label>
@@ -126,57 +121,67 @@
       </label>
     </div>
 
-    <div class="field">Фон
-      <div class="seg bg-pick" id="bg">
-        <button data-v="black" class="on">Чёрный</button>
-        <button data-v="white">Белый</button>
-        <button data-v="navy">Синий</button>
-        <button data-v="mountains">Горы</button>
-        <button data-v="ocean">Океан</button>
-        <button data-v="sunset">Закат</button>
-        <button data-v="dembel">Дембель</button>
-        <button data-v="ramadan">Рамадан</button>
-        <button data-v="honeymoon">Мёд</button>
-        <button data-v="custom">Свои обои</button>
-      </div>
-      <input type="file" id="bgFile" accept="image/*" hidden>
-    </div>
+    <button class="primary" id="dl">Скачать обои бесплатно</button>
+    <button class="secondary" id="getBtn">Живые автообои — точка красится сама →</button>
 
-    <div class="field">Точки
-      <div class="seg shape-pick" id="shape">
-        <button data-v="circle" class="on">Круг</button>
-        <button data-v="square">Квадрат</button>
-        <button data-v="rounded">Мягкие</button>
-        <button data-v="heart">Сердце</button>
-        <button data-v="star">Звезда</button>
-        <button data-v="diamond">Ромб</button>
-        <button data-v="hex">Соты</button>
-      </div>
-    </div>
+    <details class="more">
+      <summary>Ещё — фон, форма точек, заголовок</summary>
+      <div class="more-body">
+        <label class="field">Заголовок
+          <input id="title" maxlength="24" value="ТВОЙ МЕСЯЦ" autocomplete="off"
+            placeholder="пусто — обои без заголовка">
+        </label>
 
-    <div class="field">Стекло на точках
-      <div class="seg" id="glass">
-        <button data-v="0" class="on">Стандарт</button>
-        <button data-v="1">Стекло</button>
-      </div>
-    </div>
+        <div class="field">Фон
+          <div class="seg bg-pick" id="bg">
+            <button data-v="black" class="on">Чёрный</button>
+            <button data-v="white">Белый</button>
+            <button data-v="navy">Синий</button>
+            <button data-v="mountains">Горы</button>
+            <button data-v="ocean">Океан</button>
+            <button data-v="sunset">Закат</button>
+            <button data-v="dembel">Дембель</button>
+            <button data-v="ramadan">Рамадан</button>
+            <button data-v="honeymoon">Мёд</button>
+            <button data-v="custom">Свои обои</button>
+          </div>
+          <input type="file" id="bgFile" accept="image/*" hidden>
+        </div>
 
-    <div class="field">Цифры внизу
-      <div class="seg" id="footer">
-        <button data-v="1" class="on">Да</button>
-        <button data-v="0">Нет</button>
-      </div>
-    </div>
+        <div class="field">Точки
+          <div class="seg shape-pick" id="shape">
+            <button data-v="circle" class="on">Круг</button>
+            <button data-v="square">Квадрат</button>
+            <button data-v="rounded">Мягкие</button>
+            <button data-v="heart">Сердце</button>
+            <button data-v="star">Звезда</button>
+            <button data-v="diamond">Ромб</button>
+            <button data-v="hex">Соты</button>
+          </div>
+        </div>
 
-    <div class="field">Лого vita
-      <div class="seg" id="brand">
-        <button data-v="1" class="on">Да</button>
-        <button data-v="0">Нет</button>
-      </div>
-    </div>
+        <div class="field">Стекло на точках
+          <div class="seg" id="glass">
+            <button data-v="0" class="on">Стандарт</button>
+            <button data-v="1">Стекло</button>
+          </div>
+        </div>
 
-    <button class="primary" id="getBtn">Получить автообои</button>
-    <button class="secondary" id="dl">Скачать картинку бесплатно</button>
+        <div class="field">Цифры внизу
+          <div class="seg" id="footer">
+            <button data-v="1" class="on">Да</button>
+            <button data-v="0">Нет</button>
+          </div>
+        </div>
+
+        <div class="field">Лого vita
+          <div class="seg" id="brand">
+            <button data-v="1" class="on">Да</button>
+            <button data-v="0">Нет</button>
+          </div>
+        </div>
+      </div>
+    </details>
   </section>
 </main>
 

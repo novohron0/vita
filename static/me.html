@@ -184,9 +184,12 @@ function libraryItem(item, kind) {
   const code = safeCode(item.code);
   const href = isGoal ? `/g/${encodeURIComponent(code)}` : `/s/${encodeURIComponent(code)}`;
   const meta = isGoal ? `${item.done}/${item.days} дней` : `${item.mode} · ${item.shape}`;
+  // обои можно скачать прямо отсюда, без похода в конструктор
+  const download = isGoal ? '' : `<a class="lib-dl" href="/w/${encodeURIComponent(code)}.png" download="vita-${esc(code)}.png" title="Скачать обои">⤓ Скачать</a>`;
   return `<div class="library-item">
     <i style="background:${safeColor(item.color)}"></i>
     <div><b>${esc(item.title)}</b><span>${esc(meta)} · ${esc(code)}</span></div>
+    ${download}
     <a href="${href}">Открыть</a>
     <button class="publish-item" data-kind="${isGoal ? 'goal' : 'wallpaper'}" data-code="${esc(code)}" data-title="${encodeURIComponent(String(item.title || ''))}">В ленту</button>
   </div>`;

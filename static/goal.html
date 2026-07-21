@@ -8,7 +8,7 @@
 <title>Vita — цель</title>
 <script src="/static/theme.js?v=2"></script>
 <script src="/static/vita-id.js?v=1"></script>
-<link rel="stylesheet" href="/static/style.css?v=24">
+<link rel="stylesheet" href="/static/style.css?v=25">
 </head>
 <body>
 <header>
@@ -77,6 +77,15 @@ function render(anim) {
   const streak = DEMO ? doneCount : currentStreak();
   const best = DEMO ? doneCount : bestStreak();
 
+  // сегодняшняя точка как главная кнопка чек-ина — её не надо искать в сетке
+  const realToday = today();
+  const startD = start, endD = addDays(start, G.days - 1);
+  const todayKey = isoLocal(realToday);
+  const todayInRange = !DEMO && realToday >= startD && realToday <= endD;
+  const todayDone = done.has(todayKey);
+  const dayNum = Math.round((realToday - startD) / 86400000) + 1;
+  const todayJust = anim && anim.pop === todayKey;
+
   const cells = [];
   let di = 0; // порядковый среди закрашенных — для каскадной задержки при загрузке
   for (let i = 0; i < G.days; i++) {
@@ -100,6 +109,7 @@ function render(anim) {
     <div class="field" style="gap:4px">
       <span class="goal-title" style="text-transform:none">${escapeHtml(G.title)}</span>
       <span class="goal-reward">${G.reward ? '🎁 Награда за цель: <b>' + escapeHtml(G.reward) + '</b>' : ''}</span>
+      ${G.editable && !G.reward ? `<button class="reward-nudge" id="rewardNudge">＋ Добавить награду и цвет</button>` : ''}
       ${G.peers >= 2 ? `<span style="color:#ff9f45;font-size:13px;font-weight:600;text-transform:none">🔥 ${G.peers} уже с этой целью</span>` : ''}
     </div>
     <div class="stats">
@@ -108,6 +118,11 @@ function render(anim) {
       <div><b>${best}</b><span>рекорд</span></div>
     </div>
     <div class="gbar"><i style="width:${lastPct}%;background:${G.color}"></i></div>
+    ${todayInRange && !finished ? `
+    <button class="today-check${todayDone ? ' on' : ''}${todayJust ? ' tc-just' : ''}" id="todayCheck" style="--gc:${G.color}" aria-pressed="${todayDone}">
+      <span class="tc-ring"><span class="tc-fill"></span><span class="tc-check">✓</span></span>
+      <span class="tc-text"><b>${todayDone ? 'Сегодня отмечено' : 'Отметить сегодня'}</b><i>${todayDone ? 'нажми, чтобы снять' : 'день ' + dayNum + ' из ' + G.days}</i></span>
+    </button>` : ''}
     ${finished ? `<div class="celebrate"><h2>Цель закрыта! 🎉</h2><p>${G.reward ? 'Ты обещал себе: <b>' + escapeHtml(G.reward) + '</b>. Забирай.' : 'Ты дошёл. Гордись.'}</p></div>` : ''}
     <div class="gt-grid" style="grid-template-columns:repeat(${cols},1fr)">${cells.join('')}</div>
     <div class="actions">
@@ -166,6 +181,14 @@ function render(anim) {
   document.getElementById('share').addEventListener('click', shareLink);
   document.getElementById('join').addEventListener('click', join);
   document.getElementById('saveGoalEdit')?.addEventListener('click', saveGoalEdit);
+  document.getElementById('todayCheck')?.addEventListener('click', () => toggle(todayKey));
+  document.getElementById('rewardNudge')?.addEventListener('click', () => {
+    const ed = document.getElementById('editGoal');
+    if (!ed) return;
+    ed.open = true;
+    ed.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(() => document.getElementById('editReward')?.focus(), 300);
+  });
 }
 
 async function saveGoalEdit() {

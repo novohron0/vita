@@ -8,7 +8,7 @@
 <title>Vita — новая цель</title>
 <script src="/static/theme.js?v=2"></script>
 <script src="/static/vita-id.js?v=1"></script>
-<link rel="stylesheet" href="/static/style.css?v=24">
+<link rel="stylesheet" href="/static/style.css?v=25">
 <style>
   /* поля формы входят друг за другом — мягкий каскад, без мельтешения */
   main > * { animation: fadeUp .5s cubic-bezier(.22,1,.36,1) both; }
@@ -36,7 +36,7 @@
   <div class="field">
     <span class="goal-title" style="text-transform:none;letter-spacing:-.5px">Новая цель</span>
   </div>
-  <p class="hint" style="margin-top:-8px">Отмечай каждый день — цель сохранится в «Моя Vita» и останется доступна для редактирования.</p>
+  <p class="hint" style="margin-top:-8px">Назови цель и выбери срок — этого хватит, чтобы начать. Награду и цвет добавишь на странице цели.</p>
 
   <div class="field">
     <label for="title">Цель</label>
@@ -56,28 +56,13 @@
       placeholder="Своё число дней (1–365)" hidden>
   </div>
 
-  <div class="field">
-    <label for="reward">🎁 Награда себе за прохождение</label>
-    <input id="reward" maxlength="200" placeholder="Например: новые кроссовки" autocomplete="off">
-  </div>
-
-  <div class="field">
-    <label>Цвет точек</label>
-    <div class="swatches" id="colors"></div>
-    <label class="color-own">
-      <input type="color" id="colorPick" value="#34c759">
-      <span>Любой цвет</span>
-    </label>
-  </div>
-
   <button class="primary" id="go">Создать цель</button>
   <p class="err" id="err"></p>
   <p class="page-foot" style="text-align:center">⠿ vita — обои «жизнь в точках»</p>
 </main>
 
 <script>
-const COLORS = ['#34c759','#3da9fc','#ff9500','#a78bfa','#ff6b81','#ff5fa2','#f2f2f2','#000000'];
-const state = { days: 30, color: '#34c759' };
+const state = { days: 30 };
 const $ = id => document.getElementById(id);
 
 const daysSeg = $('days'), customDays = $('customDays');
@@ -100,24 +85,6 @@ customDays.addEventListener('input', () => {
   daysSeg.querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.v === 'custom'));
 });
 
-const colorsEl = $('colors');
-COLORS.forEach((c, i) => {
-  const b = document.createElement('button');
-  b.className = 'swatch' + (i === 0 ? ' on' : '');
-  b.style.background = c; b.dataset.v = c;
-  colorsEl.appendChild(b);
-});
-colorsEl.addEventListener('click', e => {
-  const b = e.target.closest('.swatch'); if (!b) return;
-  colorsEl.querySelectorAll('.swatch').forEach(x => x.classList.toggle('on', x === b));
-  state.color = b.dataset.v;
-  $('colorPick').value = state.color;
-});
-$('colorPick').addEventListener('input', e => {
-  state.color = e.target.value;
-  colorsEl.querySelectorAll('.swatch').forEach(s => s.classList.remove('on'));
-});
-
 const go = $('go'), err = $('err');
 go.addEventListener('click', async () => {
   const title = $('title').value.trim();
@@ -127,8 +94,7 @@ go.addEventListener('click', async () => {
     const r = await fetch('/api/goal', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        title, days: state.days, color: state.color,
-        reward: $('reward').value.trim(), ownerToken: VitaID.token()
+        title, days: state.days, ownerToken: VitaID.token()
       })
     });
     const j = await r.json();
