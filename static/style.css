@@ -1377,3 +1377,19 @@ input, textarea { caret-color: var(--text); }
 [data-theme="light"] ::selection { background: rgba(0, 0, 0, 0.14); }
 [data-theme="light"] * { scrollbar-color: rgba(0, 0, 0, 0.28) transparent; }
 [data-theme="light"] ::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.22); background-clip: content-box; }
+
+/* --- вход через телеграм --- */
+.tg-login {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 18px;
+  background: var(--glass-bg-soft);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-inset);
+}
+.tg-widget { min-height: 46px; display: flex; justify-content: center; }
+.tg-status { color: var(--text-nav); font-size: 13px; min-height: 18px; }
+.tg-note { color: var(--text-2); font-size: 14px; line-height: 1.45; }
+.tg-note b { color: var(--text); }

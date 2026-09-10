@@ -1,6 +1,7 @@
 """Vita — сайт-генератор обоев «жизнь в точках» + персональные ссылки для автообоев."""
 import io
 import hashlib
+import hmac
 import json
 import os
 import re
@@ -97,6 +98,11 @@ FEED_TITLE_BLOCK = re.compile(
 # см. README). Пока пусто — на странице установки кнопка в состоянии «готовится».
 SHORTCUT_ICLOUD_URL = os.environ.get("SHORTCUT_ICLOUD_URL", "")
 
+# Вход через телеграм. Токен и имя бота — из .env; пусто = кнопки входа нет,
+# человек остаётся на ключе восстановления.
+TG_BOT_TOKEN = os.environ.get("TG_BOT_TOKEN", "").strip()
+TG_BOT_NAME = os.environ.get("TG_BOT_NAME", "").strip().lstrip("@")
+
 # реквизиты для оферты и чеков: держим в .env, репозиторий публичный
 SELLER_NAME = os.environ.get("SELLER_NAME", "")
 SELLER_INN = os.environ.get("SELLER_INN", "")
@@ -191,6 +197,16 @@ def _init_schema(conn: sqlite3.Connection) -> None:
         "created TEXT NOT NULL DEFAULT (datetime('now')), paid_at TEXT)"
     )
     conn.execute("CREATE INDEX IF NOT EXISTS orders_profile ON orders(profile_code)")
+    # Вход через телеграм: один аккаунт телеграма = один профиль Vita.
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS profile_telegram("
+        "tg_id TEXT PRIMARY KEY, profile_code TEXT NOT NULL, "
+        "username TEXT NOT NULL DEFAULT '', name TEXT NOT NULL DEFAULT '', "
+        "created TEXT NOT NULL DEFAULT (datetime('now')))"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS profile_telegram_profile ON profile_telegram(profile_code)"
+    )
     # Backfill pre-account profiles without exposing their private Vita ID.
     # The first pass also repairs a partially applied migration before adding
     # the case-insensitive unique index. Later requests inspect only incomplete
@@ -1015,6 +1031,8 @@ def _profile_access_state(conn: sqlite3.Connection, profile_code: str | None) ->
     state = {
         "paid": False,
         "code": "",
+        "telegram": "",
+        "tgBot": TG_BOT_NAME,
         "until": None,
         "expired": False,
         "price": billing.PRICE,
@@ -1023,6 +1041,7 @@ def _profile_access_state(conn: sqlite3.Connection, profile_code: str | None) ->
     if not profile_code:
         return state
     state["code"] = profile_code
+    state["telegram"] = _telegram_handle(conn, profile_code)
     granted, granted_until = _profile_access_override(conn, profile_code)
     if granted and granted_until is None:
         state["paid"] = True
@@ -1046,6 +1065,104 @@ def _profile_access_state(conn: sqlite3.Connection, profile_code: str | None) ->
     state["until"] = best.isoformat()
     state["expired"] = date.today() > best
     return state
+
+
+TG_FIELDS = ("id", "first_name", "last_name", "username", "photo_url", "auth_date")
+
+
+def _telegram_check(data: dict) -> dict | None:
+    """Подпись телеграма: HMAC-SHA256 по полям, ключ — SHA256 токена бота.
+
+    Возвращает данные пользователя или None. Подделать нельзя, не зная токена;
+    просроченные больше суток подтверждения тоже отбрасываем.
+    """
+    if not TG_BOT_TOKEN:
+        return None
+    received = str(data.get("hash") or "")
+    fields = {k: data[k] for k in TG_FIELDS if data.get(k) not in (None, "")}
+    if not received or "id" not in fields or "auth_date" not in fields:
+        return None
+    check = "\n".join(f"{k}={fields[k]}" for k in sorted(fields))
+    secret = hashlib.sha256(TG_BOT_TOKEN.encode("utf-8")).digest()
+    calc = hmac.new(secret, check.encode("utf-8"), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(calc, received.lower()):
+        return None
+    try:
+        if abs(time.time() - int(fields["auth_date"])) > 86400:
+            return None
+    except (TypeError, ValueError):
+        return None
+    return fields
+
+
+def _telegram_handle(conn: sqlite3.Connection, profile_code: str | None) -> str:
+    if not profile_code:
+        return ""
+    row = conn.execute(
+        "SELECT username, name FROM profile_telegram WHERE profile_code = ?", (profile_code,)
+    ).fetchone()
+    if row is None:
+        return ""
+    return ("@" + row[0]) if row[0] else (row[1] or "телеграм")
+
+
+@app.post("/api/auth/telegram")
+async def auth_telegram(request: Request):
+    """Вход через телеграм. Первый раз — привязывает профиль этого браузера,
+    дальше — возвращает человека в его же аккаунт на любом устройстве."""
+    if not TG_BOT_TOKEN:
+        raise HTTPException(503, "Вход через телеграм ещё не подключён")
+    try:
+        payload = await request.json()
+    except ValueError:
+        raise HTTPException(422, "Не разобрали ответ телеграма")
+    if not isinstance(payload, dict):
+        raise HTTPException(422, "Не разобрали ответ телеграма")
+    data = _telegram_check(payload)
+    if data is None:
+        raise HTTPException(403, "Телеграм не подтвердил вход — попробуй ещё раз")
+    tg_id = str(data["id"])
+    username = str(data.get("username") or "")[:64]
+    name = " ".join(
+        str(data.get(k) or "") for k in ("first_name", "last_name")
+    ).strip()[:80]
+    owner_token = str(payload.get("ownerToken") or "")
+    with db() as conn:
+        row = conn.execute(
+            "SELECT profile_code FROM profile_telegram WHERE tg_id = ?", (tg_id,)
+        ).fetchone()
+        if row:
+            # уже входил — возвращаем в его аккаунт, даже если браузер чужой
+            profile_code = row[0]
+            conn.execute(
+                "UPDATE profile_telegram SET username = ?, name = ? WHERE tg_id = ?",
+                (username, name, tg_id),
+            )
+            linked = False
+        else:
+            # первый вход: закрепляем за телеграмом тот профиль, что уже есть в браузере
+            profile_code = _profile_for_token(conn, owner_token, create=True)
+            conn.execute(
+                "INSERT INTO profile_telegram(tg_id, profile_code, username, name) "
+                "VALUES(?, ?, ?, ?)",
+                (tg_id, profile_code, username, name),
+            )
+            linked = True
+        # новый ключ устройства: старый остаётся жить, если это то же самое устройство
+        token = secrets.token_hex(24)
+        conn.execute(
+            "INSERT OR IGNORE INTO profile_devices(profile_code, token_hash) VALUES(?, ?)",
+            (profile_code, _token_hash(token)),
+        )
+        profile = _profile_payload(conn, profile_code)
+        access = _profile_access_state(conn, profile_code)
+    return {
+        "token": token,
+        "linked": linked,
+        "telegram": ("@" + username) if username else (name or "телеграм"),
+        "profile": profile,
+        "access": access,
+    }
 
 
 @app.post("/api/access")

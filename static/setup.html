@@ -7,7 +7,7 @@
   <link rel="apple-touch-icon" href="/static/img/apple-touch.png">
 <title>Установка — Vita</title>
 <script src="/static/theme.js?v=2"></script>
-<link rel="stylesheet" href="/static/style.css?v=27">
+<link rel="stylesheet" href="/static/style.css?v=28">
 </head>
 <body>
 <header>
@@ -60,6 +60,13 @@
     </div>
   </div>
 
+  <div class="tg-login" id="tgBox" hidden>
+    <p class="tg-note"><b>Сохрани доступ.</b> Войди через телеграм — и эти обои вернутся
+      на любом телефоне, даже если очистишь браузер или сменишь устройство.</p>
+    <div class="tg-widget"></div>
+    <p class="tg-status"></p>
+  </div>
+
   <p class="hint fallback">Не дружишь с Ярлыками? Просто <a href="{{URL}}">открой картинку</a>,
     сохрани в Фото и поставь как обои. Но обновлять придётся руками —
     с ярлыком точки закрашиваются сами.</p>
@@ -71,8 +78,23 @@
 
 <footer class="page-foot"><a href="/buy" style="color:inherit">Открыть навсегда</a> · <a href="/offer" style="color:inherit">Оферта</a> · <a href="/privacy" style="color:inherit">Конфиденциальность</a></footer>
 
+<script src="/static/vita-id.js?v=3"></script>
+<script src="/static/tg-login.js?v=1"></script>
 <script>
 const CODE = "{{CODE}}";
+
+// вход показываем только тем, кто ещё не входил — вошедшим он ни к чему
+(async () => {
+  try {
+    const state = await VitaID.access();
+    if (state.tgBot && !state.telegram) {
+      VitaTG.mount(document.getElementById('tgBox'), state.tgBot, () => {
+        document.getElementById('tgBox').innerHTML =
+          '<p class="tg-note">Готово — доступ привязан к твоему телеграму.</p>';
+      });
+    }
+  } catch {}
+})();
 
 document.getElementById('copy').addEventListener('click', () => {
   navigator.clipboard.writeText(document.getElementById('myUrl').textContent);

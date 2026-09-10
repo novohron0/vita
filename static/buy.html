@@ -10,7 +10,7 @@
 <meta name="robots" content="index, follow">
 <link rel="canonical" href="https://vitadots.ru/buy">
 <script src="/static/theme.js?v=2"></script>
-<link rel="stylesheet" href="/static/style.css?v=27">
+<link rel="stylesheet" href="/static/style.css?v=28">
 </head>
 <body>
 <header>
@@ -43,6 +43,11 @@
     <a class="btn secondary" id="stateLink" href="/me" hidden>В кабинет</a>
   </section>
 
+  <div class="tg-login" id="tgBox" hidden>
+    <div class="tg-widget"></div>
+    <p class="tg-status"></p>
+  </div>
+
   <form class="buy-form" id="buyForm" hidden>
     <label class="field">Почта для чека
       <input id="email" type="email" inputmode="email" autocomplete="email"
@@ -59,7 +64,8 @@
 
 <footer class="page-foot">Связь: {{SUPPORT}} · {{SELLER}}, ИНН {{INN}}<br><a href="/offer" style="color:inherit">Оферта</a> · <a href="/privacy" style="color:inherit">Конфиденциальность</a></footer>
 
-<script src="/static/vita-id.js?v=2"></script>
+<script src="/static/vita-id.js?v=3"></script>
+<script src="/static/tg-login.js?v=1"></script>
 <script>
 const $ = id => document.getElementById(id);
 const form = $('buyForm'), errBox = $('buyErr'), btn = $('buyBtn');
@@ -82,6 +88,12 @@ function showState(title, text, link) {
     if (!state.payable) {
       showState('Оплата подключается',
         'Кнопка появится здесь на днях. Напиши нам {{SUPPORT}} — откроем доступ вручную.', false);
+      return;
+    }
+    if (state.tgBot && !state.telegram) {
+      showState('Войди через телеграм',
+        'Один тап — и покупка закрепится за тобой, а не за этим браузером. Тогда доступ вернётся на любом телефоне.', false);
+      VitaTG.mount($('tgBox'), state.tgBot);
       return;
     }
     if (state.until && !state.expired) {

@@ -754,16 +754,6 @@ $('goalEnd').value = state.end;
 $('goalStart').addEventListener('change', e => { state.start = e.target.value || todayISO; animateReveal(); });
 $('goalEnd').addEventListener('change', e => { state.end = e.target.value || plus30; animateReveal(); });
 
-$('dl').addEventListener('click', () => {
-  cv.toBlob(blob => {
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'vita.png';
-    a.click();
-    URL.revokeObjectURL(a.href);
-  });
-});
-
 $('getBtn').addEventListener('click', async () => {
   const btn = $('getBtn'), err = $('getErr');
   err.hidden = true;

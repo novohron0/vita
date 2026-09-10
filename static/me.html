@@ -7,8 +7,9 @@
 <link rel="apple-touch-icon" href="/static/img/apple-touch.png">
 <title>Моя Vita</title>
 <script src="/static/theme.js?v=2"></script>
-<script src="/static/vita-id.js?v=2"></script>
-<link rel="stylesheet" href="/static/style.css?v=27">
+<script src="/static/vita-id.js?v=3"></script>
+<script src="/static/tg-login.js?v=1"></script>
+<link rel="stylesheet" href="/static/style.css?v=28">
 </head>
 <body>
 <header>
@@ -68,6 +69,13 @@
       <div class="profile-connect-row"><input id="existingProfileCode" maxlength="10" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="abcdefgh23"><button id="connectExisting" type="button" class="secondary">Войти</button></div>
       <p class="hint" id="connectStatus" role="status" aria-live="polite"></p>
     </details>
+  </section>
+
+  <section class="library-card access-card" id="loginCard" hidden>
+    <div class="library-head"><h2>Вход</h2></div>
+    <p class="access-line" id="loginLine"></p>
+    <div class="tg-login" id="tgBox" hidden><div class="tg-widget"></div><p class="tg-status"></p></div>
+    <button class="secondary" id="logoutBtn" type="button" hidden>Выйти</button>
   </section>
 
   <section class="library-card access-card" id="accessCard" hidden>
@@ -358,9 +366,30 @@ $('publish').addEventListener('click', async () => {
   } catch (error) { $('publishError').textContent = error.message; button.disabled = false; }
 });
 
+function renderLogin(state) {
+  const line = $('loginLine'), box = $('tgBox'), out = $('logoutBtn');
+  if (state.telegram) {
+    line.innerHTML = `Вошёл как <b>${esc(state.telegram)}</b>. На другом телефоне нажми ту же кнопку — попадёшь в этот же аккаунт.`;
+    out.hidden = false;
+  } else if (state.tgBot) {
+    line.innerHTML = 'Войди через телеграм — и доступ вернётся на любом телефоне, даже если очистишь браузер.';
+    VitaTG.mount(box, state.tgBot);
+  } else {
+    line.innerHTML = 'Аккаунт держится на приватном коде ниже. Сохрани его — по нему вернёшь доступ.';
+  }
+  $('loginCard').hidden = false;
+}
+
+$('logoutBtn').addEventListener('click', () => {
+  if (!confirm('Выйти из аккаунта? Вернуться сможешь через телеграм.')) return;
+  VitaID.logout();
+  location.href = '/me';
+});
+
 async function renderAccess() {
   let state;
   try { state = await VitaID.access(); } catch { return; }
+  renderLogin(state);
   const line = $('accessLine'), buy = $('accessBuy');
   if (state.paid) {
     line.innerHTML = '<b>Открыт навсегда.</b> Спасибо — Vita твоя, платить больше не нужно.';

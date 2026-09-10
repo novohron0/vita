@@ -94,11 +94,27 @@
     return responseData(response, 'Не удалось начать оплату');
   }
 
+  async function loginTelegram(user) {
+    const response = await fetch('/api/auth/telegram', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...user, ownerToken: token() })
+    });
+    const data = await responseData(response, 'Телеграм не подтвердил вход');
+    if (data.token) localStorage.setItem(TOKEN_KEY, data.token);
+    return data;
+  }
+
+  function logout() {
+    localStorage.removeItem(TOKEN_KEY);
+  }
+
   async function member(handle) {
     const clean = String(handle || '').trim().replace(/^@+/, '');
     const response = await fetch(`/api/member/${encodeURIComponent(clean)}`);
     return responseData(response, 'Профиль не найден');
   }
 
-  window.VitaID = { token, ensure, library, connect, updateProfile, uploadAvatar, member, access, buy };
+  window.VitaID = { token, ensure, library, connect, updateProfile, uploadAvatar, member, access, buy,
+    loginTelegram, logout };
 })();
