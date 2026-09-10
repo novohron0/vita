@@ -17,6 +17,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from PIL import Image, ImageOps
@@ -750,6 +751,8 @@ def _profile_payload(conn: sqlite3.Connection, profile_code: str) -> dict:
 
 
 app = FastAPI(title="vita")
+# CSS и JS уходили на телефон несжатыми: gzip режет их примерно вчетверо
+app.add_middleware(GZipMiddleware, minimum_size=700)
 
 
 # Сколько раз с одного адреса можно дёргать дорогие ручки: (запросов, секунд).
@@ -809,6 +812,9 @@ async def rate_limit(request: Request, call_next):
     response = await call_next(request)
     for name, value in SECURITY_HEADERS.items():
         response.headers.setdefault(name, value)
+    path = request.url.path
+    if path.startswith("/static/") or path.startswith("/media/"):
+        response.headers.setdefault("Cache-Control", "public, max-age=31536000, immutable")
     return response
 
 
@@ -1434,7 +1440,7 @@ def focus_page():
 
 @app.get("/privacy")
 def privacy_page():
-    return FileResponse(ROOT / "static" / "privacy.html", headers={"Cache-Control": "no-cache"})
+    return _page("privacy.html")
 
 
 @app.get("/me")
