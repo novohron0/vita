@@ -101,6 +101,9 @@ SHORTCUT_ICLOUD_URL = os.environ.get("SHORTCUT_ICLOUD_URL", "")
 
 # Вход через телеграм. Токен и имя бота — из .env; пусто = кнопки входа нет,
 # человек остаётся на ключе восстановления.
+# VITA_DEV=1 — локальный запуск: статика отдаётся без долгого кэша
+DEV_MODE = os.environ.get("VITA_DEV", "").strip() == "1"
+
 TG_BOT_TOKEN = os.environ.get("TG_BOT_TOKEN", "").strip()
 TG_BOT_NAME = os.environ.get("TG_BOT_NAME", "").strip().lstrip("@")
 
@@ -814,7 +817,10 @@ async def rate_limit(request: Request, call_next):
         response.headers.setdefault(name, value)
     path = request.url.path
     if path.startswith("/static/") or path.startswith("/media/"):
-        response.headers.setdefault("Cache-Control", "public, max-age=31536000, immutable")
+        response.headers.setdefault(
+            "Cache-Control",
+            "no-cache" if DEV_MODE else "public, max-age=31536000, immutable",
+        )
     return response
 
 

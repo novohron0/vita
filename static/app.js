@@ -571,7 +571,7 @@ function startPulse() {
     if (document.hidden || now - pulseLast < 66) return; // ~15 кадров/с хватает
     const r = phoneEl.getBoundingClientRect();
     // телефон не виден и мини-превью скрыто — не жжём батарею
-    if (!$('mini').classList.contains('show') && (r.bottom < 0 || r.top > innerHeight)) return;
+    if (!$('miniWrap').classList.contains('show') && (r.bottom < 0 || r.top > innerHeight)) return;
     pulseLast = now;
     draw(1, 0.5 + 0.5 * Math.sin(now / 620));
   };
@@ -598,17 +598,139 @@ function animateJump() {
   jumpRAF = requestAnimationFrame(step);
 }
 
-// мини-превью в углу, пока большой телефон не виден — не нужно мотать вверх
+// --- плавающий предпросмотр ---
+// Выезжает, когда большой телефон скрыт больше чем наполовину. Его можно
+// перетащить в любой угол (позиция запоминается) и рассмотреть двумя пальцами.
 const phoneEl = document.querySelector('.phone');
-function updateMini() {
-  $('mini').classList.toggle('show', phoneEl.getBoundingClientRect().bottom < 40);
-}
-addEventListener('scroll', updateMini, { passive: true });
-addEventListener('resize', updateMini, { passive: true });
+const miniWrap = $('miniWrap'), miniBox = $('mini');
+const MINI_EDGE = 14;
+const CORNER_KEY = 'vitaMiniCorner';
+const TIP_KEY = 'vitaMiniTipSeen';
+const ORIGIN = { br: 'bottom right', bl: 'bottom left', tr: 'top right', tl: 'top left' };
 
-$('mini').addEventListener('click', () => {
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+let miniCorner = ['br', 'bl', 'tr', 'tl'].includes(localStorage.getItem(CORNER_KEY))
+  ? localStorage.getItem(CORNER_KEY) : 'br';
+let miniZoom = 1;
+
+function miniPlace(animate = true) {
+  const box = miniBox.getBoundingClientRect();
+  const w = box.width || 112, h = box.height || 240;
+  const top = miniCorner.startsWith('t');
+  const left = miniCorner.endsWith('l');
+  const headroom = top ? 74 : MINI_EDGE; // под шапкой, а не поверх неё
+  miniWrap.classList.toggle('noanim', !animate);
+  miniWrap.style.left = (left ? MINI_EDGE : innerWidth - w - MINI_EDGE) + 'px';
+  miniWrap.style.top = (top ? headroom : innerHeight - h - MINI_EDGE) + 'px';
+  miniBox.style.transformOrigin = ORIGIN[miniCorner];
+  if (!animate) setTimeout(() => miniWrap.classList.remove('noanim'), 0);
+}
+
+function miniSetZoom(k, smooth = true) {
+  miniZoom = Math.min(2.8, Math.max(1, k));
+  miniWrap.classList.toggle('pinching', !smooth);
+  miniWrap.classList.toggle('zoomed', miniZoom > 1.05);
+  miniBox.style.transform = `scale(${miniZoom})`;
+}
+
+miniPlace(false);
+addEventListener('resize', () => miniPlace(false), { passive: true });
+
+// Порог ровно тот, что просили: экранчик выезжает, когда телефон скрыт больше
+// чем наполовину. Считаем на скролле — это работает в любом браузере, в отличие
+// от наблюдателя пересечений, который в некоторых обёртках молчит.
+let miniTick = 0;
+function updateMini() {
+  const r = phoneEl.getBoundingClientRect();
+  const visible = Math.max(0, Math.min(r.bottom, innerHeight) - Math.max(r.top, 0));
+  const show = r.height > 0 && visible / r.height < 0.5;
+  if (show === miniWrap.classList.contains('show')) return;
+  miniWrap.classList.toggle('show', show);
+  miniWrap.setAttribute('aria-hidden', show ? 'false' : 'true');
+  if (show && !localStorage.getItem(TIP_KEY)) {
+    miniWrap.classList.add('tip');
+    setTimeout(() => miniWrap.classList.remove('tip'), 4200);
+    localStorage.setItem(TIP_KEY, '1');
+  }
+}
+function queueMini() {
+  const now = performance.now();
+  if (now - miniTick < 60) return;
+  miniTick = now;
+  updateMini();
+}
+addEventListener('scroll', queueMini, { passive: true });
+addEventListener('resize', queueMini, { passive: true });
+updateMini();
+
+// --- перетаскивание и щипок ---
+const pointers = new Map();
+let dragFrom = null, pinchFrom = null, moved = false;
+
+miniBox.addEventListener('pointerdown', e => {
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  // захват — приятный бонус, но не условие работы: палец спокойно уезжает за
+  // край экранчика, движение мы всё равно слушаем на окне
+  try { miniBox.setPointerCapture(e.pointerId); } catch {}
+  if (pointers.size === 1) {
+    const box = miniWrap.getBoundingClientRect();
+    dragFrom = { x: e.clientX, y: e.clientY, left: box.left, top: box.top };
+    moved = false;
+    miniWrap.classList.add('dragging');
+  } else if (pointers.size === 2) {
+    const [a, b] = [...pointers.values()];
+    pinchFrom = { dist: Math.hypot(a.x - b.x, a.y - b.y) || 1, zoom: miniZoom };
+    dragFrom = null;
+  }
+  e.preventDefault();
 });
+
+addEventListener('pointermove', e => {
+  if (!pointers.has(e.pointerId)) return;
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pinchFrom && pointers.size >= 2) {
+    const [a, b] = [...pointers.values()];
+    const dist = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+    miniSetZoom(pinchFrom.zoom * (dist / pinchFrom.dist), false);
+    moved = true;
+    return;
+  }
+  if (!dragFrom) return;
+  const dx = e.clientX - dragFrom.x, dy = e.clientY - dragFrom.y;
+  if (Math.abs(dx) > 4 || Math.abs(dy) > 4) moved = true;
+  const box = miniBox.getBoundingClientRect();
+  const maxLeft = innerWidth - box.width - 4, maxTop = innerHeight - box.height - 4;
+  miniWrap.style.left = Math.min(maxLeft, Math.max(4, dragFrom.left + dx)) + 'px';
+  miniWrap.style.top = Math.min(maxTop, Math.max(4, dragFrom.top + dy)) + 'px';
+});
+
+function endPointer(e) {
+  if (!pointers.has(e.pointerId)) return;
+  pointers.delete(e.pointerId);
+  if (pointers.size === 0) {
+    miniWrap.classList.remove('dragging', 'pinching');
+    if (pinchFrom) {
+      miniSetZoom(miniZoom < 1.15 ? 1 : miniZoom);  // почти вернул — вернём совсем
+      pinchFrom = null;
+    } else if (dragFrom && moved) {
+      // прилипаем к ближайшему углу
+      const box = miniWrap.getBoundingClientRect();
+      const cx = box.left + box.width / 2, cy = box.top + box.height / 2;
+      miniCorner = (cy < innerHeight / 2 ? 't' : 'b') + (cx < innerWidth / 2 ? 'l' : 'r');
+      localStorage.setItem(CORNER_KEY, miniCorner);
+      miniPlace(true);
+    } else if (dragFrom && !moved) {
+      miniSetZoom(miniZoom > 1.05 ? 1 : 2);  // одиночный тап — приблизить и вернуть
+    }
+    dragFrom = null;
+  } else if (pointers.size === 1) {
+    pinchFrom = null;
+    const [only] = [...pointers.values()];
+    const box = miniWrap.getBoundingClientRect();
+    dragFrom = { x: only.x, y: only.y, left: box.left, top: box.top };
+  }
+}
+addEventListener('pointerup', endPointer);
+addEventListener('pointercancel', endPointer);
 
 // тап по телефону — точки прыгают друг за другом (в демо уже крутится свой цикл)
 if (!DEMO) phoneEl.addEventListener('click', () => animateJump());

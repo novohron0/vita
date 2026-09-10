@@ -310,24 +310,107 @@ main { width: 100%; max-width: 430px; display: flex; flex-direction: column; gap
   background: linear-gradient(90deg, #4a4a50, #2c2c30);
 }
 
-.mini {
+/* Плавающий предпросмотр: маленький айфон, который выезжает, когда большой
+   уходит за верх экрана. Его можно перетащить в любой угол и рассмотреть
+   двумя пальцами — позиция запоминается. */
+.mini-wrap {
   position: fixed;
-  right: 14px;
-  bottom: 14px;
-  width: 92px;
-  border: 3px solid #2a2a2e;
-  border-radius: 18px;
-  overflow: hidden;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.6);
-  cursor: pointer;
-  z-index: 5;
+  left: 0;
+  top: 0;
+  z-index: 40;
+  touch-action: none;
   opacity: 0;
-  transform: translateY(12px);
-  pointer-events: none;
-  transition: opacity 0.2s, transform 0.2s;
+  visibility: hidden;
+  transform: scale(0.62) translateY(26px);
+  filter: blur(7px);
+  transition:
+    opacity .34s cubic-bezier(.22, 1, .36, 1),
+    transform .52s cubic-bezier(.22, 1, .36, 1),
+    filter .34s ease,
+    visibility 0s linear .5s,
+    left .42s cubic-bezier(.22, 1, .36, 1),
+    top .42s cubic-bezier(.22, 1, .36, 1);
+  will-change: transform, opacity, left, top;
 }
-.mini.show { opacity: 1; transform: none; pointer-events: auto; }
-.mini canvas { display: block; width: 100%; height: auto; }
+.mini-wrap.show {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  filter: none;
+  transition:
+    opacity .34s cubic-bezier(.22, 1, .36, 1),
+    transform .52s cubic-bezier(.22, 1, .36, 1),
+    filter .34s ease,
+    visibility 0s,
+    left .42s cubic-bezier(.22, 1, .36, 1),
+    top .42s cubic-bezier(.22, 1, .36, 1);
+}
+.mini-wrap.dragging { transition: none; }
+/* мгновенная установка позиции (старт, поворот экрана) не должна убивать
+   анимацию появления — гасим только переезд по left/top */
+.mini-wrap.noanim { transition-property: opacity, transform, filter, visibility; }
+
+.mini {
+  position: relative;
+  width: 104px;
+  padding: 4px;
+  background: #050506;
+  border: 2px solid #3f3f45;
+  border-radius: 26px;
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.1),
+    0 0 0 1px rgba(0, 0, 0, 0.85),
+    0 18px 42px rgba(0, 0, 0, 0.55);
+  cursor: grab;
+  transform-origin: bottom right;
+  transition: transform .28s cubic-bezier(.22, 1, .36, 1), box-shadow .3s;
+}
+.mini-wrap.zoomed .mini {
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.12),
+    0 0 0 1px rgba(0, 0, 0, 0.85),
+    0 26px 70px rgba(0, 0, 0, 0.62);
+}
+.mini-wrap.pinching .mini { transition: none; }
+.mini-wrap.dragging .mini { cursor: grabbing; }
+.mini::before { /* Dynamic Island, как у большого телефона */
+  content: "";
+  position: absolute;
+  z-index: 2;
+  top: 3.4%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 32%;
+  aspect-ratio: 3.4;
+  border-radius: 999px;
+  background: radial-gradient(circle at 78% 50%, #2e3947 0 10%, #12161b 16%, #0b0b0d 26%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.09);
+}
+.mini::after { /* кнопка питания */
+  content: "";
+  position: absolute;
+  right: -3px;
+  top: 27%;
+  width: 2px;
+  height: 13%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #4a4a50, #2c2c30);
+}
+.mini canvas { display: block; width: 100%; height: auto; border-radius: 21px; }
+
+/* подсказка показывается один раз, при первом появлении экранчика */
+.mini-hint {
+  position: absolute;
+  right: 0;
+  bottom: -22px;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--text-nav);
+  opacity: 0;
+  transition: opacity .4s ease;
+  pointer-events: none;
+}
+.mini-wrap.tip .mini-hint { opacity: 1; }
 
 .stats {
   display: flex;
