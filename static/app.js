@@ -1218,6 +1218,15 @@ function paintAvatar(url) {
   if (url) { btnImg.src = url; bigImg.src = url; }
 }
 
+function paintTagNote(profile) {
+  const note = $('tagNote'), input = $('profTag');
+  const left = profile.handleLeft ?? 2;
+  input.disabled = !!profile.handleLocked;
+  if (profile.handleLocked) note.textContent = 'Тег закреплён навсегда';
+  else if (left === 2) note.textContent = 'Тег выбирается один раз, потом его можно поменять дважды';
+  else note.textContent = left === 1 ? 'Поменять тег можно ещё один раз' : 'Замены тега закончились';
+}
+
 function paintPrime(access) {
   const row = $('primeRow'), state = $('primeState'), buy = $('primeBuy');
   const paid = !!access?.paid;
@@ -1237,10 +1246,11 @@ async function loadProfile() {
     const autoName = profile.name && profile.name === profile.handle;
     $('profName').value = autoName ? '' : (profile.name || '');
     $('profTag').value = (profile.handle || '').replace(/^@+/, '');
+    paintTagNote(profile);
     paintAvatar(profile.avatar);
     paintPrime(access);
     $('profLogout').hidden = !access.telegram;
-    if (!access.telegram && access.tgBot) VitaTG.mount($('tgBoxProfile'), access.tgBot);
+    if (!access.telegram && access.tgBotId) VitaTG.mount($('tgBoxProfile'), access);
     profileLoaded = true;
   } catch (error) {
     $('profStatus').textContent = error.message || 'Не удалось загрузить профиль';
@@ -1255,18 +1265,116 @@ $('profileClose').addEventListener('click', () => { profModal.hidden = true; });
 profModal.addEventListener('click', e => { if (e.target === profModal) profModal.hidden = true; });
 addEventListener('keydown', e => { if (e.key === 'Escape') profModal.hidden = true; });
 
-$('avaFile').addEventListener('change', async e => {
+// --- выбор области фото ---
+// Человек двигает снимок пальцем и меняет размер, в кружок попадает то, что
+// видно; на сервер уходит уже обрезанный квадрат, а не весь файл.
+const cropModal = $('cropModal'), cropCanvas = $('cropCanvas');
+const cropCtx = cropCanvas.getContext('2d');
+const CROP_OUT = 512;
+let cropImg = null, cropScale = 1, cropBase = 1, cropX = 0, cropY = 0;
+
+function cropDraw() {
+  const size = cropCanvas.width;
+  cropCtx.clearRect(0, 0, size, size);
+  cropCtx.fillStyle = '#000';
+  cropCtx.fillRect(0, 0, size, size);
+  if (!cropImg) return;
+  const k = cropBase * cropScale;
+  const w = cropImg.width * k, h = cropImg.height * k;
+  // не даём утащить снимок так, чтобы в кружке появилась пустота
+  cropX = Math.min(0, Math.max(size - w, cropX));
+  cropY = Math.min(0, Math.max(size - h, cropY));
+  cropCtx.drawImage(cropImg, cropX, cropY, w, h);
+}
+
+function cropOpen(file) {
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    URL.revokeObjectURL(url);
+    cropImg = img;
+    cropBase = Math.max(cropCanvas.width / img.width, cropCanvas.height / img.height);
+    cropScale = 1;
+    cropX = (cropCanvas.width - img.width * cropBase) / 2;
+    cropY = (cropCanvas.height - img.height * cropBase) / 2;
+    $('cropZoom').value = '1';
+    cropModal.hidden = false;
+    cropDraw();
+  };
+  img.onerror = () => {
+    URL.revokeObjectURL(url);
+    $('profStatus').textContent = 'Не получилось открыть это фото';
+  };
+  img.src = url;
+}
+
+$('cropZoom').addEventListener('input', e => {
+  const next = parseFloat(e.target.value);
+  const size = cropCanvas.width;
+  // приближаем к центру кружка, а не к левому верхнему углу
+  const cx = size / 2, cy = size / 2;
+  const ratio = next / cropScale;
+  cropX = cx - (cx - cropX) * ratio;
+  cropY = cy - (cy - cropY) * ratio;
+  cropScale = next;
+  cropDraw();
+});
+
+let cropDragFrom = null;
+const cropPointers = new Map();
+$('cropView').addEventListener('pointerdown', e => {
+  cropPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (cropPointers.size === 1) cropDragFrom = { x: e.clientX, y: e.clientY, cx: cropX, cy: cropY };
+  e.preventDefault();
+});
+addEventListener('pointermove', e => {
+  if (!cropPointers.has(e.pointerId) || !cropDragFrom) return;
+  cropPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  const view = $('cropView').getBoundingClientRect();
+  const k = cropCanvas.width / view.width;  // экранные точки → точки холста
+  cropX = cropDragFrom.cx + (e.clientX - cropDragFrom.x) * k;
+  cropY = cropDragFrom.cy + (e.clientY - cropDragFrom.y) * k;
+  cropDraw();
+});
+addEventListener('pointerup', e => {
+  cropPointers.delete(e.pointerId);
+  if (cropPointers.size === 0) cropDragFrom = null;
+});
+
+$('cropCancel').addEventListener('click', () => { cropModal.hidden = true; cropImg = null; });
+cropModal.addEventListener('click', e => { if (e.target === cropModal) $('cropCancel').click(); });
+
+$('cropDone').addEventListener('click', async () => {
+  if (!cropImg) return;
+  const out = document.createElement('canvas');
+  out.width = out.height = CROP_OUT;
+  const ctx = out.getContext('2d');
+  const scale = CROP_OUT / cropCanvas.width;
+  ctx.drawImage(
+    cropImg,
+    cropX * scale, cropY * scale,
+    cropImg.width * cropBase * cropScale * scale,
+    cropImg.height * cropBase * cropScale * scale,
+  );
+  cropModal.hidden = true;
+  $('profStatus').textContent = 'Загружаю фото…';
+  out.toBlob(async blob => {
+    if (!blob) { $('profStatus').textContent = 'Не получилось обрезать фото'; return; }
+    try {
+      const data = await VitaID.uploadAvatar(new File([blob], 'avatar.jpg', { type: 'image/jpeg' }));
+      paintAvatar(data.avatar);
+      $('profStatus').textContent = 'Фото обновлено';
+    } catch (error) {
+      $('profStatus').textContent = error.message || 'Не получилось загрузить фото';
+    }
+    cropImg = null;
+  }, 'image/jpeg', 0.92);
+});
+
+$('avaFile').addEventListener('change', e => {
   const file = e.target.files?.[0];
   e.target.value = '';
-  if (!file) return;
-  $('profStatus').textContent = 'Загружаю фото…';
-  try {
-    const data = await VitaID.uploadAvatar(file);
-    paintAvatar(data.avatar);
-    $('profStatus').textContent = 'Фото обновлено';
-  } catch (error) {
-    $('profStatus').textContent = error.message || 'Не получилось загрузить фото';
-  }
+  if (file) cropOpen(file);
 });
 
 $('profSave').addEventListener('click', async () => {
@@ -1280,6 +1388,7 @@ $('profSave').addEventListener('click', async () => {
     });
     $('profName').value = data.name || '';
     $('profTag').value = (data.handle || '').replace(/^@+/, '');
+    paintTagNote(data);
     $('profStatus').textContent = 'Сохранено';
   } catch (error) {
     $('profStatus').textContent = error.message || 'Не удалось сохранить';

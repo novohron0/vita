@@ -38,6 +38,8 @@ HANDLE_RE = re.compile(r"[a-z0-9_]{3,24}")
 DEVELOPER_HANDLE = "vit"
 # Зарезервированные теги выдаются только через /admin/handle.
 RESERVED_HANDLES = {DEVELOPER_HANDLE, "vita", "vitadots", "admin", "support"}
+# Тег выбирается один раз при регистрации, потом его можно поменять дважды.
+HANDLE_CHANGE_LIMIT = 2
 
 # Starter tags are issued only by the server. The rarity roll is intentionally
 # simple and auditable: 70% common, 22% rare, 7% epic, 1% legendary.
@@ -164,6 +166,9 @@ def _init_schema(conn: sqlite3.Connection) -> None:
         "handle TEXT NOT NULL DEFAULT ''",
         "bio TEXT NOT NULL DEFAULT ''",
         "avatar_id TEXT NOT NULL DEFAULT ''",
+        # сколько раз человек менял тег и выбирал ли он его вообще
+        "handle_changes INTEGER NOT NULL DEFAULT 0",
+        "handle_custom INTEGER NOT NULL DEFAULT 0",
     ):
         try:
             conn.execute(f"ALTER TABLE profiles ADD COLUMN {col}")
@@ -686,8 +691,8 @@ def _public_profile_payload(
 
 def _profile_payload(conn: sqlite3.Connection, profile_code: str) -> dict:
     row = conn.execute(
-        "SELECT handle, name, bio, avatar_id, settings, created "
-        "FROM profiles WHERE code = ?",
+        "SELECT handle, name, bio, avatar_id, settings, created, handle_changes, "
+        "handle_custom FROM profiles WHERE code = ?",
         (profile_code,),
     ).fetchone()
     if row is None:
@@ -746,6 +751,10 @@ def _profile_payload(conn: sqlite3.Connection, profile_code: str) -> dict:
         "tags": [],
         "developer": (row[0] or "").lower() == DEVELOPER_HANDLE,
         "settings": settings,
+        "handleLocked": bool(row[7]) and (row[6] or 0) >= HANDLE_CHANGE_LIMIT,
+        "handleLeft": (
+            HANDLE_CHANGE_LIMIT if not row[7] else max(0, HANDLE_CHANGE_LIMIT - (row[6] or 0))
+        ),
         "goals": goals,
         "wallpapers": wallpapers,
         "posts": posts,
@@ -1059,6 +1068,7 @@ def _profile_access_state(conn: sqlite3.Connection, profile_code: str | None) ->
         "code": "",
         "telegram": "",
         "tgBot": TG_BOT_NAME,
+        "tgBotId": TG_BOT_TOKEN.split(":")[0] if TG_BOT_TOKEN else "",
         "until": None,
         "expired": False,
         "price": billing.PRICE,
@@ -1493,7 +1503,26 @@ def update_profile(profile: ProfileUpdateIn):
             ).fetchone()
             if occupied:
                 raise HTTPException(409, "Этот тег уже занят")
-            fields["handle"] = handle
+            row = conn.execute(
+                "SELECT handle, handle_changes, handle_custom FROM profiles WHERE code = ?",
+                (code,),
+            ).fetchone()
+            current_handle = (row[0] or "") if row else ""
+            changes, chosen = (row[1] or 0, row[2] or 0) if row else (0, 0)
+            if current_handle.lower() != handle:
+                if not chosen:
+                    # служебный тег человек не выбирал: эта установка и есть
+                    # выбор при регистрации, в лимит замен она не идёт
+                    fields["handle_custom"] = 1
+                elif changes >= HANDLE_CHANGE_LIMIT:
+                    raise HTTPException(
+                        409,
+                        f"Тег можно поменять только {HANDLE_CHANGE_LIMIT} раза — "
+                        "дальше он остаётся навсегда",
+                    )
+                else:
+                    fields["handle_changes"] = changes + 1
+                fields["handle"] = handle
         if profile.bio is not None:
             bio = profile.bio.strip()
             if len(bio) > 280:

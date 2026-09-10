@@ -8,8 +8,8 @@
 <title>Моя Vita</title>
 <script src="/static/theme.js?v=2"></script>
 <script src="/static/vita-id.js?v=3"></script>
-<script src="/static/tg-login.js?v=1"></script>
-<link rel="stylesheet" href="/static/style.css?v=38">
+<script src="/static/tg-login.js?v=2"></script>
+<link rel="stylesheet" href="/static/style.css?v=41">
 </head>
 <body>
 <header>
@@ -373,7 +373,7 @@ function renderLogin(state) {
     out.hidden = false;
   } else if (state.tgBot) {
     line.innerHTML = 'Войди через телеграм — и доступ вернётся на любом телефоне, даже если очистишь браузер.';
-    VitaTG.mount(box, state.tgBot);
+    VitaTG.mount(box, state);
   } else {
     line.innerHTML = 'Аккаунт держится на приватном коде ниже. Сохрани его — по нему вернёшь доступ.';
   }

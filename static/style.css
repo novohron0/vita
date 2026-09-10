@@ -619,17 +619,34 @@ main { width: 100%; max-width: 430px; display: flex; flex-direction: column; gap
 .modal .sub { color: var(--text-muted); font-size: 14px; line-height: 1.5; }
 .modal-x {
   position: absolute;
-  top: 14px;
-  right: 14px;
+  top: 12px;
+  right: 12px;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   background: var(--glass-bg-soft);
   border: 1px solid var(--glass-border);
   border-radius: 50%;
-  width: 30px;
-  height: 30px;
+  width: 34px;
+  height: 34px;
   color: var(--text-muted);
-  font-size: 14px;
   cursor: pointer;
+  transition: color .2s, background .2s, transform .15s;
 }
+.modal-x svg {
+  width: 15px;
+  height: 15px;
+  display: block;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+.modal-x:active { transform: scale(0.92); color: var(--text); }
 .err { color: #ff6b81; font-size: 14px; }
 .or {
   display: flex;
@@ -1503,11 +1520,13 @@ input, textarea { caret-color: var(--text); }
 .nav { gap: 12px; }
 .logo { padding: 9px 0; display: inline-block; }
 .theme-toggle { min-height: 44px; display: inline-flex; align-items: center; }
-.linkbox button, .buy-key button, .library-x, .modal-x {
+.linkbox button, .buy-key button {
   min-height: 44px;
   padding-left: 16px;
   padding-right: 16px;
 }
+/* круглые кнопки закрытия остаются круглыми: им растим только область нажатия */
+.library-x, .modal-x { min-width: 40px; min-height: 40px; padding: 0; }
 .seg button { min-height: 40px; }
 /* инлайн-ссылки в тексте получают запас по вертикали, не разъезжаясь по строкам */
 .hint a, .buy-note a, .page-foot a, .access-line a { padding: 6px 0; }
@@ -1727,7 +1746,15 @@ button, a, .seg button, .swatch, .tariff {
 .prime.on .prime-text span { color: var(--accent-soft); }
 .prime-buy { padding: 10px 13px; font-size: 13.5px; margin: 0; white-space: nowrap; text-decoration: none; flex: none; }
 
-.profile-modal > .primary { width: 100%; }
+.profile-modal > .primary {
+  align-self: center;
+  width: auto;
+  min-width: 170px;
+  padding: 12px 26px;
+  border-radius: 999px;
+  font-size: 15px;
+  margin-top: 2px;
+}
 .prof-status { min-height: 16px; }
 .prof-exit {
   border: 0;
@@ -1739,3 +1766,70 @@ button, a, .seg button, .swatch, .tariff {
   cursor: pointer;
 }
 .prof-exit:active { color: var(--text-2); }
+
+/* Своя кнопка входа: виджет телеграма приходит синим айфреймом и в тёмной
+   карточке смотрится заплаткой. Кнопку рисуем сами, а вход открываем тем же
+   родным SDK телеграма. */
+.tg-btn {
+  width: 100%;
+  min-height: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 12px 18px;
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  background: var(--glass-bg-lift);
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .2s, border-color .2s, transform .15s;
+}
+.tg-btn:active { transform: scale(0.985); }
+.tg-btn svg { width: 19px; height: 19px; fill: currentColor; }
+.tg-login .tg-btn + .tg-status { text-align: center; }
+.tg-login:has(.tg-btn) {
+  padding: 0;
+  background: none;
+  border: 0;
+  box-shadow: none;
+  gap: 6px;
+}
+
+.tag-note { color: var(--text-faint); font-size: 12px; margin-top: -6px; }
+.prof-tag input:disabled { color: var(--text-nav); }
+
+/* --- выбор области фото --- */
+.crop-card { gap: 14px; align-items: center; text-align: center; }
+.crop-card h2 { font-size: 19px; }
+.crop-card .sub { font-size: 13.5px; }
+.crop-view {
+  position: relative;
+  width: 260px;
+  height: 260px;
+  max-width: 72vw;
+  max-height: 72vw;
+  border-radius: 18px;
+  overflow: hidden;
+  background: #000;
+  touch-action: none;
+  cursor: grab;
+}
+.crop-view:active { cursor: grabbing; }
+.crop-view canvas { width: 100%; height: 100%; display: block; }
+/* круг показывает, что именно станет аватаркой */
+.crop-ring {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: 18px;
+  box-shadow: inset 0 0 0 2000px rgba(0, 0, 0, 0.5);
+  -webkit-mask: radial-gradient(circle at 50% 50%, transparent 0 49%, #000 49.4%);
+  mask: radial-gradient(circle at 50% 50%, transparent 0 49%, #000 49.4%);
+}
+.crop-zoom { width: 100%; max-width: 260px; accent-color: var(--text); }
+.crop-actions { display: flex; gap: 10px; width: 100%; }
+.crop-actions button { flex: 1; margin: 0; border-radius: 999px; padding: 12px 18px; font-size: 15px; }
