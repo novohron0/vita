@@ -1,4 +1,7 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
+/* Двойной тап по экрану на айфоне приближал страницу — раздражает и ломает
+   ощущение приложения. Щипок для увеличения при этом остаётся. */
+html { touch-action: manipulation; }
 
 :root {
   --glass-blur: 32px;

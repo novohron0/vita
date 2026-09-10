@@ -613,8 +613,11 @@ let miniCorner = ['br', 'bl', 'tr', 'tl'].includes(localStorage.getItem(CORNER_K
 let miniZoom = 1;
 
 function miniPlace(animate = true) {
-  const box = miniBox.getBoundingClientRect();
-  const w = box.width || 112, h = box.height || 240;
+  // offsetWidth/Height не учитывают масштаб: пока экранчик спрятан, он ужат
+  // до 0.62, и по getBoundingClientRect он «уже» настоящего — из-за этого
+  // правый угол считался неверно и половина уезжала за экран
+  const w = miniBox.offsetWidth || 112;
+  const h = miniBox.offsetHeight || 240;
   const top = miniCorner.startsWith('t');
   const left = miniCorner.endsWith('l');
   const headroom = top ? 74 : MINI_EDGE; // под шапкой, а не поверх неё
