@@ -785,6 +785,17 @@ def _rate_ok(key: str, limit: int, window: int) -> bool:
         return True
 
 
+# Заголовки безопасности: сканеры репутации их проверяют, а браузеру они
+# запрещают угадывать типы файлов и утекать адрес страницы на чужие сайты.
+SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "X-Frame-Options": "SAMEORIGIN",
+    "Permissions-Policy": "geolocation=(), microphone=(), camera=(), payment=()",
+    "Strict-Transport-Security": "max-age=31536000",
+}
+
+
 @app.middleware("http")
 async def rate_limit(request: Request, call_next):
     rule = RATE_RULES.get(request.url.path)
@@ -795,7 +806,10 @@ async def rate_limit(request: Request, call_next):
                 {"detail": "Слишком много запросов подряд — подожди немного и повтори"},
                 status_code=429,
             )
-    return await call_next(request)
+    response = await call_next(request)
+    for name, value in SECURITY_HEADERS.items():
+        response.headers.setdefault(name, value)
+    return response
 
 
 @app.get("/healthz")
