@@ -612,18 +612,31 @@ let miniCorner = ['br', 'bl', 'tr', 'tl'].includes(localStorage.getItem(CORNER_K
   ? localStorage.getItem(CORNER_KEY) : 'br';
 let miniZoom = 1;
 
+// Видимая часть экрана: на айфоне снизу висит панель Safari, и обычный
+// innerHeight про неё не знает — экранчик уезжал прямо под неё.
+function viewport() {
+  const vv = window.visualViewport;
+  return {
+    w: vv ? vv.width : innerWidth,
+    h: vv ? vv.height : innerHeight,
+    top: vv ? vv.offsetTop : 0,
+    left: vv ? vv.offsetLeft : 0,
+  };
+}
+
 function miniPlace(animate = true) {
   // offsetWidth/Height не учитывают масштаб: пока экранчик спрятан, он ужат
   // до 0.62, и по getBoundingClientRect он «уже» настоящего — из-за этого
   // правый угол считался неверно и половина уезжала за экран
   const w = miniBox.offsetWidth || 112;
   const h = miniBox.offsetHeight || 240;
+  const v = viewport();
   const top = miniCorner.startsWith('t');
   const left = miniCorner.endsWith('l');
   const headroom = top ? 74 : MINI_EDGE; // под шапкой, а не поверх неё
   miniWrap.classList.toggle('noanim', !animate);
-  miniWrap.style.left = (left ? MINI_EDGE : innerWidth - w - MINI_EDGE) + 'px';
-  miniWrap.style.top = (top ? headroom : innerHeight - h - MINI_EDGE) + 'px';
+  miniWrap.style.left = (v.left + (left ? MINI_EDGE : v.w - w - MINI_EDGE)) + 'px';
+  miniWrap.style.top = (v.top + (top ? headroom : v.h - h - MINI_EDGE)) + 'px';
   miniBox.style.transformOrigin = ORIGIN[miniCorner];
   if (!animate) setTimeout(() => miniWrap.classList.remove('noanim'), 0);
 }
@@ -637,6 +650,7 @@ function miniSetZoom(k, smooth = true) {
 
 miniPlace(false);
 addEventListener('resize', () => miniPlace(false), { passive: true });
+addEventListener('orientationchange', () => setTimeout(() => miniPlace(false), 250));
 
 // Порог ровно тот, что просили: экранчик выезжает, когда телефон скрыт больше
 // чем наполовину. Считаем на скролле — это работает в любом браузере, в отличие
@@ -644,9 +658,11 @@ addEventListener('resize', () => miniPlace(false), { passive: true });
 let miniTick = 0;
 function updateMini() {
   const r = phoneEl.getBoundingClientRect();
-  const visible = Math.max(0, Math.min(r.bottom, innerHeight) - Math.max(r.top, 0));
+  const vh = viewport().h;
+  const visible = Math.max(0, Math.min(r.bottom, vh) - Math.max(r.top, 0));
   const show = r.height > 0 && visible / r.height < 0.5;
   if (show === miniWrap.classList.contains('show')) return;
+  if (show) miniPlace(false);  // панель браузера могла сдвинуть видимую область
   miniWrap.classList.toggle('show', show);
   miniWrap.setAttribute('aria-hidden', show ? 'false' : 'true');
   if (show && !localStorage.getItem(TIP_KEY)) {
@@ -661,8 +677,14 @@ function queueMini() {
   miniTick = now;
   updateMini();
 }
+// touchmove и wheel — страховка: на айфоне во время инерции scroll иногда
+// молчит до самой остановки
 addEventListener('scroll', queueMini, { passive: true });
+addEventListener('touchmove', queueMini, { passive: true });
+addEventListener('wheel', queueMini, { passive: true });
 addEventListener('resize', queueMini, { passive: true });
+window.visualViewport?.addEventListener('resize', () => { miniPlace(false); queueMini(); });
+window.visualViewport?.addEventListener('scroll', queueMini);
 updateMini();
 
 // --- перетаскивание и щипок ---
@@ -784,13 +806,7 @@ $('proModal').addEventListener('click', e => {
   if (e.target === $('proModal')) $('proModal').hidden = true;
 });
 
-(async () => {
-  try {
-    const access = await window.VitaID?.access();
-    hasFullAccess = !!access?.paid;
-    if (hasFullAccess) $('brandOff').classList.remove('locked');
-  } catch {}
-})();
+
 bindSeg('bg', v => {
   $('bgOwn').classList.remove('on');
   state.bg = v;
@@ -1187,3 +1203,98 @@ async function reelLife() {
     end.remove();
   }
 }
+
+// --- профиль в шапке ---
+// Кружок открывает карточку: фото, имя, тег и статус Прайма. Всё, что человек
+// меняет здесь, попадает в тот же аккаунт, что и обои.
+const profModal = $('profileModal');
+let profileLoaded = false;
+
+function paintAvatar(url) {
+  const btn = $('avatarBtn'), btnImg = $('avatarBtnImg'), bigImg = $('avaImg');
+  btn.classList.toggle('filled', !!url);
+  btnImg.hidden = !url;
+  bigImg.hidden = !url;
+  if (url) { btnImg.src = url; bigImg.src = url; }
+}
+
+function paintPrime(access) {
+  const row = $('primeRow'), state = $('primeState'), buy = $('primeBuy');
+  const paid = !!access?.paid;
+  row.classList.toggle('on', paid);
+  buy.hidden = paid || !access?.payable;
+  if (paid) state.textContent = 'открыт навсегда';
+  else if (access?.until && !access.expired) state.textContent = 'идут пробные дни';
+  else if (access?.expired) state.textContent = 'проба кончилась';
+  else state.textContent = 'не подключён';
+  hasFullAccess = paid;
+  if (paid) $('brandOff').classList.remove('locked');
+}
+
+async function loadProfile() {
+  try {
+    const [profile, access] = await Promise.all([VitaID.ensure(), VitaID.access()]);
+    const autoName = profile.name && profile.name === profile.handle;
+    $('profName').value = autoName ? '' : (profile.name || '');
+    $('profTag').value = (profile.handle || '').replace(/^@+/, '');
+    paintAvatar(profile.avatar);
+    paintPrime(access);
+    $('profLogout').hidden = !access.telegram;
+    if (!access.telegram && access.tgBot) VitaTG.mount($('tgBoxProfile'), access.tgBot);
+    profileLoaded = true;
+  } catch (error) {
+    $('profStatus').textContent = error.message || 'Не удалось загрузить профиль';
+  }
+}
+
+$('avatarBtn').addEventListener('click', () => {
+  profModal.hidden = false;
+  if (!profileLoaded) loadProfile();
+});
+$('profileClose').addEventListener('click', () => { profModal.hidden = true; });
+profModal.addEventListener('click', e => { if (e.target === profModal) profModal.hidden = true; });
+addEventListener('keydown', e => { if (e.key === 'Escape') profModal.hidden = true; });
+
+$('avaFile').addEventListener('change', async e => {
+  const file = e.target.files?.[0];
+  e.target.value = '';
+  if (!file) return;
+  $('profStatus').textContent = 'Загружаю фото…';
+  try {
+    const data = await VitaID.uploadAvatar(file);
+    paintAvatar(data.avatar);
+    $('profStatus').textContent = 'Фото обновлено';
+  } catch (error) {
+    $('profStatus').textContent = error.message || 'Не получилось загрузить фото';
+  }
+});
+
+$('profSave').addEventListener('click', async () => {
+  const btn = $('profSave');
+  btn.disabled = true;
+  $('profStatus').textContent = 'Сохраняю…';
+  try {
+    const data = await VitaID.updateProfile({
+      name: $('profName').value.trim(),
+      handle: $('profTag').value.trim(),
+    });
+    $('profName').value = data.name || '';
+    $('profTag').value = (data.handle || '').replace(/^@+/, '');
+    $('profStatus').textContent = 'Сохранено';
+  } catch (error) {
+    $('profStatus').textContent = error.message || 'Не удалось сохранить';
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+$('profLogout').addEventListener('click', () => {
+  if (!confirm('Выйти из аккаунта? Вернуться сможешь через телеграм.')) return;
+  VitaID.logout();
+  location.reload();
+});
+
+// статус Прайма нужен и до открытия карточки: от него зависит замок на логотипе
+(async () => {
+  try { paintPrime(await VitaID.access()); } catch {}
+})();
