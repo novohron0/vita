@@ -58,8 +58,10 @@ function failView() {
   $('title').textContent = 'Оплата не прошла';
   $('text').textContent = 'Деньги остались у тебя — банк отменил платёж. Можно спокойно попробовать снова.';
   $('note').textContent = 'Если списание всё-таки произошло — напиши нам, разберёмся и вернём.';
-  $('goBtn').textContent = 'На главную';
-  $('goBtn').href = '/';
+  $('goBtn').textContent = 'Попробовать ещё раз';
+  $('goBtn').href = '/buy';
+  $('retryBtn').textContent = 'На главную';
+  $('retryBtn').href = '/';
   $('retryBtn').hidden = false;
 }
 

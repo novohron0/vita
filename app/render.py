@@ -531,7 +531,7 @@ def render_wallpaper(cfg: dict, today: date | None = None, expired: bool = False
         _watermark(draw, W / 2, y0 - 110, text)
     if expired:
         # доступ кончился: прогресс заморожен (today = дата окончания), обои сами напоминают
-        draw.text((W / 2, y0 + grid_h + 130), "точки замерли · продли на vita",
+        draw.text((W / 2, y0 + grid_h + 130), "точки замерли · vitadots.ru",
                   font=_font(40), fill=color, anchor="mm")
     elif cfg.get("footer", True):
         draw.text(

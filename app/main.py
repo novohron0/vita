@@ -1817,6 +1817,11 @@ async function ext(code, days) {{
   await fetch(`/admin/extend?token={token}&code=${{code}}&days=${{days}}`, {{ method: 'POST' }});
   location.reload();
 }}
+async function grantOrder(inv) {{
+  if (!confirm('Открыть доступ по счёту №' + inv + ' навсегда?')) return;
+  await fetch(`/admin/order/grant?token={token}&inv=${{inv}}`, {{ method: 'POST' }});
+  location.reload();
+}}
 async function feedMod(code, hide) {{
   await fetch(`/admin/feed/hide?token={token}&code=${{code}}&hide=${{hide ? 1 : 0}}`, {{ method: 'POST' }});
   location.reload();
@@ -1884,6 +1889,28 @@ def admin(token: str = ""):
         ).fetchall()
         fw_rows = conn.execute(
             "SELECT contact, created FROM focus_wait ORDER BY created DESC"
+        ).fetchall()
+        money = {
+            "links": conn.execute("SELECT COUNT(*) FROM links").fetchone()[0],
+            "links_week": conn.execute(
+                "SELECT COUNT(*) FROM links WHERE created >= date('now', '-7 day')"
+            ).fetchone()[0],
+            "forever": conn.execute(
+                "SELECT COUNT(*) FROM profile_access WHERE access_until IS NULL"
+            ).fetchone()[0],
+        }
+        paid_row = conn.execute(
+            "SELECT COUNT(*), COALESCE(SUM(CAST(amount AS REAL)), 0) FROM orders WHERE status = 'paid'"
+        ).fetchone()
+        money["paid"], money["sum"] = paid_row[0], paid_row[1]
+        money["pending"] = conn.execute(
+            "SELECT COUNT(*) FROM orders WHERE status != 'paid'"
+        ).fetchone()[0]
+        order_rows = conn.execute(
+            "SELECT o.id, o.created, o.paid_at, o.amount, o.email, o.status, "
+            "COALESCE(p.handle, '') "
+            "FROM orders o LEFT JOIN profiles p ON p.code = o.profile_code "
+            "ORDER BY o.id DESC LIMIT 30"
         ).fetchall()
         feed_rows = conn.execute(
             "SELECT g.code, g.title, cnt.peers, COALESCE(done.cnt, 0), COALESCE(g.feed_hidden, 0) "
@@ -1970,9 +1997,34 @@ def admin(token: str = ""):
             f'<div class="card"><div class="meta"><span>🔥 Лента — модерация ({len(feed_rows)})</span>'
             f'</div><div class="idea">{"".join(flines)}</div></div>'
         )
+    # деньги и воронка: сколько обоев сделали, сколько купили, кто заплатил
+    conv = (money["paid"] / money["links"] * 100) if money["links"] else 0
+    olines = []
+    for oid, ocreated, opaid, oamount, oemail, ostatus, ohandle in order_rows:
+        who = f"@{esc(ohandle)}" if ohandle else "—"
+        if ostatus == "paid":
+            mark = f'<span style="color:#34c759">оплачен {opaid or ""}</span>'
+            btn = ""
+        else:
+            mark = '<span class="expired">не оплачен</span>'
+            btn = f'<button onclick="grantOrder({oid})">выдать вручную</button>'
+        olines.append(
+            f'<div style="margin:8px 0">№{oid} · {ocreated} · <b>{esc(oemail)}</b> · '
+            f'{oamount} ₽ · {who} · {mark} {btn}</div>'
+        )
+    money_block = (
+        f'<div class="card"><div class="meta">'
+        f'<span>💰 Куплено навсегда: <b>{money["paid"]}</b></span>'
+        f'<span>выручка: <b>{money["sum"]:.0f} ₽</b></span>'
+        f'<span>доступов навсегда: <b>{money["forever"]}</b></span>'
+        f'<span>обоев всего: <b>{money["links"]}</b> (за неделю {money["links_week"]})</span>'
+        f'<span>конверсия: <b>{conv:.1f}%</b></span>'
+        f'<span>счетов без оплаты: {money["pending"]}</span></div>'
+        f'<div class="idea">{"".join(olines) or "Заказов пока нет."}</div></div>'
+    )
     html = ADMIN_PAGE.format(
         count=len(rows),
-        cards=focus_block + feed_block + ("".join(cards) or "<p>Пока пусто.</p>"),
+        cards=money_block + focus_block + feed_block + ("".join(cards) or "<p>Пока пусто.</p>"),
         token=ADMIN_TOKEN,
     )
     return HTMLResponse(html)
@@ -1992,6 +2044,24 @@ def admin_extend(code: str, days: int, token: str = ""):
         else:
             new_until = _extend(conn, code, days, row[0])
     return {"code": code, "access_until": new_until}
+
+
+@app.post("/admin/order/grant")
+def admin_order_grant(inv: int, token: str = ""):
+    """Открыть доступ по номеру счёта руками: деньги пришли, уведомление — нет."""
+    if token != ADMIN_TOKEN:
+        raise HTTPException(403, "Нет доступа")
+    with db() as conn:
+        row = conn.execute(
+            "SELECT profile_code, status FROM orders WHERE id = ?", (inv,)
+        ).fetchone()
+        if row is None:
+            raise HTTPException(404, "Нет такого счёта")
+        conn.execute(
+            "UPDATE orders SET status = 'paid', paid_at = datetime('now') WHERE id = ?", (inv,)
+        )
+        _grant_forever(conn, row[0])
+    return {"invId": inv, "paid": True}
 
 
 @app.post("/admin/grant")
