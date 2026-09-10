@@ -263,10 +263,6 @@ main { width: 100%; max-width: 430px; display: flex; flex-direction: column; gap
 }
 .seg.wide { width: 100%; }
 .seg.wide button { flex: 1; }
-.seg.bg-pick { flex-wrap: wrap; width: 100%; }
-.seg.bg-pick button { flex: 1 1 calc(33.33% - 4px); min-width: 0; font-size: 13px; padding: 9px 8px; }
-.seg.shape-pick { flex-wrap: wrap; width: 100%; }
-.seg.shape-pick button { flex: 1 1 calc(33.33% - 4px); min-width: 0; font-size: 12px; padding: 9px 6px; }
 .seg button {
   border: 0;
   background: transparent;
@@ -1444,4 +1440,98 @@ button, a, .seg button, .swatch, .tariff {
   .head-r { gap: 8px; }
   .nav { gap: 9px; }
   .nav a { font-size: 13px; padding: 11px 0; }
+}
+
+/* --- выбор фона и точек: ровная сетка ---
+   Раньше это был flex-wrap, и последняя кнопка растягивалась на всю строку:
+   «Свои обои» выходила втрое шире соседей. Сетка держит одинаковый размер. */
+.pick-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  width: 100%;
+}
+.pick-grid button {
+  min-height: 44px;
+  padding: 10px 6px;
+  border: 1px solid var(--seg-track-border);
+  border-radius: 14px;
+  background: var(--glass-bg-soft);
+  backdrop-filter: blur(14px) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(14px) saturate(var(--glass-saturate));
+  box-shadow: var(--seg-track-inset);
+  color: var(--seg-off);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: background .2s, color .2s, border-color .2s, transform .15s;
+}
+.pick-grid button.on {
+  background: var(--seg-on-bg);
+  color: var(--seg-on-text);
+  border-color: transparent;
+  box-shadow: var(--seg-on-shadow);
+}
+.pick-grid button:active { transform: scale(0.97); }
+
+/* своё фото — отдельная кнопка во всю ширину, но обычной высоты */
+.pick-own {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 8px;
+  border: 1px dashed var(--glass-edge);
+  border-radius: 14px;
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .2s, color .2s, border-color .2s;
+}
+.pick-own.on {
+  border-style: solid;
+  background: var(--seg-on-bg);
+  color: var(--seg-on-text);
+}
+.pick-own:active { transform: scale(0.99); }
+
+/* платная опция: замок вместо обещаний, объяснение — в окне по нажатию */
+.seg button.locked { position: relative; padding-right: 30px; }
+.seg button.locked .lock {
+  position: absolute;
+  right: 11px;
+  top: 50%;
+  width: 9px;
+  height: 8px;
+  margin-top: -3px;
+  border-radius: 2px;
+  background: currentColor;
+  opacity: 0.75;
+}
+.seg button.locked .lock::before {
+  content: "";
+  position: absolute;
+  left: 1.5px;
+  top: -5px;
+  width: 6px;
+  height: 6px;
+  border: 1.5px solid currentColor;
+  border-bottom: 0;
+  border-radius: 3px 3px 0 0;
+}
+
+.pro-modal { text-align: left; display: flex; flex-direction: column; gap: 12px; }
+.pro-modal h2 { font-size: 22px; letter-spacing: -0.02em; }
+.pro-modal .sub { color: var(--text-2); font-size: 15px; line-height: 1.5; }
+.pro-modal .btn { text-align: center; text-decoration: none; }
+/* точка, которая гаснет — та же метафора, что и на обоях */
+.pro-mark {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--text);
+  box-shadow: 0 0 0 6px rgba(255, 255, 255, 0.07);
 }

@@ -638,9 +638,36 @@ bindSeg('mode', v => {
 bindSeg('shape', v => { state.shape = v; });
 bindSeg('glass', v => { state.glass = v === '1'; }, true);
 bindSeg('footer', v => { state.footer = v === '1'; });
-bindSeg('brand', v => { state.brand = v === '1'; });
+// Логотип на обоях убирается только на полном доступе: клик по «Убрать» без
+// покупки ничего не переключает, а объясняет, что это даёт.
+let hasFullAccess = false;
+const brandSeg = $('brand');
+brandSeg.addEventListener('click', e => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  if (btn.dataset.v === '0' && !hasFullAccess) {
+    $('proModal').hidden = false;
+    return;
+  }
+  brandSeg.querySelectorAll('button').forEach(b => b.classList.toggle('on', b === btn));
+  state.brand = btn.dataset.v === '1';
+  draw();
+});
+
+$('proLater').addEventListener('click', () => { $('proModal').hidden = true; });
+$('proModal').addEventListener('click', e => {
+  if (e.target === $('proModal')) $('proModal').hidden = true;
+});
+
+(async () => {
+  try {
+    const access = await window.VitaID?.access();
+    hasFullAccess = !!access?.paid;
+    if (hasFullAccess) $('brandOff').classList.remove('locked');
+  } catch {}
+})();
 bindSeg('bg', v => {
-  if (v === 'custom') { $('bgFile').click(); return; }
+  $('bgOwn').classList.remove('on');
   state.bg = v;
   customBgImg = null;
   state.bgImageId = null;
@@ -689,6 +716,8 @@ async function uploadBgFile(file) {
   state.bgImageId = j.id;
 }
 
+$('bgOwn').addEventListener('click', () => $('bgFile').click());
+
 $('bgFile').addEventListener('change', e => {
   const file = e.target.files?.[0];
   e.target.value = '';
@@ -698,8 +727,8 @@ $('bgFile').addEventListener('change', e => {
   img.onload = async () => {
     customBgImg = img;
     state.bg = 'custom';
-    $('bg').querySelectorAll('button').forEach(b =>
-      b.classList.toggle('on', b.dataset.v === 'custom'));
+    $('bg').querySelectorAll('button').forEach(b => b.classList.remove('on'));
+    $('bgOwn').classList.add('on');
     refreshSwatches();
     animateReveal();
     URL.revokeObjectURL(url);
