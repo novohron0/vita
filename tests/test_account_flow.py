@@ -57,11 +57,12 @@ with tempfile.TemporaryDirectory(prefix="vita-account-") as data_dir:
     assert profile["name"] == profile["handle"]
     assert profile["bio"] == ""
     assert profile["avatar"] == ""
-    assert len(profile["tags"]) == 1
-    assert set(profile["tags"][0]) == {
-        "id", "name", "description", "icon", "rarity", "earnedAt",
-    }
-    assert profile["tags"][0]["rarity"] in {"common", "rare", "epic", "legendary"}
+    assert profile["tags"] == []  # достижения пока копятся только на сервере
+    assert profile["developer"] is False
+    with main.db() as conn:
+        assert conn.execute(
+            "SELECT COUNT(*) FROM profile_tags WHERE profile_code = ?", (profile["code"],)
+        ).fetchone()[0] == 1
 
     updated = main.update_profile(main.ProfileUpdateIn(
         ownerToken=token,
@@ -109,7 +110,7 @@ with tempfile.TemporaryDirectory(prefix="vita-account-") as data_dir:
     other = main.ensure_profile(main.ProfileIn(ownerToken=other_token, name="Другой человек"))
     assert other["code"] != profile["code"]
     assert other["handle"] != updated["handle"]
-    assert len(other["tags"]) == 1
+    assert other["tags"] == []
     try:
         main.update_profile(main.ProfileUpdateIn(
             ownerToken=other_token, handle="KAMIL_vita",
@@ -117,6 +118,83 @@ with tempfile.TemporaryDirectory(prefix="vita-account-") as data_dir:
         raise AssertionError("duplicate handle must fail")
     except HTTPException as error:
         assert error.status_code == 409
+
+    # Зарезервированный @vit нельзя присвоить себе через публичный PATCH.
+    try:
+        main.update_profile(main.ProfileUpdateIn(ownerToken=other_token, handle="@vit"))
+        raise AssertionError("the developer handle must stay admin-only")
+    except HTTPException as error:
+        assert error.status_code == 409
+
+    # Админ может выдать бессрочный доступ по тегу ещё до создания обоев.
+    try:
+        main.admin_grant(other["handle"], 0, "wrong-token")
+        raise AssertionError("tag grants must require the admin token")
+    except HTTPException as error:
+        assert error.status_code == 403
+    granted = main.admin_grant(f"@{other['handle']}", 0, main.ADMIN_TOKEN)
+    assert granted == {
+        "tag": other["handle"], "wallpapers": 0, "access_until": None,
+    }
+    with main.db() as conn:
+        assert conn.execute(
+            "SELECT access_until FROM profile_access WHERE profile_code = ?",
+            (other["code"],),
+        ).fetchone() == (None,)
+
+    future_wallpaper = main.create_link(main.LinkIn(
+        ownerToken=other_token,
+        idea="Хочу бессрочные обои по тегу аккаунта",
+        contact="@other",
+    ), request("/api/link"))
+    assert future_wallpaper["until"] is None
+    try:
+        main.create_review(main.ReviewIn(
+            code=future_wallpaper["code"],
+            text="Бессрочный доступ нельзя случайно заменить пробной неделей.",
+        ))
+        raise AssertionError("a review must not downgrade unlimited access")
+    except HTTPException as error:
+        assert error.status_code == 409
+
+    # @vit — единственный developer handle и всегда имеет бессрочный доступ,
+    # даже без отдельной строки profile_access.
+    developer_token = "developer-token-0123456789abcdef" * 2
+    developer = main.ensure_profile(main.ProfileIn(
+        ownerToken=developer_token, name="Разработчик Vita",
+    ))
+    existing_developer_wallpaper = main.create_link(main.LinkIn(
+        ownerToken=developer_token,
+        idea="Эти обои созданы до назначения developer-тега",
+        contact="@vit",
+    ), request("/api/link"))
+    assert existing_developer_wallpaper["until"] is not None
+    assigned = main.admin_set_handle(developer["code"], "@vit", main.ADMIN_TOKEN)
+    assert assigned["handle"] == "vit"
+    developer_profile = main.profile_library(main.OwnerIn(ownerToken=developer_token))
+    assert developer_profile["handle"] == "vit"
+    assert developer_profile["developer"] is True
+    with main.db() as conn:
+        assert conn.execute(
+            "SELECT 1 FROM profile_access WHERE profile_code = ?", (developer["code"],)
+        ).fetchone() is None
+        assert main._profile_access_override(conn, developer["code"]) == (True, None)
+        conn.execute(
+            "UPDATE links SET access_until = '2000-01-01' WHERE code = ?",
+            (existing_developer_wallpaper["code"],),
+        )
+        assert main._effective_access_until(
+            conn, "2000-01-01", developer["code"],
+        ) is None
+    setup = main.setup_page(existing_developer_wallpaper["code"], request("/s/test"))
+    assert "Доступ закончился" not in setup.body.decode()
+    assert "Открой вторую неделю" not in setup.body.decode()
+    developer_wallpaper = main.create_link(main.LinkIn(
+        ownerToken=developer_token,
+        idea="Разработчику Vita доступно всё без срока",
+        contact="@vit",
+    ), request("/api/link"))
+    assert developer_wallpaper["until"] is None
 
     goal = main.create_goal(
         main.GoalIn(title="Бегать каждый день", days=30, ownerToken=token),
@@ -164,9 +242,10 @@ with tempfile.TemporaryDirectory(prefix="vita-account-") as data_dir:
     assert library["avatar"] == with_avatar["avatar"]
 
     public = main.public_profile("KAMIL_VITA")
-    assert set(public) == {"handle", "name", "bio", "avatar", "tags"}
+    assert set(public) == {"handle", "name", "bio", "avatar", "tags", "developer"}
     assert public["handle"] == "kamil_vita"
     assert public["avatar"] == with_avatar["avatar"]
+    assert public["developer"] is False
     assert "code" not in public and "settings" not in public
     assert profile["code"] not in repr(public)
 

@@ -14,7 +14,7 @@
 <link rel="canonical" href="https://vitadots.ru/">
 <meta name="twitter:card" content="summary_large_image">
 <script src="/static/theme.js?v=2"></script>
-<link rel="stylesheet" href="/static/style.css?v=25">
+<link rel="stylesheet" href="/static/style.css?v=27">
 <style>
   .home-hero { animation: fadeUp .7s cubic-bezier(.22,1,.36,1) both; }
   .phone { animation: phoneReveal .85s cubic-bezier(.22,1,.36,1) both, phoneFloat 7s ease-in-out 1.1s infinite; }
@@ -123,6 +123,9 @@
 
     <button class="primary" id="dl">Скачать обои бесплатно</button>
     <button class="secondary" id="getBtn">Живые автообои — точка красится сама →</button>
+    <p class="err" id="getErr" hidden></p>
+    <p class="hint">Первые 7 дней бесплатно и без карты. Понравится —
+      <a href="/buy" style="color:var(--text-2)">{{PRICE}} ₽ один раз</a>, навсегда и без подписки.</p>
 
     <details class="more">
       <summary>Ещё — фон, форма точек, заголовок</summary>
@@ -185,36 +188,9 @@
   </section>
 </main>
 
-<div class="modal-back" id="modal" hidden>
-  <div class="modal">
-    <button class="modal-x" id="modalClose">✕</button>
-    <h2>Живые обои Vita</h2>
-    <p class="sub">Каждую ночь точка закрашивается сама. Первым 100 —
-      неделя бесплатно за идею.</p>
+<footer class="page-foot"><a href="/buy" style="color:inherit">{{PRICE}} ₽ один раз</a> · <a href="/offer" style="color:inherit">Оферта</a> · <a href="/privacy" style="color:inherit">Конфиденциальность</a></footer>
 
-    <label class="field">Твоя идея — что добавить в Vita?
-      <textarea id="idea" rows="3" maxlength="500"
-        placeholder="Например: режим «до дня рождения» или точки-сердечки"></textarea>
-    </label>
-    <label class="field">Телега или инста — туда придёт вторая неделя
-      <input id="contact" maxlength="64" placeholder="@nickname" autocomplete="off">
-    </label>
-    <button class="primary" id="ideaSend">Получить неделю бесплатно</button>
-    <p class="err" id="ideaErr" hidden></p>
-
-    <div class="or">тарифы — скоро</div>
-    <div class="tariffs">
-      <button class="tariff" disabled type="button" aria-disabled="true"><b>119 ₽</b><span>месяц · скоро</span></button>
-      <button class="tariff" disabled type="button" aria-disabled="true"><b>269 ₽</b><span>3 месяца · скоро</span></button>
-      <button class="tariff" disabled type="button" aria-disabled="true"><b>590 ₽</b><span>год · скоро</span></button>
-    </div>
-    <p class="hint">Оплаты на сайте пока нет — только неделя за идею. <a href="/privacy" style="color:#7fd4a3">Конфиденциальность</a></p>
-  </div>
-</div>
-
-<footer class="page-foot"><a href="/privacy" style="color:inherit">Конфиденциальность</a> · от 49 ₽/мес · без автосписаний</footer>
-
-<script src="/static/vita-id.js?v=1"></script>
-<script src="/static/app.js?v=19"></script>
+<script src="/static/vita-id.js?v=2"></script>
+<script src="/static/app.js?v=20"></script>
 </body>
 </html>

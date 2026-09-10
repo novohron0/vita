@@ -6,6 +6,10 @@ import os
 import re
 import secrets
 import sqlite3
+import threading
+import time
+from collections import defaultdict, deque
+from contextlib import contextmanager
 from datetime import date, timedelta
 from html import escape as esc
 from pathlib import Path
@@ -16,6 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from PIL import Image, ImageOps
 
+from . import billing
 from .render import SHAPES, render_goal, render_wallpaper
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -92,6 +97,11 @@ FEED_TITLE_BLOCK = re.compile(
 # см. README). Пока пусто — на странице установки кнопка в состоянии «готовится».
 SHORTCUT_ICLOUD_URL = os.environ.get("SHORTCUT_ICLOUD_URL", "")
 
+# реквизиты для оферты и чеков: держим в .env, репозиторий публичный
+SELLER_NAME = os.environ.get("SELLER_NAME", "")
+SELLER_INN = os.environ.get("SELLER_INN", "")
+SUPPORT_CONTACT = os.environ.get("SUPPORT_CONTACT", "")
+
 TRIAL_DAYS = 7
 REVIEW_DAYS = 7  # вторая неделя — автоматом за отзыв после использования
 # токен админки: /admin?token=... — боевой задаётся в .env, не публиковать
@@ -123,8 +133,10 @@ NETBLOCK_CORS = {
 }
 
 
-def db() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH)
+def _init_schema(conn: sqlite3.Connection) -> None:
+    """Схема и миграции. Гоняются один раз на процесс, а не на каждый запрос."""
+    conn.execute("PRAGMA journal_mode = WAL")  # чтение не ждёт запись — важно под нагрузкой
+    conn.execute("PRAGMA synchronous = NORMAL")
     conn.execute(
         "CREATE TABLE IF NOT EXISTS links("
         "code TEXT PRIMARY KEY, config TEXT NOT NULL, "
@@ -160,6 +172,25 @@ def db() -> sqlite3.Connection:
         "rarity TEXT NOT NULL, earned_at TEXT NOT NULL DEFAULT (datetime('now')), "
         "PRIMARY KEY(profile_code, tag_id))"
     )
+    # Одна строка означает выданный владельцем доступ. NULL = бессрочно;
+    # отсутствие строки = обычный пробный период. Право хранится у профиля,
+    # поэтому действует и на будущие обои, а не только на уже созданные ссылки.
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS profile_access("
+        "profile_code TEXT PRIMARY KEY, access_until TEXT, "
+        "updated TEXT NOT NULL DEFAULT (datetime('now')))"
+    )
+    # Заказы Робокассы. id = InvId счёта; оплаченный заказ навсегда открывает
+    # доступ профилю. Почта нужна для чека и чтобы вернуть человеку доступ,
+    # если он потеряет свой Vita ID.
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS orders("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, profile_code TEXT NOT NULL, "
+        "amount TEXT NOT NULL, email TEXT NOT NULL DEFAULT '', "
+        "status TEXT NOT NULL DEFAULT 'new', "
+        "created TEXT NOT NULL DEFAULT (datetime('now')), paid_at TEXT)"
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS orders_profile ON orders(profile_code)")
     # Backfill pre-account profiles without exposing their private Vita ID.
     # The first pass also repairs a partially applied migration before adding
     # the case-insensitive unique index. Later requests inspect only incomplete
@@ -265,7 +296,34 @@ def db() -> sqlite3.Connection:
         "app TEXT PRIMARY KEY, "
         "blocked INTEGER NOT NULL DEFAULT 0)"
     )
-    return conn
+    conn.commit()
+
+
+_schema_lock = threading.Lock()
+# помечаем по пути файла: тесты подменяют DB_PATH, и новой базе схема тоже нужна
+_schema_ready: set[str] = set()
+
+
+@contextmanager
+def db():
+    """Соединение на запрос: транзакция закрывается, файл — тоже.
+
+    busy_timeout вместо мгновенной ошибки «database is locked»: под сотней
+    человек параллельные записи неизбежны, лучше подождать 20 секунд, чем упасть.
+    """
+    path = str(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=20)
+    try:
+        conn.execute("PRAGMA busy_timeout = 20000")
+        if path not in _schema_ready:
+            with _schema_lock:
+                if path not in _schema_ready:
+                    _init_schema(conn)
+                    _schema_ready.add(path)
+        with conn:  # коммит на выходе, откат при исключении — как было раньше
+            yield conn
+    finally:
+        conn.close()
 
 
 class LinkIn(BaseModel):
@@ -284,6 +342,11 @@ class LinkIn(BaseModel):
     idea: str = ""
     contact: str = ""
     ownerToken: str = ""
+
+
+class BuyIn(BaseModel):
+    ownerToken: str = ""
+    email: str = ""
 
 
 class ReviewIn(BaseModel):
@@ -673,10 +736,64 @@ def _profile_payload(conn: sqlite3.Connection, profile_code: str) -> dict:
 app = FastAPI(title="vita")
 
 
+# Сколько раз с одного адреса можно дёргать дорогие ручки: (запросов, секунд).
+# Считаем в памяти процесса — против случайного шквала и простых скриптов
+# этого хватает, а серьёзный поток всё равно режется на уровне Caddy.
+RATE_RULES = {
+    "/api/link": (30, 3600),
+    "/api/buy": (10, 3600),
+    "/api/goal": (30, 3600),
+    "/api/upload-bg": (25, 3600),
+    "/api/upload-post-image": (25, 3600),
+    "/api/profile/avatar": (25, 3600),
+    "/api/feed-post": (15, 3600),
+    "/api/review": (10, 3600),
+    "/api/focus-wait": (10, 3600),
+}
+_rate_hits: dict = defaultdict(deque)
+_rate_lock = threading.Lock()
+
+
+def _rate_ok(key: str, limit: int, window: int) -> bool:
+    now = time.monotonic()
+    with _rate_lock:
+        hits = _rate_hits[key]
+        while hits and now - hits[0] > window:
+            hits.popleft()
+        if len(hits) >= limit:
+            return False
+        hits.append(now)
+        if len(_rate_hits) > 20000:  # страховка от роста словаря
+            for stale in [k for k, v in _rate_hits.items() if not v][:5000]:
+                del _rate_hits[stale]
+        return True
+
+
+@app.middleware("http")
+async def rate_limit(request: Request, call_next):
+    rule = RATE_RULES.get(request.url.path)
+    if rule and request.method == "POST":
+        ip = request.client.host if request.client else "unknown"
+        if not _rate_ok(f"{request.url.path}|{ip}", *rule):
+            return JSONResponse(
+                {"detail": "Слишком много запросов подряд — подожди немного и повтори"},
+                status_code=429,
+            )
+    return await call_next(request)
+
+
+@app.get("/healthz")
+def healthz():
+    """Живость для мониторинга: база отвечает — значит сервис на ходу."""
+    with db() as conn:
+        conn.execute("SELECT 1").fetchone()
+    return {"ok": True}
+
+
 @app.get("/")
 def index():
     # HTML не кэшируем: статика версионируется (?v=N), а страница всегда свежая
-    return FileResponse(ROOT / "static" / "index.html", headers={"Cache-Control": "no-cache"})
+    return _page("index.html")
 
 
 @app.get("/robots.txt")
@@ -769,29 +886,29 @@ def avatar_image(image_id: str):
 
 @app.post("/api/link")
 def create_link(cfg: LinkIn, request: Request):
-    idea, contact = cfg.idea.strip(), cfg.contact.strip()
-    if len(idea) < 10:
-        raise HTTPException(422, "Расскажи идею чуть подробнее — хотя бы пару слов")
-    if len(contact) < 2:
-        raise HTTPException(422, "Оставь телегу или инсту — туда придёт вторая неделя")
+    # 7 дней пробы получают все и сразу: анкета на входе резала конверсию
+    # с роликов. Идея и контакт остались добровольными — пишем, если оставили.
+    idea, contact = cfg.idea.strip()[:500], cfg.contact.strip()[:64]
     if cfg.bg == "custom":
         if not cfg.bgImage or not re.fullmatch(r"[a-z0-9]{6}", cfg.bgImage):
             raise HTTPException(422, "Загрузи своё фото для фона")
         if not (DATA / "bg" / f"{cfg.bgImage}.jpg").exists():
             raise HTTPException(422, "Фото не найдено — выбери снова")
     code = "".join(secrets.choice(CODE_ALPHABET) for _ in range(6))
-    until = (date.today() + timedelta(days=TRIAL_DAYS)).isoformat()
+    trial_until = (date.today() + timedelta(days=TRIAL_DAYS)).isoformat()
     config = json.dumps(cfg.model_dump(exclude={"idea", "contact", "ownerToken"}), ensure_ascii=False)
     with db() as conn:
         owner_code = _profile_for_token(conn, cfg.ownerToken, create=bool(cfg.ownerToken.strip()))
+        until = _effective_access_until(conn, trial_until, owner_code)
         conn.execute(
             "INSERT INTO links(code, config, access_until, owner_code) VALUES(?, ?, ?, ?)",
             (code, config, until, owner_code),
         )
-        conn.execute(
-            "INSERT INTO ideas(code, idea, contact) VALUES(?, ?, ?)",
-            (code, idea, contact),
-        )
+        if idea or contact:
+            conn.execute(
+                "INSERT INTO ideas(code, idea, contact) VALUES(?, ?, ?)",
+                (code, idea, contact),
+            )
     base = str(request.base_url).rstrip("/")
     return {"code": code, "url": f"{base}/w/{code}.png", "setup": f"{base}/s/{code}", "until": until}
 
@@ -803,17 +920,20 @@ def create_review(rv: ReviewIn):
         raise HTTPException(422, "Напиши чуть подробнее — хотя бы строчку живого текста")
     with db() as conn:
         row = conn.execute(
-            "SELECT access_until, review_at FROM links WHERE code = ?", (rv.code,)
+            "SELECT access_until, review_at, owner_code FROM links WHERE code = ?", (rv.code,)
         ).fetchone()
         if row is None:
             raise HTTPException(404, "Нет такой ссылки")
         if row[1]:  # вторую неделю уже дарили
             raise HTTPException(409, "Вторая неделя уже активирована — спасибо, что остаёшься 🙏")
+        effective_until = _effective_access_until(conn, row[0], row[2])
+        if effective_until is None:
+            raise HTTPException(409, "Бессрочный доступ уже активен")
         conn.execute("INSERT INTO reviews(code, text) VALUES(?, ?)", (rv.code, text))
         conn.execute(
             "UPDATE links SET review_at = datetime('now') WHERE code = ?", (rv.code,)
         )
-        new_until = _extend(conn, rv.code, REVIEW_DAYS, row[0])
+        new_until = _extend(conn, rv.code, REVIEW_DAYS, effective_until)
     until_d = date.fromisoformat(new_until)
     return {"code": rv.code, "until": new_until, "until_h": until_d.strftime("%d.%m")}
 
@@ -829,6 +949,43 @@ def _access_state(access_until: str | None) -> tuple[bool, date | None]:
     return date.today() > until, until
 
 
+def _profile_access_override(
+    conn: sqlite3.Connection, profile_code: str | None
+) -> tuple[bool, str | None]:
+    """(есть профильное право, срок). @vit всегда имеет бессрочное право."""
+    if not profile_code:
+        return False, None
+    profile = conn.execute(
+        "SELECT handle FROM profiles WHERE code = ?", (profile_code,)
+    ).fetchone()
+    if profile is None:
+        return False, None
+    if (profile[0] or "").strip().lower() == DEVELOPER_HANDLE:
+        return True, None
+    grant = conn.execute(
+        "SELECT access_until FROM profile_access WHERE profile_code = ?", (profile_code,)
+    ).fetchone()
+    return (False, None) if grant is None else (True, grant[0])
+
+
+def _effective_access_until(
+    conn: sqlite3.Connection,
+    link_access_until: str | None,
+    profile_code: str | None,
+) -> str | None:
+    """Совмещает срок ссылки с правом профиля; NULL означает бессрочно."""
+    granted, profile_until = _profile_access_override(conn, profile_code)
+    if not granted:
+        return link_access_until
+    if profile_until is None or link_access_until is None:
+        return None
+    _, link_date = _access_state(link_access_until)
+    _, profile_date = _access_state(profile_until)
+    if link_date is None or profile_date is None:
+        return None
+    return max(link_date, profile_date).isoformat()
+
+
 def _extend(conn: sqlite3.Connection, code: str, days: int, current: str | None) -> str:
     """Продлить доступ от максимума (сегодня, текущий срок). Возвращает новую дату ISO."""
     _, until = _access_state(current)
@@ -836,6 +993,169 @@ def _extend(conn: sqlite3.Connection, code: str, days: int, current: str | None)
     new_until = (base + timedelta(days=days)).isoformat()
     conn.execute("UPDATE links SET access_until = ? WHERE code = ?", (new_until, code))
     return new_until
+
+
+
+EMAIL_RE = re.compile(r"[^@\s]+@[^@\s.]+\.[a-zA-Z]{2,}")
+
+
+def _grant_forever(conn: sqlite3.Connection, profile_code: str) -> None:
+    """Вечная покупка: право у профиля + все его текущие обои и цели оживают."""
+    conn.execute(
+        "INSERT INTO profile_access(profile_code, access_until) VALUES(?, NULL) "
+        "ON CONFLICT(profile_code) DO UPDATE SET "
+        "access_until = NULL, updated = datetime('now')",
+        (profile_code,),
+    )
+    conn.execute("UPDATE links SET access_until = NULL WHERE owner_code = ?", (profile_code,))
+
+
+def _profile_access_state(conn: sqlite3.Connection, profile_code: str | None) -> dict:
+    """Что показывать человеку про его доступ: куплен, идёт проба или всё кончилось."""
+    state = {
+        "paid": False,
+        "code": "",
+        "until": None,
+        "expired": False,
+        "price": billing.PRICE,
+        "payable": billing.enabled(),
+    }
+    if not profile_code:
+        return state
+    state["code"] = profile_code
+    granted, granted_until = _profile_access_override(conn, profile_code)
+    if granted and granted_until is None:
+        state["paid"] = True
+        return state
+    best: date | None = None
+    rows = [granted_until] if granted else []
+    rows += [
+        value for (value,) in conn.execute(
+            "SELECT access_until FROM links WHERE owner_code = ?", (profile_code,)
+        )
+    ]
+    for value in rows:
+        if value is None:
+            state["paid"] = True
+            return state
+        _, until = _access_state(value)
+        if until and (best is None or until > best):
+            best = until
+    if best is None:
+        return state
+    state["until"] = best.isoformat()
+    state["expired"] = date.today() > best
+    return state
+
+
+@app.post("/api/access")
+def access_state(owner: OwnerIn):
+    """Статус доступа по приватному Vita ID — для кабинета и кнопки покупки."""
+    with db() as conn:
+        profile_code = _profile_for_token(conn, owner.ownerToken)
+        return _profile_access_state(conn, profile_code)
+
+
+@app.post("/api/buy")
+def buy(order: BuyIn):
+    """Создаёт счёт Робокассы на вечный доступ и отдаёт фронту поля формы."""
+    if not billing.enabled():
+        raise HTTPException(503, "Оплата ещё не подключена — напиши нам, откроем доступ вручную")
+    email = order.email.strip().lower()[:120]
+    if not EMAIL_RE.fullmatch(email):
+        raise HTTPException(422, "Проверь почту — на неё придёт чек и запасной ключ доступа")
+    with db() as conn:
+        profile_code = _profile_for_token(conn, order.ownerToken, create=True)
+        state = _profile_access_state(conn, profile_code)
+        if state["paid"]:
+            raise HTTPException(409, "Доступ уже открыт навсегда")
+        cur = conn.execute(
+            "INSERT INTO orders(profile_code, amount, email) VALUES(?, ?, ?)",
+            (profile_code, billing.amount(), email),
+        )
+        inv_id = int(cur.lastrowid)
+    form = billing.payment_form(inv_id, email)
+    return {"invId": inv_id, "action": form["action"], "fields": form["fields"]}
+
+
+def _pay_result(params: dict) -> str:
+    checked = billing.check_result(params)
+    if checked is None:
+        raise HTTPException(403, "bad signature")
+    inv_id, out_sum = checked
+    with db() as conn:
+        row = conn.execute(
+            "SELECT profile_code, amount, status FROM orders WHERE id = ?", (inv_id,)
+        ).fetchone()
+        if row is None:
+            raise HTTPException(404, "no such order")
+        profile_code, amount_due, status = row
+        # деньги пришли меньше цены — доступ не открываем, разбираемся руками
+        if float(out_sum) + 0.01 < float(amount_due):
+            raise HTTPException(400, "amount mismatch")
+        if status != "paid":  # повторное уведомление ничего не ломает
+            conn.execute(
+                "UPDATE orders SET status = 'paid', paid_at = datetime('now') WHERE id = ?",
+                (inv_id,),
+            )
+            _grant_forever(conn, profile_code)
+    return f"OK{inv_id}"
+
+
+@app.get("/pay/result")
+def pay_result_get(request: Request):
+    return Response(_pay_result(dict(request.query_params)), media_type="text/plain")
+
+
+@app.post("/pay/result")
+async def pay_result_post(request: Request):
+    form = dict(await request.form())
+    if not form:
+        form = dict(request.query_params)
+    return Response(_pay_result(form), media_type="text/plain")
+
+
+@app.get("/pay/success")
+def pay_success(request: Request):
+    """Возврат покупателя. Доступ выдаёт /pay/result, тут только показываем итог."""
+    inv_id = billing.check_success(dict(request.query_params))
+    paid = False
+    if inv_id is not None:
+        with db() as conn:
+            row = conn.execute("SELECT status FROM orders WHERE id = ?", (inv_id,)).fetchone()
+            paid = bool(row and row[0] == "paid")
+    return _page("paid.html", {"{{STATE}}": "paid" if paid else "pending"})
+
+
+@app.get("/pay/fail")
+def pay_fail():
+    return _page("paid.html", {"{{STATE}}": "fail"})
+
+
+def _page(name: str, extra: dict | None = None) -> HTMLResponse:
+    """HTML с подстановкой цены и реквизитов — они живут в .env, а не в статике."""
+    html = (ROOT / "static" / name).read_text(encoding="utf-8")
+    values = {
+        "{{PRICE}}": billing.PRICE,
+        "{{SELLER}}": SELLER_NAME or "Исполнитель (реквизиты уточняются)",
+        "{{INN}}": SELLER_INN or "—",
+        "{{SUPPORT}}": SUPPORT_CONTACT or "на почту поддержки",
+        "{{UPDATED}}": "10.09.2026",
+    }
+    values.update(extra or {})
+    for key, value in values.items():
+        html = html.replace(key, value)
+    return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/buy")
+def buy_page():
+    return _page("buy.html")
+
+
+@app.get("/offer")
+def offer_page():
+    return _page("offer.html")
 
 
 REVIEW_BLOCK = """<div class="review" id="reviewBlock">
@@ -858,26 +1178,37 @@ REVIEW_DONE = """<div class="review">
 def setup_page(code: str, request: Request):
     with db() as conn:
         row = conn.execute(
-            "SELECT access_until, fetches, review_at FROM links WHERE code = ?", (code,)
+            "SELECT access_until, fetches, review_at, owner_code "
+            "FROM links WHERE code = ?", (code,)
         ).fetchone()
+        effective_until = (
+            _effective_access_until(conn, row[0], row[3]) if row is not None else None
+        )
     if row is None:
         raise HTTPException(404, "Нет такой ссылки")
-    access_until, fetches, review_at = row
+    _, fetches, review_at, _ = row
     url = str(request.base_url).rstrip("/") + f"/w/{code}.png"
     if SHORTCUT_ICLOUD_URL:
         btn = f'<a class="btn primary" href="{SHORTCUT_ICLOUD_URL}">Добавить ярлык</a>'
     else:
         btn = '<span class="btn primary disabled">Ярлык готовится — скоро здесь</span>'
-    expired, until = _access_state(access_until)
+    expired, until = _access_state(effective_until)
+    buy = ""
     if until is None:
-        access = ""
+        access = "Доступ навсегда — точки не остановятся."
     elif expired:
-        access = f"Доступ закончился {until.strftime('%d.%m')} — продли, и точки оживут."
+        access = f"Точки замерли {until.strftime('%d.%m')} — пробные дни кончились."
+        buy = (f'<a class="btn primary" href="/buy">Оживить обои — {billing.PRICE} ₽ навсегда</a>'
+               '<p class="hint">Один платёж, без подписки. Обои начнут обновляться этой же ночью.</p>')
     else:
-        access = f"Твоя неделя активна до {until.strftime('%d.%m')}."
+        access = f"Бесплатно до {until.strftime('%d.%m')}."
+        buy = (f'<p class="hint">Дальше — {billing.PRICE} ₽ один раз, и обои остаются навсегда. '
+               '<a href="/buy" style="color:var(--text-2)">Открыть сейчас</a></p>')
     # блок отзыва: только тем, кто уже пользовался (обои реально тянулись) или у кого доступ истёк,
     # и только если вторую неделю ещё не дарили — иначе пусто/благодарность
-    if review_at:
+    if until is None:
+        review = ""
+    elif review_at:
         review = REVIEW_DONE
     elif fetches and fetches > 0 or expired:
         review = REVIEW_BLOCK
@@ -888,18 +1219,60 @@ def setup_page(code: str, request: Request):
         html.replace("{{URL}}", url)
         .replace("{{SHORTCUT_BTN}}", btn)
         .replace("{{ACCESS}}", access)
+        .replace("{{BUY}}", buy)
         .replace("{{REVIEW}}", review)
         .replace("{{CODE}}", code),
         headers={"Cache-Control": "no-cache"},
     )
 
 
+WP_CACHE = DATA / "wpcache"
+
+
+def _wallpaper_png(config: str, expired: bool, until: date | None) -> bytes:
+    """PNG обоев с дневным кэшем: за сутки одна картинка рисуется один раз.
+
+    Ключ включает дату — в полночь кэш протухает сам, лишней инвалидации не надо.
+    """
+    today = date.today().isoformat()
+    digest = hashlib.sha256(
+        f"{config}|{expired}|{until.isoformat() if until else ''}".encode("utf-8")
+    ).hexdigest()[:20]
+    path = WP_CACHE / f"{today}-{digest}.png"
+    try:
+        return path.read_bytes()
+    except OSError:
+        pass
+    img = render_wallpaper(
+        json.loads(config),
+        today=until if expired else None,  # прогресс заморожен на дате окончания
+        expired=expired,
+    )
+    buf = io.BytesIO()
+    img.save(buf, "PNG")
+    data = buf.getvalue()
+    try:
+        WP_CACHE.mkdir(parents=True, exist_ok=True)
+        for stale in WP_CACHE.glob("*.png"):  # вчерашние картинки больше не нужны
+            if not stale.name.startswith(today):
+                stale.unlink(missing_ok=True)
+        tmp = WP_CACHE / f".{digest}.tmp"
+        tmp.write_bytes(data)
+        tmp.replace(path)
+    except OSError:
+        pass  # нет места или прав — отдаём картинку без кэша
+    return data
+
+
 @app.get("/w/{code}.png")
 def wallpaper(code: str):
     with db() as conn:
         row = conn.execute(
-            "SELECT config, access_until FROM links WHERE code = ?", (code,)
+            "SELECT config, access_until, owner_code FROM links WHERE code = ?", (code,)
         ).fetchone()
+        effective_until = (
+            _effective_access_until(conn, row[1], row[2]) if row is not None else None
+        )
         if row is not None:
             conn.execute(
                 "UPDATE links SET fetches = fetches + 1, last_fetch = datetime('now') WHERE code = ?",
@@ -907,16 +1280,9 @@ def wallpaper(code: str):
             )
     if row is None:
         raise HTTPException(404, "Нет такой ссылки")
-    expired, until = _access_state(row[1])
-    img = render_wallpaper(
-        json.loads(row[0]),
-        today=until if expired else None,  # прогресс заморожен на дате окончания
-        expired=expired,
-    )
-    buf = io.BytesIO()
-    img.save(buf, "PNG")
+    expired, until = _access_state(effective_until)
     return Response(
-        buf.getvalue(),
+        _wallpaper_png(row[0], expired, until),
         media_type="image/png",
         headers={"Cache-Control": "no-store"},  # Ярлыки должны тянуть свежую картинку каждый день
     )
@@ -1503,10 +1869,16 @@ def admin(token: str = ""):
     if token != ADMIN_TOKEN:
         raise HTTPException(403, "Нет доступа")
     with db() as conn:
-        rows = conn.execute(
-            "SELECT i.created, i.idea, i.contact, l.code, l.access_until, l.fetches "
+        raw_rows = conn.execute(
+            "SELECT i.created, i.idea, i.contact, l.code, l.access_until, l.fetches, "
+            "l.owner_code "
             "FROM ideas i JOIN links l ON l.code = i.code ORDER BY i.id DESC"
         ).fetchall()
+        rows = [
+            (created, idea, contact, code,
+             _effective_access_until(conn, access_until, owner_code), fetches)
+            for created, idea, contact, code, access_until, fetches, owner_code in raw_rows
+        ]
         rv_rows = conn.execute(
             "SELECT code, text FROM reviews ORDER BY id"
         ).fetchall()
@@ -1565,7 +1937,7 @@ def admin(token: str = ""):
             f'<button class="copy" data-copy="{esc(copy_text)}" onclick="copyCard(this)">⧉ Копировать</button>'
             f'<button onclick="ext(\'{code}\', 7)">+7 дней</button>'
             f'<button onclick="ext(\'{code}\', 30)">+месяц</button>'
-            f'<button onclick="ext(\'{code}\', 3650)">навсегда</button></div></div>'
+            f'<button onclick="ext(\'{code}\', 0)">навсегда</button></div></div>'
         )
     # вейтлист беты Vita Focus — карточкой над идеями (виден только когда кто-то записался)
     focus_block = ""
@@ -1614,16 +1986,20 @@ def admin_extend(code: str, days: int, token: str = ""):
         row = conn.execute("SELECT access_until FROM links WHERE code = ?", (code,)).fetchone()
         if row is None:
             raise HTTPException(404, "Нет такой ссылки")
-        new_until = _extend(conn, code, days, row[0])
+        if days <= 0 or row[0] is None:
+            conn.execute("UPDATE links SET access_until = NULL WHERE code = ?", (code,))
+            new_until = None
+        else:
+            new_until = _extend(conn, code, days, row[0])
     return {"code": code, "access_until": new_until}
 
 
 @app.post("/admin/grant")
 def admin_grant(tag: str, days: int = 0, token: str = ""):
-    """Подписка на обои по тегу: продлевает все обои профиля; days<=0 — навсегда."""
+    """Доступ по тегу для текущих и будущих обоев; days<=0 — навсегда."""
     if token != ADMIN_TOKEN:
         raise HTTPException(403, "Нет доступа")
-    handle = tag.strip().lower().removeprefix("@")
+    handle = _normalize_handle(tag)
     with db() as conn:
         row = conn.execute(
             "SELECT code FROM profiles WHERE handle = ? COLLATE NOCASE", (handle,)
@@ -1633,19 +2009,39 @@ def admin_grant(tag: str, days: int = 0, token: str = ""):
         codes = [c for (c,) in conn.execute(
             "SELECT code FROM links WHERE owner_code = ?", (row[0],)
         )]
-        if not codes:
-            raise HTTPException(404, "У профиля нет обоев — пусть сначала создаст их")
         if days <= 0:
+            conn.execute(
+                "INSERT INTO profile_access(profile_code, access_until) VALUES(?, NULL) "
+                "ON CONFLICT(profile_code) DO UPDATE SET "
+                "access_until = NULL, updated = datetime('now')",
+                (row[0],),
+            )
             conn.execute(
                 "UPDATE links SET access_until = NULL WHERE owner_code = ?", (row[0],)
             )
             until = None
         else:
+            current_grant = conn.execute(
+                "SELECT access_until FROM profile_access WHERE profile_code = ?", (row[0],)
+            ).fetchone()
+            if current_grant is not None and current_grant[0] is None:
+                until = None
+            else:
+                _, current_until = _access_state(current_grant[0] if current_grant else None)
+                base = max(date.today(), current_until) if current_until else date.today()
+                until = (base + timedelta(days=days)).isoformat()
+                conn.execute(
+                    "INSERT INTO profile_access(profile_code, access_until) VALUES(?, ?) "
+                    "ON CONFLICT(profile_code) DO UPDATE SET "
+                    "access_until = excluded.access_until, updated = datetime('now')",
+                    (row[0], until),
+                )
             for code in codes:
                 current = conn.execute(
                     "SELECT access_until FROM links WHERE code = ?", (code,)
                 ).fetchone()
-                until = _extend(conn, code, days, current[0])
+                if current[0] is not None and until is not None:
+                    _extend(conn, code, days, current[0])
     return {"tag": handle, "wallpapers": len(codes), "access_until": until}
 
 

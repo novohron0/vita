@@ -8,7 +8,7 @@
 <title>Моя Vita</title>
 <script src="/static/theme.js?v=2"></script>
 <script src="/static/vita-id.js?v=2"></script>
-<link rel="stylesheet" href="/static/style.css?v=25">
+<link rel="stylesheet" href="/static/style.css?v=27">
 </head>
 <body>
 <header>
@@ -68,6 +68,12 @@
       <div class="profile-connect-row"><input id="existingProfileCode" maxlength="10" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="abcdefgh23"><button id="connectExisting" type="button" class="secondary">Войти</button></div>
       <p class="hint" id="connectStatus" role="status" aria-live="polite"></p>
     </details>
+  </section>
+
+  <section class="library-card access-card" id="accessCard" hidden>
+    <div class="library-head"><h2>Доступ</h2></div>
+    <p class="access-line" id="accessLine"></p>
+    <a class="btn primary" id="accessBuy" href="/buy" hidden></a>
   </section>
 
   <section class="library-card">
@@ -352,9 +358,29 @@ $('publish').addEventListener('click', async () => {
   } catch (error) { $('publishError').textContent = error.message; button.disabled = false; }
 });
 
+async function renderAccess() {
+  let state;
+  try { state = await VitaID.access(); } catch { return; }
+  const line = $('accessLine'), buy = $('accessBuy');
+  if (state.paid) {
+    line.innerHTML = '<b>Открыт навсегда.</b> Спасибо — Vita твоя, платить больше не нужно.';
+  } else if (state.until && !state.expired) {
+    const until = new Date(state.until).toLocaleDateString('ru-RU', { day: '2-digit', month: 'long' });
+    line.innerHTML = `Пробные дни идут до <b>${esc(until)}</b>. Дальше точки замрут.`;
+    if (state.payable) { buy.textContent = `Открыть навсегда — ${esc(state.price)} ₽`; buy.hidden = false; }
+  } else if (state.expired) {
+    line.innerHTML = '<b>Точки замерли.</b> Пробные дни закончились — обои перестали обновляться.';
+    if (state.payable) { buy.textContent = `Оживить обои — ${esc(state.price)} ₽ навсегда`; buy.hidden = false; }
+  } else {
+    line.innerHTML = 'Сделай первые обои — 7 дней бесплатно, без карты.';
+  }
+  $('accessCard').hidden = false;
+}
+
 (async () => {
   try { render(await VitaID.ensure()); }
-  catch (error) { document.querySelector('main').innerHTML = `<p class="err">${esc(error.message)}</p>`; }
+  catch (error) { document.querySelector('main').innerHTML = `<p class="err">${esc(error.message)}</p>`; return; }
+  renderAccess();
 })();
 </script>
 </body>

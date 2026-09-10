@@ -16,7 +16,7 @@
 
   --text: #f2f2f2;
   --text-2: #d9d9de;
-  --text-muted: #6e6e73;
+  --text-muted: #7d7d84;
   --text-faint: #48484d;
   --text-nav: #8e8e8e;
   --text-nav-on: #f2f2f2;
@@ -1246,3 +1246,134 @@ main   { animation: fadeUp .7s cubic-bezier(.22,1,.36,1) both; }
     --glass-bg-lift: rgba(36, 36, 42, 0.98);
   }
 }
+
+/* --- оплата: одна вечная покупка (/buy, /pay/success) --- */
+.buy { gap: 26px; }
+.buy h1 { font-size: 30px; line-height: 1.15; letter-spacing: -0.02em; text-wrap: balance; }
+.buy .sub { color: var(--text-2); font-size: 15px; line-height: 1.5; }
+
+.buy-price {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 22px 20px;
+  border-radius: 22px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow), var(--glass-inset);
+}
+.buy-price .buy-sum {
+  font-size: 44px;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.buy-price > span { color: var(--text-nav); font-size: 14px; line-height: 1.4; }
+
+.buy-list { list-style: none; display: flex; flex-direction: column; gap: 14px; }
+.buy-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  color: var(--text-2);
+  font-size: 15px;
+  line-height: 1.45;
+}
+.buy-list b { color: var(--text); font-weight: 600; }
+.buy-dot {
+  flex: none;
+  width: 11px;
+  height: 11px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: var(--text);
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.06);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .buy-list li { animation: dotIn .5s cubic-bezier(.22,1,.36,1) both; }
+  .buy-list li:nth-child(2) { animation-delay: .07s; }
+  .buy-list li:nth-child(3) { animation-delay: .14s; }
+  .buy-list li:nth-child(4) { animation-delay: .21s; }
+  .buy-list li:nth-child(5) { animation-delay: .28s; }
+  @keyframes dotIn { from { opacity: 0; transform: translateY(6px); } }
+}
+
+.buy-form { display: flex; flex-direction: column; gap: 12px; }
+.buy-form .primary:disabled { opacity: 0.55; cursor: default; }
+.buy-note { color: var(--text-nav); font-size: 12.5px; line-height: 1.55; }
+.buy-note a { color: var(--text-2); text-underline-offset: 3px; }
+
+.buy-state {
+  padding: 18px 20px;
+  border-radius: 20px;
+  background: var(--glass-bg-soft);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-inset);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.buy-state h2 { font-size: 19px; letter-spacing: -0.01em; }
+.buy-state.on { border-color: rgba(52, 199, 89, 0.4); }
+
+/* Vita ID после оплаты — по нему человек возвращает доступ на другом телефоне */
+.buy-key {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: var(--glass-bg-lift);
+  border: 1px solid var(--glass-border);
+}
+.buy-key b { font-size: 20px; letter-spacing: 0.14em; font-variant-numeric: tabular-nums; }
+.buy-key button {
+  border: 0;
+  border-radius: 12px;
+  background: var(--glass-bg-soft);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 9px 14px;
+  cursor: pointer;
+}
+.buy-key button:hover { background: var(--glass-bg-lift); }
+
+/* карточка доступа в кабинете */
+.access-card { display: flex; flex-direction: column; gap: 12px; }
+.access-line { color: var(--text-2); font-size: 15px; line-height: 1.45; }
+.access-line b { color: var(--text); }
+
+/* оферта и правовые тексты */
+.legal { gap: 18px; }
+.legal h1 { font-size: 24px; letter-spacing: -0.02em; }
+.legal h2 { font-size: 16px; margin-top: 10px; }
+.legal p, .legal li { color: var(--text-2); font-size: 14px; line-height: 1.6; }
+.legal ul { padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+
+/* --- то, что рисует браузер: приводим к палитре Vita --- */
+::selection { background: rgba(255, 255, 255, 0.22); color: var(--text); }
+input, textarea { caret-color: var(--text); }
+:focus-visible {
+  outline: 2px solid var(--glass-edge);
+  outline-offset: 3px;
+  border-radius: 12px;
+}
+* { scrollbar-color: rgba(255, 255, 255, 0.22) transparent; scrollbar-width: thin; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.3); background-clip: content-box; }
+::-webkit-scrollbar-track { background: transparent; }
+[data-theme="light"] ::selection { background: rgba(0, 0, 0, 0.14); }
+[data-theme="light"] * { scrollbar-color: rgba(0, 0, 0, 0.28) transparent; }
+[data-theme="light"] ::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.22); background-clip: content-box; }

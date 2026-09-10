@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/png" href="/static/img/favicon.png">
+<link rel="apple-touch-icon" href="/static/img/apple-touch.png">
+<title>Vita навсегда — {{PRICE}} ₽ один раз</title>
+<meta name="description" content="Vita без подписки: один платёж {{PRICE}} ₽ — живые обои-календарь, цели и все обновления остаются навсегда.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://vitadots.ru/buy">
+<script src="/static/theme.js?v=2"></script>
+<link rel="stylesheet" href="/static/style.css?v=27">
+</head>
+<body>
+<header>
+  <a class="logo" href="/">⠿ vita</a>
+  <nav class="nav"><a href="/me">Кабинет</a><a href="/feed">Лента</a></nav>
+</header>
+
+<main class="buy">
+  <div>
+    <h1>Один платёж — и Vita твоя</h1>
+    <p class="sub">Без подписки и автосписаний. Заплатил один раз — точки закрашиваются
+      каждую ночь дальше, сколько бы лет ни прошло.</p>
+  </div>
+
+  <div class="buy-price">
+    <b class="buy-sum">{{PRICE}} ₽</b>
+    <span>один раз<br>и навсегда</span>
+  </div>
+
+  <ul class="buy-list">
+    <li><i class="buy-dot"></i><span><b>Живые обои</b> — месяц, год, вся жизнь или своя цель. Ночью сервер закрашивает новую точку сам.</span></li>
+    <li><i class="buy-dot"></i><span><b>Сколько угодно обоев</b> — меняй режим, цвет, форму точек и фон хоть каждый день.</span></li>
+    <li><i class="buy-dot"></i><span><b>Цели со стриками</b> — сетка дней, отметка каждый вечер и цель прямо на обоях.</span></li>
+    <li><i class="buy-dot"></i><span><b>Все обновления</b> — что появится в Vita дальше, доплачивать не придётся.</span></li>
+  </ul>
+
+  <section class="buy-state" id="stateBox" hidden>
+    <h2 id="stateTitle"></h2>
+    <p class="hint" id="stateText"></p>
+    <a class="btn secondary" id="stateLink" href="/me" hidden>В кабинет</a>
+  </section>
+
+  <form class="buy-form" id="buyForm" hidden>
+    <label class="field">Почта для чека
+      <input id="email" type="email" inputmode="email" autocomplete="email"
+        placeholder="ты@почта.рф" required>
+    </label>
+    <button class="primary" id="buyBtn" type="submit">Оплатить {{PRICE}} ₽</button>
+    <p class="err" id="buyErr" hidden></p>
+    <p class="buy-note">Оплата картой или через СБП, платежи проводит Робокасса —
+      данные карты к нам не попадают. Чек придёт на указанную почту.
+      Нажимая кнопку, ты соглашаешься с <a href="/offer">офертой</a> и
+      <a href="/privacy">политикой конфиденциальности</a>.</p>
+  </form>
+</main>
+
+<footer class="page-foot">vita · твоя жизнь в точках</footer>
+
+<script src="/static/vita-id.js?v=2"></script>
+<script>
+const $ = id => document.getElementById(id);
+const form = $('buyForm'), errBox = $('buyErr'), btn = $('buyBtn');
+
+function showState(title, text, link) {
+  $('stateTitle').textContent = title;
+  $('stateText').textContent = text;
+  $('stateLink').hidden = !link;
+  $('stateBox').hidden = false;
+}
+
+(async () => {
+  try {
+    const state = await VitaID.access();
+    if (state.paid) {
+      $('stateBox').classList.add('on');
+      showState('Доступ уже открыт', 'Ты купил Vita навсегда — платить второй раз не нужно.', true);
+      return;
+    }
+    if (!state.payable) {
+      showState('Оплата подключается',
+        'Кнопка появится здесь на днях. Напиши нам {{SUPPORT}} — откроем доступ вручную.', false);
+      return;
+    }
+    if (state.until && !state.expired) {
+      const d = new Date(state.until);
+      showState('Пробная неделя идёт',
+        'Бесплатно до ' + d.toLocaleDateString('ru-RU', { day: '2-digit', month: 'long' }) +
+        '. Можешь открыть навсегда сейчас — дни не сгорят, доступ просто станет вечным.', false);
+    } else if (state.expired) {
+      showState('Точки замерли',
+        'Пробные дни закончились, обои перестали обновляться. Один платёж — и они оживут этой же ночью.', false);
+    }
+    form.hidden = false;
+  } catch {
+    form.hidden = false;
+  }
+})();
+
+form.addEventListener('submit', async e => {
+  e.preventDefault();
+  errBox.hidden = true;
+  btn.disabled = true;
+  btn.textContent = 'Открываю оплату…';
+  try {
+    const order = await VitaID.buy($('email').value.trim());
+    const pay = document.createElement('form');
+    pay.method = 'POST';
+    pay.action = order.action;
+    for (const [name, value] of Object.entries(order.fields)) {
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = name;
+      input.value = value;
+      pay.appendChild(input);
+    }
+    document.body.appendChild(pay);
+    pay.submit();
+  } catch (e) {
+    errBox.textContent = e.message || 'Не получилось начать оплату — попробуй ещё раз';
+    errBox.hidden = false;
+    btn.disabled = false;
+    btn.textContent = 'Оплатить {{PRICE}} ₽';
+  }
+});
+</script>
+</body>
+</html>

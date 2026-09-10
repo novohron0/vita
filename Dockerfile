@@ -13,4 +13,4 @@ COPY static static
 EXPOSE 8787
 # proxy-headers: за Caddy, чтобы ссылки в API были https и с правильным доменом
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8787", \
-     "--proxy-headers", "--forwarded-allow-ips=*"]
+     "--workers", "2", "--proxy-headers", "--forwarded-allow-ips=*"]

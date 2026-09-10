@@ -764,20 +764,18 @@ $('dl').addEventListener('click', () => {
   });
 });
 
-$('getBtn').addEventListener('click', () => { $('modal').hidden = false; });
-$('modalClose').addEventListener('click', () => { $('modal').hidden = true; });
-$('modal').addEventListener('click', e => { if (e.target === $('modal')) $('modal').hidden = true; });
-
-$('ideaSend').addEventListener('click', async () => {
-  const btn = $('ideaSend'), err = $('ideaErr');
-  btn.disabled = true;
+$('getBtn').addEventListener('click', async () => {
+  const btn = $('getBtn'), err = $('getErr');
   err.hidden = true;
+  if (state.bg === 'custom' && !state.bgImageId) {
+    err.textContent = 'Сначала выбери своё фото в блоке «Фон»';
+    err.hidden = false;
+    return;
+  }
+  btn.disabled = true;
+  const label = btn.textContent;
+  btn.textContent = 'Делаю обои…';
   try {
-    if (state.bg === 'custom' && !state.bgImageId) {
-      err.textContent = 'Сначала выбери своё фото в блоке «Фон»';
-      err.hidden = false;
-      return;
-    }
     const res = await fetch('/api/link', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -786,7 +784,6 @@ $('ideaSend').addEventListener('click', async () => {
         bgImage: state.bgImageId || '', shape: state.shape, glass: state.glass,
         title: state.title, footer: state.footer, brand: state.brand, birth: state.birth,
         start: state.start, end: state.end,
-        idea: $('idea').value, contact: $('contact').value,
         ownerToken: window.VitaID?.token() || '',
       }),
     });
@@ -794,14 +791,16 @@ $('ideaSend').addEventListener('click', async () => {
     if (!res.ok) {
       err.textContent = data.detail || 'Что-то пошло не так — попробуй ещё раз';
       err.hidden = false;
+      btn.disabled = false;
+      btn.textContent = label;
       return;
     }
     window.location.href = data.setup;
   } catch {
     err.textContent = 'Нет связи с сервером — попробуй ещё раз';
     err.hidden = false;
-  } finally {
     btn.disabled = false;
+    btn.textContent = label;
   }
 });
 

@@ -76,11 +76,29 @@
     return responseData(response, 'Не удалось загрузить фото');
   }
 
+  async function access() {
+    const response = await fetch('/api/access', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ownerToken: token() })
+    });
+    return responseData(response, 'Не удалось проверить доступ');
+  }
+
+  async function buy(email) {
+    const response = await fetch('/api/buy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ownerToken: token(), email })
+    });
+    return responseData(response, 'Не удалось начать оплату');
+  }
+
   async function member(handle) {
     const clean = String(handle || '').trim().replace(/^@+/, '');
     const response = await fetch(`/api/member/${encodeURIComponent(clean)}`);
     return responseData(response, 'Профиль не найден');
   }
 
-  window.VitaID = { token, ensure, library, connect, updateProfile, uploadAvatar, member };
+  window.VitaID = { token, ensure, library, connect, updateProfile, uploadAvatar, member, access, buy };
 })();

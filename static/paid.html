@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/png" href="/static/img/favicon.png">
+<link rel="apple-touch-icon" href="/static/img/apple-touch.png">
+<title>Оплата — Vita</title>
+<meta name="robots" content="noindex">
+<script src="/static/theme.js?v=2"></script>
+<link rel="stylesheet" href="/static/style.css?v=27">
+</head>
+<body data-state="{{STATE}}">
+<header>
+  <a class="logo" href="/">⠿ vita</a>
+  <span class="tag">оплата</span>
+</header>
+
+<main class="buy">
+  <div>
+    <h1 id="title">Проверяем оплату…</h1>
+    <p class="sub" id="text">Секунду — банк подтверждает платёж.</p>
+  </div>
+
+  <section class="buy-state on" id="keyBox" hidden>
+    <h2>Твой ключ доступа</h2>
+    <p class="hint">Сохрани его. По этому коду вернёшь купленный доступ на другом
+      телефоне или после чистки браузера: кабинет → «Войти по Vita ID».</p>
+    <div class="buy-key"><b id="key">—</b><button type="button" id="copyKey">Скопировать</button></div>
+  </section>
+
+  <div class="buy-form">
+    <a class="btn primary" id="goBtn" href="/me">В кабинет</a>
+    <a class="btn secondary" id="retryBtn" href="/buy" hidden>Попробовать ещё раз</a>
+    <p class="buy-note" id="note">Чек придёт на почту, которую ты указал при оплате.</p>
+  </div>
+</main>
+
+<footer class="page-foot">vita · твоя жизнь в точках</footer>
+
+<script src="/static/vita-id.js?v=2"></script>
+<script>
+const $ = id => document.getElementById(id);
+const state = document.body.dataset.state;
+
+function paidView(code) {
+  $('title').textContent = 'Готово — Vita теперь твоя';
+  $('text').textContent = 'Платёж прошёл, доступ бессрочный. Обои снова закрашивают точку каждую ночь.';
+  $('note').textContent = 'Чек уже улетел на твою почту.';
+  $('retryBtn').hidden = true;
+  if (code) {
+    $('key').textContent = code;
+    $('keyBox').hidden = false;
+  }
+}
+
+function failView() {
+  $('title').textContent = 'Оплата не прошла';
+  $('text').textContent = 'Деньги остались у тебя — банк отменил платёж. Можно спокойно попробовать снова.';
+  $('note').textContent = 'Если списание всё-таки произошло — напиши нам, разберёмся и вернём.';
+  $('goBtn').textContent = 'На главную';
+  $('goBtn').href = '/';
+  $('retryBtn').hidden = false;
+}
+
+function pendingView() {
+  $('title').textContent = 'Платёж обрабатывается';
+  $('text').textContent = 'Банк ещё подтверждает оплату — обычно это занимает до минуты. Страница обновится сама.';
+}
+
+$('copyKey').addEventListener('click', async () => {
+  await navigator.clipboard.writeText($('key').textContent);
+  $('copyKey').textContent = 'Скопировано ✓';
+});
+
+(async () => {
+  if (state === 'fail') { failView(); return; }
+  pendingView();
+  // доступ выдаёт уведомление от Робокассы, оно может прийти чуть позже возврата
+  for (let attempt = 0; attempt < 20; attempt++) {
+    try {
+      const access = await VitaID.access();
+      if (access.paid) { paidView(access.code); return; }
+    } catch {}
+    await new Promise(r => setTimeout(r, 3000));
+  }
+  $('title').textContent = 'Оплата ещё не подтвердилась';
+  $('text').textContent = 'Если деньги списались, доступ откроется автоматически в течение нескольких минут. Не открылся — напиши нам, включим руками.';
+})();
+</script>
+</body>
+</html>
