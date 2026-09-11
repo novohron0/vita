@@ -19,7 +19,7 @@
   try { if (!localStorage.getItem('vitaSignedIn')) document.documentElement.classList.add('gate'); } catch (e) {}
 </script>
 <script src="/static/theme.js?v=6"></script>
-<link rel="stylesheet" href="/static/style.css?v=63">
+<link rel="stylesheet" href="/static/style.css?v=66">
 <style>
   .home-hero { animation: fadeUp .7s cubic-bezier(.22,1,.36,1) both; }
   .phone { animation: phoneReveal .85s cubic-bezier(.22,1,.36,1) both, phoneFloat 7s ease-in-out 1.1s infinite; }
@@ -260,6 +260,14 @@
     <button class="auth-forgot" id="authBack" type="button" hidden>← назад ко входу</button>
 
   </div>
+
+  <footer class="gate-foot" id="gateFoot">
+  <p class="gate-what"><b>Vita</b> — живые обои-календарь для айфона: каждый день закрашивается
+    одна точка. Месяц, год, вся жизнь или срок до цели. 7 дней бесплатно, дальше
+    <b>{{PRICE}} ₽ один раз</b> навсегда, без подписки.</p>
+  <p class="gate-legal"><a href="/buy">Оплата</a> · <a href="/offer">Оферта, заказ, возврат</a> ·
+    <a href="/privacy">Персональные данные</a><br>{{SUPPORT}} · {{SELLER}}, ИНН {{INN}}</p>
+</footer>
 </div>
 
 <div class="modal-back center" id="cropModal" hidden>

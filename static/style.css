@@ -739,6 +739,31 @@ main { width: 100%; max-width: 430px; display: flex; flex-direction: column; gap
 .hero-tune:active { border-color: var(--glass-border); color: var(--text); }
 html { scroll-behavior: smooth; }
 
+/* Витрина под запертой дверью: что продаём, почём и по каким условиям — это
+   должно читаться до входа. Иначе ни человек, ни проверяющий платёжного
+   сервиса не понимают, куда попали. */
+/* окно и витрина стоят столбиком: иначе flex разложит их в ряд */
+#authModal { flex-direction: column; }
+.gate-foot { display: none; }
+html.gate .gate-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 430px;
+  margin: 14px auto 0;
+  padding: 0 6px;
+  gap: 7px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.gate-what b { color: var(--text); }
+.gate-price b { color: var(--text-2); }
+.gate-legal { color: var(--text-faint); font-size: 12.5px; }
+.gate-legal a { color: var(--text-muted); }
+
 /* Запертая дверь: до входа на странице нет ничего, кроме самого окна.
    Прячем не прозрачностью, а display — чтобы ни один тап не проходил мимо. */
 html.gate body > header,
