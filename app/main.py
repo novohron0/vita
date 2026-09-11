@@ -109,6 +109,24 @@ DEV_MODE = os.environ.get("VITA_DEV", "").strip() == "1"
 TG_BOT_TOKEN = os.environ.get("TG_BOT_TOKEN", "").strip()
 TG_BOT_NAME = os.environ.get("TG_BOT_NAME", "").strip().lstrip("@")
 
+# Письма (код на смену забытого пароля). Ящик заводится у почтового сервиса,
+# ключи — в .env на сервере. Пусто = писем нет и код уходит в телеграм, как раньше.
+# Хостинг режет порты 25/465/587, поэтому по умолчанию 2525 — он открыт.
+SMTP_HOST = os.environ.get("SMTP_HOST", "").strip()
+try:
+    SMTP_PORT = int(os.environ.get("SMTP_PORT", "").strip() or 2525)
+except ValueError:      # опечатка в .env не должна ронять весь сайт
+    SMTP_PORT = 2525
+SMTP_USER = os.environ.get("SMTP_USER", "").strip()
+SMTP_PASS = os.environ.get("SMTP_PASS", "")
+# адрес в поле «От кого»: у сервиса он должен быть на подтверждённом домене
+SMTP_FROM = os.environ.get("SMTP_FROM", "").strip() or SMTP_USER
+SMTP_FROM_NAME = os.environ.get("SMTP_FROM_NAME", "Vita").strip()
+MAIL_ON = bool(SMTP_HOST and SMTP_USER and SMTP_PASS and SMTP_FROM)
+
+RESET_TTL = 900      # код на смену пароля живёт 15 минут
+RESET_RESEND = 60    # и повторное письмо не раньше чем через минуту
+
 # реквизиты для оферты и чеков: держим в .env, репозиторий публичный
 SELLER_NAME = os.environ.get("SELLER_NAME", "")
 SELLER_INN = os.environ.get("SELLER_INN", "")
@@ -1373,12 +1391,49 @@ def _tg_send(chat_id: str, text: str) -> bool:
         return False
 
 
+def _mail_send(to: str, subject: str, text: str) -> bool:
+    """Письмо простым текстом. Почта может лежать — запрос из-за этого не роняем."""
+    if not MAIL_ON:
+        return False
+    import smtplib
+    import ssl
+    from email.message import EmailMessage
+    from email.utils import formataddr, formatdate, make_msgid
+
+    msg = EmailMessage()
+    msg["From"] = formataddr((SMTP_FROM_NAME, SMTP_FROM))
+    msg["To"] = to
+    msg["Subject"] = subject
+    msg["Date"] = formatdate(localtime=True)
+    msg["Message-ID"] = make_msgid(domain=SMTP_FROM.rpartition("@")[2] or None)
+    # служебное письмо: почтовики не считают его рассылкой и не ждут «отписаться»
+    msg["Auto-Submitted"] = "auto-generated"
+    msg.set_content(text)
+    try:
+        if SMTP_PORT == 465:
+            client = smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=15)
+        else:
+            client = smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15)
+        with client:
+            if SMTP_PORT != 465:
+                client.starttls(context=ssl.create_default_context())
+            client.login(SMTP_USER, SMTP_PASS)
+            client.send_message(msg)
+        return True
+    except Exception as error:
+        # молча терять письма нельзя: без этой строки неверный пароль в .env
+        # выглядит как «код просто не пришёл». Сам адрес в лог не пишем.
+        print(f"[mail] не отправилось через {SMTP_HOST}:{SMTP_PORT}: {error}", flush=True)
+        return False
+
+
 @app.post("/api/auth/forgot")
 def auth_forgot(data: AuthIn):
-    """Код на смену пароля уходит в телеграм — почтовой рассылки у нас нет.
+    """Код на смену пароля уходит письмом на ту же почту, которой человек входит.
+    Телеграм остаётся запасным путём — на случай, если почта ещё не настроена.
 
-    Отвечаем одинаково независимо от того, есть такая почта или нет: иначе
-    форма превращается в способ узнать, кто у нас зарегистрирован."""
+    Когда письма включены, ответ один и тот же, есть такая почта у нас или нет:
+    иначе форма превращается в способ узнать, кто у нас зарегистрирован."""
     email = _clean_email(data.email)
     with db() as conn:
         row = conn.execute(
@@ -1386,22 +1441,41 @@ def auth_forgot(data: AuthIn):
         ).fetchone()
         sent = False
         if row:
-            tg = conn.execute(
-                "SELECT tg_id FROM profile_telegram WHERE profile_code = ?", (row[0],)
+            fresh = conn.execute(
+                "SELECT expires FROM auth_reset WHERE email = ?", (email,)
             ).fetchone()
-            if tg:
+            if fresh and fresh[0] > time.time() + RESET_TTL - RESET_RESEND:
+                # код выслали меньше минуты назад: второе письмо не шлём, чтобы
+                # с чужой формы нельзя было завалить человеку ящик
+                sent = True
+            else:
                 code = f"{secrets.randbelow(10000):04d}"
                 conn.execute(
                     "INSERT INTO auth_reset(email, code_hash, expires, tries) "
                     "VALUES(?, ?, ?, 0) ON CONFLICT(email) DO UPDATE SET "
                     "code_hash = excluded.code_hash, expires = excluded.expires, tries = 0",
-                    (email, _token_hash(code), time.time() + 900),
+                    (email, _token_hash(code), time.time() + RESET_TTL),
                 )
-                sent = _tg_send(
-                    tg[0],
-                    f"Код для смены пароля в Vita: {code}\n"
-                    "Он живёт 15 минут. Если пароль менял не ты — просто не вводи его.",
+                text = (
+                    f"Код для смены пароля в Vita: {code}\n\n"
+                    "Он живёт 15 минут — впиши его на vitadots.ru.\n"
+                    "Если пароль менял не ты — просто не вводи код, "
+                    "с аккаунтом ничего не случится."
                 )
+                sent = _mail_send(email, f"{code} — код для смены пароля в Vita", text)
+                if not sent:
+                    tg = conn.execute(
+                        "SELECT tg_id FROM profile_telegram WHERE profile_code = ?", (row[0],)
+                    ).fetchone()
+                    sent = bool(tg) and _tg_send(tg[0], text)
+        if MAIL_ON:
+            return {
+                "ok": True,
+                "sent": True,
+                "hint": "Если такая почта у нас есть, код уже летит на неё. "
+                        "Загляни во «Входящие» и в «Спам» — код живёт 15 минут.",
+            }
+        # писем ещё нет: честно говорим, что код ушёл только в телеграм
         return {
             "ok": True,
             "sent": sent,
@@ -1416,7 +1490,7 @@ def auth_forgot(data: AuthIn):
 
 @app.post("/api/auth/reset")
 def auth_reset(data: ResetIn):
-    """Смена пароля по коду из телеграма."""
+    """Смена пароля по коду из письма (или из телеграма, если писем нет)."""
     email = _clean_email(data.email)
     password = _clean_password(data.password)
     code = str(data.code or "").strip()

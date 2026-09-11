@@ -1,9 +1,10 @@
-"""Вход по почте и паролю: регистрация, вход, смена забытого пароля.
+"""Вход по почте и паролю: регистрация, вход, смена забытого пароля письмом.
 
 Гоняется на временном каталоге — боевую ~/vita/data трогать нельзя.
 """
 import json
 import os
+import re
 import sys
 import tempfile
 from pathlib import Path
@@ -92,9 +93,10 @@ with tempfile.TemporaryDirectory(prefix="vita-auth-") as data_dir:
     assert quiet["hint"] == unknown["hint"], "по подсказке видно, кто у нас есть"
 
     # --- смена пароля по коду ---
+    # OR REPLACE: запрос кода выше уже завёл строку, даже если отправить было некуда
     with main.db() as conn:
         conn.execute(
-            "INSERT INTO auth_reset(email, code_hash, expires, tries) VALUES(?, ?, ?, 0)",
+            "INSERT OR REPLACE INTO auth_reset(email, code_hash, expires, tries) VALUES(?, ?, ?, 0)",
             ("kot@primer.ru", main._token_hash("4242"), main.time.time() + 900),
         )
     try:
@@ -129,5 +131,51 @@ with tempfile.TemporaryDirectory(prefix="vita-auth-") as data_dir:
     with main.db() as conn:
         state = main._profile_access_state(conn, before["code"])
     assert state["email"] == "kot@primer.ru", state
+
+    # --- письмо с кодом: когда почта настроена, код уходит на неё ---
+    letters = []
+
+    def fake_mail(to, subject, text):
+        letters.append((to, subject, text))
+        return True
+
+    main.MAIL_ON = True
+    main._mail_send = fake_mail
+
+    answer = main.auth_forgot(main.AuthIn(email="kot@primer.ru"))
+    assert len(letters) == 1 and letters[0][0] == "kot@primer.ru", letters
+    code = re.search(r"\b(\d{4})\b", letters[0][2]).group(1)
+    assert code in letters[0][1], f"кода нет в теме письма: {letters[0][1]}"
+
+    # второй запрос подряд не заваливает ящик ещё одним письмом
+    main.auth_forgot(main.AuthIn(email="kot@primer.ru"))
+    assert len(letters) == 1, "письмо ушло второй раз подряд"
+
+    # на незарегистрированную почту не пишем, а отвечаем слово в слово так же
+    stranger = main.auth_forgot(main.AuthIn(email="nikogo@primer.ru"))
+    assert len(letters) == 1, "написали на чужую почту"
+    assert stranger == answer, f"по ответу видно, кто у нас есть: {stranger} / {answer}"
+
+    # код из письма меняет пароль
+    done_mail = body(main.auth_reset(main.ResetIn(
+        email="kot@primer.ru", code=code, password="izpisma12")))
+    assert done_mail["profile"]["code"] == before["code"]
+    assert body(main.auth_login(main.AuthIn(
+        email="kot@primer.ru", password="izpisma12")))["profile"]["code"] == before["code"]
+
+    # --- почта отвалилась, но телеграм привязан: код уходит туда ---
+    tg_out = []
+    main._mail_send = lambda to, subject, text: False
+    main._tg_send = lambda chat_id, text: tg_out.append((chat_id, text)) or True
+    with main.db() as conn:
+        conn.execute(
+            "INSERT INTO profile_telegram(tg_id, profile_code) VALUES(?, ?)",
+            ("77007", before["code"]),
+        )
+    main.auth_forgot(main.AuthIn(email="kot@primer.ru"))
+    assert tg_out and tg_out[0][0] == "77007", f"код не ушёл в телеграм: {tg_out}"
+    tg_code = re.search(r"\b(\d{4})\b", tg_out[0][1]).group(1)
+    assert body(main.auth_reset(main.ResetIn(
+        email="kot@primer.ru", code=tg_code, password="iztelegi12")))["profile"]["code"] == before["code"]
 
 print("Vita auth: passed")
