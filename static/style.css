@@ -186,8 +186,7 @@ header {
   border: 1px solid var(--glass-border);
   box-shadow: var(--glass-inset), var(--glass-shadow);
   position: relative;
-  transition: width .26s ease-out, padding .26s ease-out, gap .26s ease-out,
-              box-shadow .45s ease;
+  transition: box-shadow .45s ease;
 }
 body.scrolled .head-pill { box-shadow: var(--glass-inset), var(--glass-shadow), 0 10px 30px rgba(0, 0, 0, 0.22); }
 /* чем меньше островок, тем плотнее его стекло: сквозь узкую пилюлю не должны
@@ -207,16 +206,15 @@ body.scrolled .head-pill { box-shadow: var(--glass-inset), var(--glass-shadow), 
 .head-pill .theme-toggle { justify-self: end; }
 
 /* название никуда не девается: шапка просто собирается вокруг кружка профиля */
-.head-shrink .logo { font-size: calc(17px - 3px * var(--k)); white-space: nowrap; transition: font-size .26s ease-out; }
+.head-shrink .logo { font-size: calc(17px - 3px * var(--k)); white-space: nowrap; }
 .head-shrink .avatar-btn {
   width: calc(34px - 6px * var(--k));
   height: calc(34px - 6px * var(--k));
-  transition: width .26s ease-out, height .26s ease-out, border-color .2s, transform .15s;
+  transition: border-color .2s, transform .15s;
 }
 .head-shrink .theme-toggle {
   transform: scale(calc(1 - 0.2 * var(--k)));
   transform-origin: right center;
-  transition: transform .26s ease-out;
 }
 
 /* кромка стекла: загорается, когда под шапку уехал контент — тогда размытие

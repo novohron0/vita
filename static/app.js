@@ -604,13 +604,14 @@ function animateJump() {
 const phoneEl = document.querySelector('.phone');
 const miniWrap = $('miniWrap'), miniBox = $('mini');
 const headPill = document.getElementById('headPill');
+let headTarget = 0, headNow = 0, headRaf = 0;
 const MINI_EDGE = 14;
 const CORNER_KEY = 'vitaMiniCorner';
 const TIP_KEY = 'vitaMiniTipSeen';
 const ORIGIN = { br: 'bottom right', bl: 'bottom left', tr: 'top right', tl: 'top left' };
 
 let miniCorner = ['br', 'bl', 'tr', 'tl'].includes(localStorage.getItem(CORNER_KEY))
-  ? localStorage.getItem(CORNER_KEY) : 'br';
+  ? localStorage.getItem(CORNER_KEY) : 'tr';
 let miniZoom = 1;
 
 // Видимая часть экрана: на айфоне снизу висит панель Safari, и обычный
@@ -664,12 +665,7 @@ function updateMini() {
   const show = r.height > 0 && visible / r.height < 0.5;
   // свет за телефоном горит, пока сам телефон в кадре: на прокрутке он не нужен
   document.body.classList.toggle('dim', show);
-  // шапка садится в островок: трогается с первых пикселей прокрутки и успевает
-  // собраться задолго до того, как выедет экранчик
-  if (headPill) {
-    const k = Math.min(1, Math.max(0, (scrollY || 0) / 380));
-    headPill.style.setProperty('--k', k.toFixed(3));
-  }
+  aimHead();
   if (show === miniWrap.classList.contains('show')) return;
   if (show) miniPlace(false);  // панель браузера могла сдвинуть видимую область
   miniWrap.classList.toggle('show', show);
@@ -698,6 +694,25 @@ addEventListener('resize', queueMini, { passive: true });
 window.visualViewport?.addEventListener('resize', () => { miniPlace(false); queueMini(); });
 window.visualViewport?.addEventListener('scroll', queueMini);
 updateMini();
+
+// Шапка садится в островок: трогается с первых пикселей прокрутки и успевает
+// собраться задолго до того, как выедет экранчик. Цель считает скролл, а
+// доводит до неё кадровый цикл — иначе на редких событиях айфона видны ступеньки.
+function headTick() {
+  headNow += (headTarget - headNow) * 0.16;
+  if (Math.abs(headTarget - headNow) < 0.0015) headNow = headTarget;
+  headPill.style.setProperty('--k', headNow.toFixed(4));
+  headRaf = headNow === headTarget ? 0 : requestAnimationFrame(headTick);
+}
+function aimHead() {
+  if (!headPill) return;
+  headTarget = Math.min(1, Math.max(0, (scrollY || 0) / 380));
+  if (headTarget !== headNow && !headRaf) headRaf = requestAnimationFrame(headTick);
+}
+// скролл слушаем без придержки: поставить одно число дёшево, а цель должна
+// быть свежей к каждому кадру
+addEventListener('scroll', aimHead, { passive: true });
+addEventListener('touchmove', aimHead, { passive: true });
 
 // Появление на прокрутке. Считаем в том же месте, что уже слушает скролл:
 // наблюдатель пересечений в некоторых обёртках молчит, а пустая страница —
