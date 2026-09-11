@@ -50,7 +50,6 @@ html { touch-action: manipulation; }
   --fc-bg: var(--glass-bg);
   --fc-bg-top: rgba(255, 255, 255, 0.08);
   --press-glow: rgba(255, 255, 255, 0.20);
-  --hem-tint: rgba(8, 8, 11, 0.55);
   color-scheme: dark;
 }
 
@@ -99,7 +98,6 @@ html { touch-action: manipulation; }
   --fc-bg: rgba(255, 252, 246, 0.74);
   --fc-bg-top: rgba(255, 253, 248, 0.9);
   --press-glow: rgba(150, 110, 52, 0.26);
-  --hem-tint: rgba(240, 233, 222, 0.62);
   color-scheme: light;
 }
 
@@ -150,6 +148,25 @@ header {
   border: 1px solid var(--glass-border);
   box-shadow: var(--glass-inset), var(--glass-shadow);
 }
+/* кромка стекла: загорается, когда под шапку уехал контент — тогда размытие
+   действительно работает, а не тонирует пустоту */
+header::after {
+  content: "";
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: -1px;
+  height: 1px;
+  border-radius: 1px;
+  background: linear-gradient(90deg, transparent, var(--glass-edge), transparent);
+  opacity: 0;
+  transition: opacity .45s ease;
+  pointer-events: none;
+}
+body.scrolled header { box-shadow: var(--glass-inset), var(--glass-shadow), 0 10px 30px rgba(0, 0, 0, 0.22); }
+body.scrolled header::after { opacity: 1; }
+header { transition: box-shadow .45s ease; }
+
 .head-r {
   display: flex;
   align-items: center;
@@ -251,7 +268,26 @@ header {
 
 @media (max-width: 374px) {
   header { flex-wrap: wrap; padding: 10px 12px; }
-  .head-r { width: 100%; justify-content: space-between; }
+  /* кромка стекла: загорается, когда под шапку уехал контент — тогда размытие
+   действительно работает, а не тонирует пустоту */
+header::after {
+  content: "";
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: -1px;
+  height: 1px;
+  border-radius: 1px;
+  background: linear-gradient(90deg, transparent, var(--glass-edge), transparent);
+  opacity: 0;
+  transition: opacity .45s ease;
+  pointer-events: none;
+}
+body.scrolled header { box-shadow: var(--glass-inset), var(--glass-shadow), 0 10px 30px rgba(0, 0, 0, 0.22); }
+body.scrolled header::after { opacity: 1; }
+header { transition: box-shadow .45s ease; }
+
+.head-r { width: 100%; justify-content: space-between; }
   .nav { gap: 10px 12px; }
   .nav a { font-size: 13px; }
   body { padding-left: 12px; padding-right: 12px; }
@@ -591,8 +627,7 @@ main { width: 100%; max-width: 430px; display: flex; flex-direction: column; gap
 }
 .hint { color: var(--text-muted); font-size: 13px; line-height: 1.5; }
 
-/* нижний воздух: последняя строка не должна тонуть под стеклянной кромкой */
-.page-foot { color: var(--text-faint); font-size: 13px; padding-top: 36px; padding-bottom: 54px; }
+.page-foot { color: var(--text-faint); font-size: 13px; padding-top: 36px; padding-bottom: 18px; }
 
 /* --- модал предложки --- */
 .modal-back {
@@ -985,18 +1020,18 @@ body.demo-goal main { pointer-events: none; }
 body::before {
   content: ""; position: fixed; inset: -25%; z-index: -1; pointer-events: none;
   background:
-    radial-gradient(36% 30% at 20% 16%, var(--aurora-1), transparent 70%),
-    radial-gradient(32% 28% at 82% 80%, var(--aurora-2), transparent 70%);
+    radial-gradient(78% 58% at 22% 10%, var(--aurora-1), transparent 76%),
+    radial-gradient(72% 54% at 80% 88%, var(--aurora-2), transparent 76%);
   filter: blur(34px);
   /* свет не ёрзает: бесконечный дрейф выглядел как болтанка и жёг батарею.
      Теперь он ровно разгорается при входе и гаснет, когда телефон ушёл из кадра.
      Анимация без forwards — иначе она залипает и глушит переход */
   opacity: 1;
   animation: auroraRise 1.5s cubic-bezier(.22, 1, .36, 1);
-  transition: opacity 1.15s cubic-bezier(.22, 1, .36, 1);
+  transition: opacity 1.6s cubic-bezier(.22, 1, .36, 1);
 }
 @keyframes auroraRise { from { opacity: 0; } }
-body.dim::before { opacity: 0; }
+body.dim::before { opacity: .34; }
 
 /* вход страницы */
 header { animation: fadeDown .55s cubic-bezier(.22,1,.36,1) both; }
@@ -1033,28 +1068,13 @@ main   { animation: fadeUp .7s cubic-bezier(.22,1,.36,1) both; }
 
 /* появление на прокрутке: блок поднимается снизу, как стеклянная панель.
    Класс вешает скрипт — без него страница просто видна целиком */
-.reveal { opacity: 0; transform: translateY(30px); }
+.reveal { opacity: 0; transform: translateY(26px) scale(.975); }
 .reveal.in {
   opacity: 1;
   transform: none;
-  transition: opacity .58s cubic-bezier(.22, 1, .36, 1), transform .72s cubic-bezier(.22, 1, .36, 1);
+  transition: opacity .5s cubic-bezier(.22, 1, .36, 1), transform .66s cubic-bezier(.22, 1, .36, 1);
 }
 
-/* нижняя кромка: контент утекает под матовое стекло, а не обрывается */
-.glass-hem {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: calc(86px + env(safe-area-inset-bottom, 0px));
-  z-index: 5;
-  pointer-events: none;
-  background: linear-gradient(to top, var(--hem-tint), transparent);
-  backdrop-filter: blur(14px) saturate(1.35);
-  -webkit-backdrop-filter: blur(14px) saturate(1.35);
-  -webkit-mask-image: linear-gradient(to top, #000 0 40%, rgba(0, 0, 0, 0.5) 74%, transparent 100%);
-  mask-image: linear-gradient(to top, #000 0 40%, rgba(0, 0, 0, 0.5) 74%, transparent 100%);
-}
 
 /* телефон — парит + свечение; ховер/тап вспыхивает ярче (drop-shadow не трогает стек рамки) */
 .phone { animation: phoneFloat 7s ease-in-out .9s infinite; transition: filter .5s; cursor: pointer; }
@@ -1591,7 +1611,26 @@ button, a, .seg button, .swatch, .tariff {
 @media (max-width: 420px) {
   header { padding: 8px 12px; gap: 8px; }
   .logo { font-size: 18px; }
-  .head-r { gap: 8px; }
+  /* кромка стекла: загорается, когда под шапку уехал контент — тогда размытие
+   действительно работает, а не тонирует пустоту */
+header::after {
+  content: "";
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: -1px;
+  height: 1px;
+  border-radius: 1px;
+  background: linear-gradient(90deg, transparent, var(--glass-edge), transparent);
+  opacity: 0;
+  transition: opacity .45s ease;
+  pointer-events: none;
+}
+body.scrolled header { box-shadow: var(--glass-inset), var(--glass-shadow), 0 10px 30px rgba(0, 0, 0, 0.22); }
+body.scrolled header::after { opacity: 1; }
+header { transition: box-shadow .45s ease; }
+
+.head-r { gap: 8px; }
   .nav { gap: 9px; }
   .nav a { font-size: 13px; padding: 11px 0; }
 }

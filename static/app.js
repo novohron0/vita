@@ -679,6 +679,8 @@ function queueMini() {
   miniTick = now;
   updateMini();
   liftRising();
+  // край стекла у шапки: зажигаем, когда под неё действительно уехал контент
+  document.body.classList.toggle('scrolled', (scrollY || 0) > 12);
 }
 // touchmove и wheel — страховка: на айфоне во время инерции scroll иногда
 // молчит до самой остановки
