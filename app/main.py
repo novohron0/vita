@@ -109,9 +109,14 @@ DEV_MODE = os.environ.get("VITA_DEV", "").strip() == "1"
 TG_BOT_TOKEN = os.environ.get("TG_BOT_TOKEN", "").strip()
 TG_BOT_NAME = os.environ.get("TG_BOT_NAME", "").strip().lstrip("@")
 
-# Письма (код на смену забытого пароля). Ящик заводится у почтового сервиса,
-# ключи — в .env на сервере. Пусто = писем нет и код уходит в телеграм, как раньше.
-# Хостинг режет порты 25/465/587, поэтому по умолчанию 2525 — он открыт.
+# Письма (код на смену забытого пароля). Ключи — в .env на сервере, пусто =
+# писем нет и код уходит в телеграм, как раньше. Отправлять умеем двумя путями:
+# по HTTP у RuSender (порт 443) и обычным SMTP. Хостинг режет 25/465/587,
+# поэтому SMTP только на 2525, а надёжнее всего путь по HTTP.
+RUSENDER_KEY = os.environ.get("RUSENDER_KEY", "").strip()
+RUSENDER_SEND_KEY = os.environ.get("RUSENDER_SEND_KEY", "").strip()
+RUSENDER_URL = "https://api.rusender.ru/api/v1/external-mails/send"
+
 SMTP_HOST = os.environ.get("SMTP_HOST", "").strip()
 try:
     SMTP_PORT = int(os.environ.get("SMTP_PORT", "").strip() or 2525)
@@ -119,10 +124,13 @@ except ValueError:      # опечатка в .env не должна ронят�
     SMTP_PORT = 2525
 SMTP_USER = os.environ.get("SMTP_USER", "").strip()
 SMTP_PASS = os.environ.get("SMTP_PASS", "")
+
 # адрес в поле «От кого»: у сервиса он должен быть на подтверждённом домене
-SMTP_FROM = os.environ.get("SMTP_FROM", "").strip() or SMTP_USER
-SMTP_FROM_NAME = os.environ.get("SMTP_FROM_NAME", "Vita").strip()
-MAIL_ON = bool(SMTP_HOST and SMTP_USER and SMTP_PASS and SMTP_FROM)
+MAIL_FROM = os.environ.get("MAIL_FROM", "").strip() or SMTP_USER
+MAIL_FROM_NAME = os.environ.get("MAIL_FROM_NAME", "Vita").strip()
+MAIL_ON = bool(MAIL_FROM and (
+    (RUSENDER_KEY and RUSENDER_SEND_KEY) or (SMTP_HOST and SMTP_USER and SMTP_PASS)
+))
 
 RESET_TTL = 900      # код на смену пароля живёт 15 минут
 RESET_RESEND = 60    # и повторное письмо не раньше чем через минуту
@@ -1395,17 +1403,59 @@ def _mail_send(to: str, subject: str, text: str) -> bool:
     """Письмо простым текстом. Почта может лежать — запрос из-за этого не роняем."""
     if not MAIL_ON:
         return False
+    if RUSENDER_KEY and RUSENDER_SEND_KEY:
+        return _mail_send_api(to, subject, text)
+    return _mail_send_smtp(to, subject, text)
+
+
+def _mail_send_api(to: str, subject: str, text: str) -> bool:
+    """RuSender по HTTP: единственный путь наружу, который хостинг не режет."""
+    import urllib.request
+
+    body = json.dumps({
+        # ключ одноразовости: если сеть моргнула и мы повторили запрос,
+        # человек не получит два письма с разными кодами
+        "idempotencyKey": secrets.token_hex(8),
+        "mail": {
+            "to": {"email": to},
+            "from": {"email": MAIL_FROM, "name": MAIL_FROM_NAME},
+            "subject": subject,
+            "text": text,
+        },
+    }).encode("utf-8")
+    try:
+        req = urllib.request.Request(
+            f"{RUSENDER_URL}/{RUSENDER_SEND_KEY}",
+            data=body,
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {RUSENDER_KEY}",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            resp.read()
+        return True
+    except Exception as error:
+        # молча терять письма нельзя: без этой строки неверный ключ в .env
+        # выглядит как «код просто не пришёл». Сам адрес в лог не пишем.
+        print(f"[mail] RuSender не принял письмо: {error}", flush=True)
+        return False
+
+
+def _mail_send_smtp(to: str, subject: str, text: str) -> bool:
+    """Запасной путь: обычный SMTP, если когда-нибудь заведём ящик."""
     import smtplib
     import ssl
     from email.message import EmailMessage
     from email.utils import formataddr, formatdate, make_msgid
 
     msg = EmailMessage()
-    msg["From"] = formataddr((SMTP_FROM_NAME, SMTP_FROM))
+    msg["From"] = formataddr((MAIL_FROM_NAME, MAIL_FROM))
     msg["To"] = to
     msg["Subject"] = subject
     msg["Date"] = formatdate(localtime=True)
-    msg["Message-ID"] = make_msgid(domain=SMTP_FROM.rpartition("@")[2] or None)
+    msg["Message-ID"] = make_msgid(domain=MAIL_FROM.rpartition("@")[2] or None)
     # служебное письмо: почтовики не считают его рассылкой и не ждут «отписаться»
     msg["Auto-Submitted"] = "auto-generated"
     msg.set_content(text)

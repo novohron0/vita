@@ -178,4 +178,46 @@ with tempfile.TemporaryDirectory(prefix="vita-auth-") as data_dir:
     assert body(main.auth_reset(main.ResetIn(
         email="kot@primer.ru", code=tg_code, password="iztelegi12")))["profile"]["code"] == before["code"]
 
+    # --- отправка через RuSender: проверяем сам запрос, никуда не ходим ---
+    import urllib.request
+
+    calls = []
+
+    class FakeResponse:
+        def read(self):
+            return b"{}"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *rest):
+            return False
+
+    real_urlopen = urllib.request.urlopen
+    urllib.request.urlopen = lambda req, timeout=None: (calls.append(req), FakeResponse())[1]
+
+    main.RUSENDER_KEY = "rs_ck_v1_test"
+    main.RUSENDER_SEND_KEY = "7"
+    main.MAIL_FROM = "vita@vitadots.ru"
+    main.MAIL_FROM_NAME = "Vita"
+
+    assert main._mail_send_api("kot@primer.ru", "4242 — код", "Код: 4242") is True
+    sent = calls[0]
+    assert sent.full_url.endswith("/external-mails/send/7"), sent.full_url
+    assert sent.get_header("Authorization") == "Bearer rs_ck_v1_test"
+    payload = json.loads(sent.data)
+    assert payload["mail"]["to"]["email"] == "kot@primer.ru"
+    assert payload["mail"]["from"]["email"] == "vita@vitadots.ru", payload["mail"]["from"]
+    assert payload["mail"]["subject"].startswith("4242")
+    assert "4242" in payload["mail"]["text"]
+    assert payload["idempotencyKey"], "нет ключа одноразовости — повтор задвоит письмо"
+
+    # сервис лёг — ручка не падает, а честно говорит «не отправили»
+    def boom(req, timeout=None):
+        raise RuntimeError("503 Service Unavailable")
+
+    urllib.request.urlopen = boom
+    assert main._mail_send_api("kot@primer.ru", "тема", "текст") is False
+    urllib.request.urlopen = real_urlopen
+
 print("Vita auth: passed")
