@@ -883,8 +883,11 @@ def robots():
 
 @app.get("/sitemap.xml")
 def sitemap():
+    # В поиске нужна одна Vita — главная. Служебные страницы (лента, цели,
+    # политика, отложенный Focus) только размывали выдачу: человек искал сайт,
+    # а первой строкой ему попадалась «Vita — конфиденциальность».
     urls = "".join(
-        f"<url><loc>https://vitadots.ru/{p}</loc></url>" for p in ("", "goals", "feed", "focus", "privacy")
+        f"<url><loc>https://vitadots.ru/{p}</loc></url>" for p in ("", "buy")
     )
     return Response(
         f'<?xml version="1.0" encoding="UTF-8"?>'
