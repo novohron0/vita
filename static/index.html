@@ -14,7 +14,7 @@
 <link rel="canonical" href="https://vitadots.ru/">
 <meta name="twitter:card" content="summary_large_image">
 <script src="/static/theme.js?v=3"></script>
-<link rel="stylesheet" href="/static/style.css?v=52">
+<link rel="stylesheet" href="/static/style.css?v=55">
 <style>
   .home-hero { animation: fadeUp .7s cubic-bezier(.22,1,.36,1) both; }
   .phone { animation: phoneReveal .85s cubic-bezier(.22,1,.36,1) both, phoneFloat 7s ease-in-out 1.1s infinite; }
@@ -92,6 +92,14 @@
 
   <div class="phone"><canvas id="cv" width="1179" height="2556"></canvas></div>
 
+  <div class="hero-act">
+    <button class="primary" id="heroBtn" type="button">Сделать мои обои</button>
+    <p class="err" id="heroErr" hidden></p>
+    <p class="hero-note">7 дней бесплатно, карта не нужна.
+      Дальше — <a href="/buy">{{PRICE}} ₽ один раз</a>, навсегда и без подписки.</p>
+    <a class="hero-tune" href="#tune">Сначала настрою вид ↓</a>
+  </div>
+
 
 
   <div class="stats">
@@ -99,7 +107,7 @@
     <div><b id="stat2">0</b><span id="stat2l">впереди</span></div>
   </div>
 
-  <section class="controls">
+  <section class="controls" id="tune">
     <label class="field" id="birthRow" hidden>Дата рождения
       <input type="date" id="birth" value="2000-01-01">
     </label>
@@ -262,6 +270,6 @@
 
 <script src="/static/vita-id.js?v=3"></script>
 <script src="/static/tg-login.js?v=2"></script>
-<script src="/static/app.js?v=37"></script>
+<script src="/static/app.js?v=38"></script>
 </body>
 </html>

@@ -992,8 +992,9 @@ $('goalEnd').value = state.end;
 $('goalStart').addEventListener('change', e => { state.start = e.target.value || todayISO; animateReveal(); });
 $('goalEnd').addEventListener('change', e => { state.end = e.target.value || plus30; animateReveal(); });
 
-$('getBtn').addEventListener('click', async () => {
-  const btn = $('getBtn'), err = $('getErr');
+// Обои делают две кнопки: одна сразу под телефоном, другая внизу конструктора.
+// Логика одна, поэтому вынесена — каждая показывает ход дела на себе.
+async function makeWallpaper(btn, err) {
   err.hidden = true;
   if (state.bg === 'custom' && !state.bgImageId) {
     err.textContent = 'Сначала выбери своё фото в блоке «Фон»';
@@ -1030,7 +1031,10 @@ $('getBtn').addEventListener('click', async () => {
     btn.disabled = false;
     btn.textContent = label;
   }
-});
+}
+
+$('getBtn').addEventListener('click', () => makeWallpaper($('getBtn'), $('getErr')));
+if ($('heroBtn')) $('heroBtn').addEventListener('click', () => makeWallpaper($('heroBtn'), $('heroErr')));
 
 // ——— рилс-сценарий: сон на rAF (не троттлится в видимой вкладке, тайминг стабильный для съёмки)
 const rafSleep = ms => new Promise(r => {

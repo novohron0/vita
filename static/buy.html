@@ -10,7 +10,7 @@
 <meta name="robots" content="index, follow">
 <link rel="canonical" href="https://vitadots.ru/buy">
 <script src="/static/theme.js?v=3"></script>
-<link rel="stylesheet" href="/static/style.css?v=52">
+<link rel="stylesheet" href="/static/style.css?v=55">
 </head>
 <body>
 <header>
@@ -42,11 +42,6 @@
     <a class="btn secondary" id="stateLink" href="/me" hidden>В кабинет</a>
   </section>
 
-  <div class="tg-login" id="tgBox" hidden>
-    <div class="tg-widget"></div>
-    <p class="tg-status"></p>
-  </div>
-
   <form class="buy-form" id="buyForm" hidden>
     <label class="field">Почта для чека
       <input id="email" type="email" inputmode="email" autocomplete="email"
@@ -59,6 +54,13 @@
       Нажимая кнопку, ты соглашаешься с <a href="/offer">офертой</a> и
       <a href="/privacy">политикой конфиденциальности</a>.</p>
   </form>
+
+  <div class="tg-login tg-after" id="tgBox" hidden>
+    <p class="tg-why">Чтобы покупка закрепилась за тобой, а не за этим браузером —
+      привяжи телеграм. Тогда доступ вернётся на любом телефоне. Можно и после оплаты.</p>
+    <div class="tg-widget"></div>
+    <p class="tg-status"></p>
+  </div>
 </main>
 
 <footer class="page-foot">Связь: {{SUPPORT}} · {{SELLER}}, ИНН {{INN}}<br><a href="/offer" style="color:inherit">Оферта</a> · <a href="/privacy" style="color:inherit">Конфиденциальность</a></footer>
@@ -89,12 +91,6 @@ function showState(title, text, link) {
         'Кнопка появится здесь на днях. Напиши нам {{SUPPORT}} — откроем доступ вручную.', false);
       return;
     }
-    if (state.tgBot && !state.telegram) {
-      showState('Войди через телеграм',
-        'Один тап — и покупка закрепится за тобой, а не за этим браузером. Тогда доступ вернётся на любом телефоне.', false);
-      VitaTG.mount($('tgBox'), state);
-      return;
-    }
     if (state.until && !state.expired) {
       const d = new Date(state.until);
       showState('Пробная неделя идёт',
@@ -103,8 +99,17 @@ function showState(title, text, link) {
     } else if (state.expired) {
       showState('Точки замерли',
         'Пробные дни закончились, обои перестали обновляться. Один платёж — и они оживут этой же ночью.', false);
+    } else {
+      // тот, кто пришёл впервые, должен узнать про бесплатную неделю здесь же
+      showState('Сначала — 7 дней бесплатно',
+        'Карта не нужна: сделай обои, поставь на телефон и смотри неделю. Платить есть смысл, когда точки уже закрашиваются сами.', false);
     }
     form.hidden = false;
+    // привязка телеграма — предложение рядом с оплатой, а не пропуск к ней
+    if (state.tgBot && !state.telegram) {
+      $('tgBox').hidden = false;
+      VitaTG.mount($('tgBox'), state);
+    }
   } catch {
     form.hidden = false;
   }

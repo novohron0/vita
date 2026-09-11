@@ -698,6 +698,34 @@ main { width: 100%; max-width: 430px; display: flex; flex-direction: column; gap
 
 /* подвал несёт оферту и реквизиты продавца: самый бледный тон тут не годится,
    он давал 2.3:1 на тёмном и 3.2:1 на светлом при норме 4.5 */
+/* Кнопка под телефоном: обещание рилса выполняется сразу, а не через два с
+   половиной экрана прокрутки. Настройки ниже — это «улучшить», а не «начать». */
+.hero-act { display: flex; flex-direction: column; align-items: center; gap: 9px; }
+@media (max-height: 880px) {
+  main { gap: 15px; }
+  .home-hero { margin: 0 0 2px; }
+  .home-hero p { font-size: 14px; margin-top: 6px; }
+  .phone { width: 224px; }
+}
+.hero-act .primary { width: auto; min-width: 220px; margin: 0; padding: 15px 30px; font-size: 16px; }
+.hero-note { color: var(--text-muted); font-size: 13px; line-height: 1.5; text-align: center; max-width: 320px; }
+.hero-note a { color: var(--text-2); }
+.hero-tune {
+  color: var(--text-nav);
+  font-size: 13px;
+  text-decoration: none;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+.hero-tune:active { border-color: var(--glass-border); color: var(--text); }
+html { scroll-behavior: smooth; }
+
+/* привязка телеграма стоит после формы: это забота на будущее, а не пропуск
+   к оплате — человек, готовый платить, не должен сначала регистрироваться */
+.tg-after { margin-top: 4px; padding-top: 18px; border-top: 1px solid var(--glass-border); }
+.tg-why { color: var(--text-muted); font-size: 13px; line-height: 1.5; margin-bottom: 12px; }
+
 .page-foot { color: var(--text-muted); font-size: 13px; padding-top: 36px; padding-bottom: 18px; }
 
 /* --- модал предложки --- */
