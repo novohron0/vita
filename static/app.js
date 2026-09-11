@@ -1556,25 +1556,59 @@ const authModal = $('authModal');
 const AUTH_SEEN = 'vitaAuthSeen';
 let authMode = 'login';
 
+// Забытый пароль идёт тремя шагами: почта → код из четырёх цифр → новый пароль.
+// Каждый шаг показывает ровно одно поле, чтобы не гадать, что заполнять.
 function paintAuth() {
   const reg = authMode === 'register';
+  const forgot = authMode === 'forgot';
   const reset = authMode === 'reset';
+  const entry = !forgot && !reset;
   $('authTabs').querySelectorAll('button')
     .forEach(b => b.classList.toggle('on', b.dataset.v === authMode));
-  $('authTabs').hidden = reset;
-  $('authBody').hidden = reset;
+  $('authTabs').hidden = !entry;
+  $('authLead').hidden = !entry;
+  $('tgBoxAuth').hidden = !entry;
+  $('authOr').hidden = !entry;
+  $('authBody').hidden = !entry;
+  $('authForgotBody').hidden = !forgot;
   $('authResetBody').hidden = !reset;
   $('authPass2Row').hidden = !reg;
-  $('authForgot').hidden = reg || reset;
-  $('authGo').textContent = reset ? 'Сменить пароль' : (reg ? 'Создать аккаунт' : 'Войти');
-  $('authSub').textContent = reset
-    ? 'Код ушёл в телеграм. Введи его и придумай новый пароль.'
-    : (reg
-      ? 'Чтобы обои и покупка остались твоими, а не этого браузера.'
-      : 'С возвращением — обои и покупка на месте.');
+  $('authForgot').hidden = !(authMode === 'login');
+  $('authBack').hidden = entry;
+  $('authGo').textContent = forgot ? 'Отправить код'
+    : (reset ? 'Сменить пароль' : (reg ? 'Создать аккаунт' : 'Войти'));
+  $('authSub').textContent = forgot
+    ? 'Пришлём код в телеграм, если он привязан к аккаунту.'
+    : (reset
+      ? 'Впиши код и придумай новый пароль.'
+      : (reg
+        ? 'Чтобы обои и покупка остались твоими, а не этого браузера.'
+        : 'С возвращением — обои и покупка на месте.'));
   $('authPass').autocomplete = reg ? 'new-password' : 'current-password';
   $('authErr').hidden = true;
 }
+
+// Четыре клетки ведут себя как одно поле: цифра перебрасывает вперёд, стирание
+// возвращает назад, вставленный целиком код раскладывается сам.
+const codeCells = [...$('codeRow').querySelectorAll('.code-cell')];
+function codeValue() { return codeCells.map(c => c.value).join(''); }
+function codeClear() { codeCells.forEach(c => { c.value = ''; }); }
+codeCells.forEach((cell, i) => {
+  cell.addEventListener('input', () => {
+    cell.value = cell.value.replace(/\D/g, '').slice(-1);
+    if (cell.value && i < codeCells.length - 1) codeCells[i + 1].focus();
+  });
+  cell.addEventListener('keydown', e => {
+    if (e.key === 'Backspace' && !cell.value && i > 0) codeCells[i - 1].focus();
+  });
+  cell.addEventListener('paste', e => {
+    const digits = (e.clipboardData?.getData('text') || '').replace(/\D/g, '');
+    if (!digits) return;
+    e.preventDefault();
+    codeCells.forEach((c, n) => { c.value = digits[n] || ''; });
+    codeCells[Math.min(digits.length, codeCells.length) - 1].focus();
+  });
+});
 
 function authFail(message) {
   const err = $('authErr');
@@ -1626,8 +1660,23 @@ $('authGo').addEventListener('click', async () => {
       await VitaID.register(email, $('authPass').value);
     } else if (authMode === 'login') {
       await VitaID.login(email, $('authPass').value);
+    } else if (authMode === 'forgot') {
+      const box = $('authForgotEmail');
+      if (!box.value.trim()) throw new Error('Впиши почту, на которую регистрировался');
+      const data = await VitaID.forgot(box.value.trim());
+      $('authNote').textContent = data.hint;
+      $('authNote').hidden = false;
+      if (!data.sent) { paintAuth(); $('authNote').hidden = false; btn.disabled = false; return; }
+      authMode = 'reset';
+      codeClear();
+      paintAuth();
+      $('authNote').hidden = false;
+      codeCells[0].focus();
+      btn.disabled = false;
+      return;
     } else {
-      await VitaID.resetPass(email, $('authCode').value.trim(), $('authNewPass').value);
+      if (codeValue().length < codeCells.length) throw new Error('Впиши все четыре цифры');
+      await VitaID.resetPass($('authForgotEmail').value.trim(), codeValue(), $('authNewPass').value);
     }
     localStorage.setItem(AUTH_SEEN, '1');
     localStorage.setItem('vitaSignedIn', '1');
@@ -1640,21 +1689,18 @@ $('authGo').addEventListener('click', async () => {
   btn.disabled = false;
 });
 
-$('authForgot').addEventListener('click', async () => {
-  const email = $('authEmail').value.trim();
-  const note = $('authNote');
-  if (!email) { authFail('Сначала впиши почту, на которую регистрировался'); return; }
-  const btn = $('authForgot');
-  btn.disabled = true;
-  try {
-    const data = await VitaID.forgot(email);
-    note.textContent = data.hint;
-    note.hidden = false;
-    if (data.sent) { authMode = 'reset'; paintAuth(); note.hidden = false; }
-  } catch (error) {
-    authFail(error.message || 'Не получилось отправить код');
-  }
-  btn.disabled = false;
+$('authForgot').addEventListener('click', () => {
+  $('authForgotEmail').value = $('authEmail').value.trim();
+  authMode = 'forgot';
+  paintAuth();
+  $('authNote').hidden = true;
+  $('authForgotEmail').focus();
+});
+
+$('authBack').addEventListener('click', () => {
+  authMode = 'login';
+  paintAuth();
+  $('authNote').hidden = true;
 });
 
 // Главная открывается только своим: пока человек не завёл аккаунт или не вошёл,

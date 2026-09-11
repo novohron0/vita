@@ -171,11 +171,13 @@ header {
 
 .head-pill {
   --k: 0;
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  display: flex;
   align-items: center;
-  justify-items: center;
+  justify-content: space-between;
   width: calc(100% - (100% - 178px) * var(--k));
+  /* уже своего содержимого пилюля не станет: на внутренних страницах в ней
+     живут ещё и ссылки, и текст не должен обрезаться */
+  min-width: min(100%, max-content);
   gap: calc(10px - 5px * var(--k));
   padding: calc(9px - 3px * var(--k)) calc(16px - 9px * var(--k));
   border-radius: 999px;
@@ -201,9 +203,25 @@ body.scrolled .head-pill { box-shadow: var(--glass-inset), var(--glass-shadow), 
   pointer-events: none;
 }
 .head-pill > * { position: relative; }
-.head-pill .logo { justify-self: start; }
-.head-pill .avatar-btn { justify-self: center; margin-left: 0; }
-.head-pill .theme-toggle { justify-self: end; }
+/* на главной кружок профиля стоит ровно посередине, а логотип и переключатель
+   сходятся к нему с боков */
+#headPill { display: grid; grid-template-columns: 1fr auto 1fr; justify-items: center; }
+#headPill .logo { justify-self: start; }
+#headPill .avatar-btn { justify-self: center; margin-left: 0; }
+#headPill .theme-toggle { justify-self: end; }
+/* На внутренних страницах в пилюле живут ещё и ссылки. Они жмутся сильнее
+   логотипа: шторка должна остаться одной строкой, а не расползтись на две. */
+.head-pill .nav {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: none;
+  white-space: nowrap;
+}
+.head-pill .nav a { font-size: 12.5px; padding: 6px 0; }
+/* когда ссылок много, слово «vita» уступает им место первым */
+.head-pill:has(.nav) .logo-word { display: none; }
+.head-pill:has(.nav) { gap: 10px; }
 
 /* название никуда не девается: шапка просто собирается вокруг кружка профиля */
 .head-shrink .logo { font-size: calc(17px - 3px * var(--k)); white-space: nowrap; }
@@ -740,6 +758,30 @@ html.gate body { min-height: 100dvh; }
 /* --- окно входа --- */
 .auth-modal { align-items: stretch; text-align: left; gap: 13px; max-width: 340px; padding: 26px 22px 22px; }
 .auth-seg { align-self: center; }
+/* Код из телеграма: четыре клетки вместо одного поля — цифры не сливаются,
+   и сразу видно, сколько осталось ввести. */
+.code-row { display: flex; gap: 10px; justify-content: center; }
+.code-cell {
+  width: 58px;
+  height: 64px;
+  border-radius: 16px;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg-soft);
+  color: var(--text);
+  font: inherit;
+  font-size: 26px;
+  font-weight: 700;
+  text-align: center;
+  padding: 0;
+  transition: border-color .2s, box-shadow .25s, transform .15s;
+}
+.code-cell:focus {
+  outline: none;
+  border-color: var(--text-nav);
+  box-shadow: 0 0 0 3px var(--swatch-halo), 0 8px 24px var(--press-glow);
+  transform: translateY(-1px);
+}
+
 /* телеграм стоит первым: это вход в один тап, форма — для тех, кому он не подходит */
 .auth-lead { text-align: center; color: var(--text-2); font-size: 15px; font-weight: 600; }
 .tg-lead .tg-btn { width: 100%; min-height: 48px; font-size: 15.5px; }

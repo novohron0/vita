@@ -42,7 +42,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const pill = header.querySelector('.head-pill');
   const nav = header.querySelector('.nav');
   if (pill) {
-    pill.append(btn);
+    pill.append(btn);   // переключатель всегда с краю: логотип — ссылки — тема
   } else if (nav) {
     const wrap = document.createElement('div');
     wrap.className = 'head-r';

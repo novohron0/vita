@@ -1383,7 +1383,7 @@ def auth_forgot(data: AuthIn):
                 "SELECT tg_id FROM profile_telegram WHERE profile_code = ?", (row[0],)
             ).fetchone()
             if tg:
-                code = f"{secrets.randbelow(1000000):06d}"
+                code = f"{secrets.randbelow(10000):04d}"
                 conn.execute(
                     "INSERT INTO auth_reset(email, code_hash, expires, tries) "
                     "VALUES(?, ?, ?, 0) ON CONFLICT(email) DO UPDATE SET "

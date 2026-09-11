@@ -95,7 +95,7 @@ with tempfile.TemporaryDirectory(prefix="vita-auth-") as data_dir:
     with main.db() as conn:
         conn.execute(
             "INSERT INTO auth_reset(email, code_hash, expires, tries) VALUES(?, ?, ?, 0)",
-            ("kot@primer.ru", main._token_hash("424242"), main.time.time() + 900),
+            ("kot@primer.ru", main._token_hash("4242"), main.time.time() + 900),
         )
     try:
         main.auth_reset(main.ResetIn(
@@ -105,7 +105,7 @@ with tempfile.TemporaryDirectory(prefix="vita-auth-") as data_dir:
         assert error.status_code == 403, error.status_code
 
     done = body(main.auth_reset(main.ResetIn(
-        email="kot@primer.ru", code="424242", password="novyparol1")))
+        email="kot@primer.ru", code="4242", password="novyparol1")))
     assert done["profile"]["code"] == before["code"]
 
     # старый пароль больше не работает, новый работает
@@ -120,7 +120,7 @@ with tempfile.TemporaryDirectory(prefix="vita-auth-") as data_dir:
     # код одноразовый
     try:
         main.auth_reset(main.ResetIn(
-            email="kot@primer.ru", code="424242", password="ещёодин1"))
+            email="kot@primer.ru", code="4242", password="ещёодин1"))
         raise AssertionError("код сработал второй раз")
     except HTTPException as error:
         assert error.status_code == 403, error.status_code
