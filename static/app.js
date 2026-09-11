@@ -661,6 +661,8 @@ function updateMini() {
   const vh = viewport().h;
   const visible = Math.max(0, Math.min(r.bottom, vh) - Math.max(r.top, 0));
   const show = r.height > 0 && visible / r.height < 0.5;
+  // свет за телефоном горит, пока сам телефон в кадре: на прокрутке он не нужен
+  document.body.classList.toggle('dim', show);
   if (show === miniWrap.classList.contains('show')) return;
   if (show) miniPlace(false);  // панель браузера могла сдвинуть видимую область
   miniWrap.classList.toggle('show', show);
@@ -676,6 +678,7 @@ function queueMini() {
   if (now - miniTick < 60) return;
   miniTick = now;
   updateMini();
+  liftRising();
 }
 // touchmove и wheel — страховка: на айфоне во время инерции scroll иногда
 // молчит до самой остановки
@@ -686,6 +689,27 @@ addEventListener('resize', queueMini, { passive: true });
 window.visualViewport?.addEventListener('resize', () => { miniPlace(false); queueMini(); });
 window.visualViewport?.addEventListener('scroll', queueMini);
 updateMini();
+
+// Появление на прокрутке. Считаем в том же месте, что уже слушает скролл:
+// наблюдатель пересечений в некоторых обёртках молчит, а пустая страница —
+// слишком высокая цена за красоту. Показанные блоки выпадают из списка, и
+// когда он пустеет, работа прекращается совсем.
+let rising = [];
+function liftRising() {
+  if (!rising.length) return;
+  const vh = viewport().h;
+  rising = rising.filter(el => {
+    const r = el.getBoundingClientRect();
+    if (!r.height) return true;            // скрытое поле дождётся своего часа
+    if (r.top > vh * 0.94) return true;
+    el.classList.add('in');
+    return false;
+  });
+}
+rising = [...document.querySelectorAll('.stats, .controls > .field, .controls > .primary, .controls > .hint')];
+for (const el of rising) el.classList.add('reveal');
+// даём браузеру отрисовать исходное положение, иначе появления не видно
+setTimeout(liftRising, 60);
 
 // --- перетаскивание и щипок ---
 const pointers = new Map();
@@ -807,21 +831,40 @@ $('proModal').addEventListener('click', e => {
 });
 
 
+// Свой заголовок сильнее фона: перебирая фоны, человек не должен терять текст,
+// который написал руками. Заголовок фона подставляется только вторым нажатием
+// на ту же кнопку — это осознанная просьба «возьми и текст тоже».
+let bgTipTimer = 0;
+function showBgTip(text) {
+  const tip = $('bgTip');
+  tip.textContent = text;
+  tip.hidden = !text;
+  clearTimeout(bgTipTimer);
+  if (text) bgTipTimer = setTimeout(() => { tip.hidden = true; }, 5000);
+}
+
 bindSeg('bg', v => {
+  const again = state.bg === v && !$('bgOwn').classList.contains('on');
   $('bgOwn').classList.remove('on');
   state.bg = v;
   customBgImg = null;
   state.bgImageId = null;
-  if (BG_TITLES[v]) {
+  if (BG_TITLES[v] && (!customTitle || again)) {
     state.title = BG_TITLES[v];
     $('title').value = state.title;
     bgAutoTitle = true;
     customTitle = false;
+    showBgTip('');
+  } else if (BG_TITLES[v]) {
+    showBgTip('твой заголовок остался. нажми ещё раз, чтобы взять «' + BG_TITLES[v] + '»');
   } else if (bgAutoTitle) {
     state.title = TITLES[state.mode];
     $('title').value = state.title;
     bgAutoTitle = false;
     customTitle = false;
+    showBgTip('');
+  } else {
+    showBgTip('');
   }
   refreshSwatches();
   animateReveal();
@@ -909,6 +952,7 @@ $('colorPick').addEventListener('input', e => {
 // любое ручное изменение (включая полное стирание) — воля юзера, дефолт не навязываем
 $('title').addEventListener('input', e => {
   customTitle = true;
+  showBgTip('');
   bgAutoTitle = false;
   state.title = e.target.value;
   draw();

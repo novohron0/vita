@@ -49,52 +49,57 @@ html { touch-action: manipulation; }
   --modal-backdrop: rgba(0, 0, 0, 0.55);
   --fc-bg: var(--glass-bg);
   --fc-bg-top: rgba(255, 255, 255, 0.08);
+  --press-glow: rgba(255, 255, 255, 0.20);
+  --hem-tint: rgba(8, 8, 11, 0.55);
   color-scheme: dark;
 }
 
 [data-theme="light"] {
   --accent-soft: #1a7f43;
-  --glass-bg: rgba(255, 255, 255, 0.76);
-  --glass-bg-soft: rgba(255, 255, 255, 0.64);
-  --glass-bg-lift: rgba(255, 255, 255, 0.9);
-  --glass-border: rgba(0, 0, 0, 0.08);
+  --glass-bg: rgba(255, 252, 246, 0.78);
+  --glass-bg-soft: rgba(252, 247, 239, 0.7);
+  --glass-bg-lift: rgba(255, 253, 248, 0.92);
+  --glass-border: rgba(74, 58, 38, 0.11);
   --glass-edge: rgba(255, 255, 255, 0.98);
-  --glass-shadow: 0 14px 40px rgba(0, 0, 0, 0.08), 0 1px 0 rgba(255, 255, 255, 0.9);
-  --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.98), inset 0 -1px 0 rgba(0, 0, 0, 0.04);
-  --glass-shine: linear-gradient(148deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.45) 40%, rgba(255, 255, 255, 0) 62%);
-  --seg-track-border: rgba(0, 0, 0, 0.07);
+  --glass-shadow: 0 14px 40px rgba(88, 66, 40, 0.1), 0 1px 0 rgba(255, 255, 255, 0.9);
+  --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.96), inset 0 -1px 0 rgba(74, 58, 38, 0.05);
+  --glass-shine: linear-gradient(148deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 250, 242, 0.45) 40%, rgba(255, 255, 255, 0) 62%);
+  --seg-track-border: rgba(74, 58, 38, 0.09);
   --seg-track-inset: inset 0 1px 0 rgba(255, 255, 255, 0.9);
 
-  --text: #1c1c1e;
-  --text-2: #3a3a3c;
-  --text-muted: #6e6e73;
-  --text-faint: #8e8e93;
-  --text-nav: #6e6e73;
-  --text-nav-on: #1c1c1e;
-  --body-grad-a: rgba(255, 255, 255, 0.78);
-  --body-grad-b: rgba(248, 246, 242, 0.94);
-  --body-base: #f4f1ec;
-  --header-bg: rgba(255, 255, 255, 0.78);
-  --input-text: #1c1c1e;
-  --input-focus: rgba(0, 0, 0, 0.22);
+  --text: #221f1a;
+  --text-2: #3d372f;
+  --text-muted: #6b6358;
+  --text-faint: #8d8375;
+  --text-nav: #6b6358;
+  --text-nav-on: #221f1a;
+  --body-grad-a: rgba(253, 249, 242, 0.8);
+  --body-grad-b: rgba(240, 233, 222, 0.95);
+  --body-base: #f1ece3;
+  --header-bg: rgba(255, 252, 246, 0.8);
+  --input-text: #221f1a;
+  --input-focus: rgba(74, 58, 38, 0.26);
   --input-inset: inset 0 1px 0 rgba(255, 255, 255, 0.95);
-  --seg-off: #6e6e73;
-  --seg-on-bg: #1c1c1e;
-  --seg-on-text: #fff;
-  --seg-on-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 4px 14px rgba(0, 0, 0, 0.12);
-  --primary-bg: #1c1c1e;
-  --primary-text: #fff;
-  --primary-inset: inset 0 1px 0 rgba(255, 255, 255, 0.1);
-  --primary-glow: 0 8px 28px rgba(0, 0, 0, 0.14);
-  --secondary-text: #1c1c1e;
-  --aurora-1: rgba(255, 255, 255, 0.55);
-  --aurora-2: rgba(52, 199, 89, 0.07);
-  --swatch-ring: #1c1c1e;
-  --swatch-halo: rgba(0, 0, 0, 0.1);
-  --modal-bg: rgba(255, 255, 255, 0.92);
-  --modal-backdrop: rgba(248, 246, 242, 0.72);
-  --fc-bg: rgba(255, 255, 255, 0.72);
-  --fc-bg-top: rgba(255, 255, 255, 0.9);
+  --seg-off: #6b6358;
+  --seg-on-bg: #2a241c;
+  --seg-on-text: #fffaf2;
+  --seg-on-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 4px 14px rgba(88, 66, 40, 0.16);
+  --primary-bg: #2a241c;
+  --primary-text: #fffaf2;
+  --primary-inset: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  --primary-glow: 0 8px 28px rgba(88, 66, 40, 0.18);
+  --secondary-text: #221f1a;
+  /* песочное свечение: на светлом фоне белая аврора была невидима */
+  --aurora-1: rgba(214, 176, 122, 0.34);
+  --aurora-2: rgba(176, 196, 186, 0.26);
+  --swatch-ring: #2a241c;
+  --swatch-halo: rgba(74, 58, 38, 0.12);
+  --modal-bg: rgba(255, 253, 248, 0.94);
+  --modal-backdrop: rgba(240, 233, 222, 0.74);
+  --fc-bg: rgba(255, 252, 246, 0.74);
+  --fc-bg-top: rgba(255, 253, 248, 0.9);
+  --press-glow: rgba(150, 110, 52, 0.26);
+  --hem-tint: rgba(240, 233, 222, 0.62);
   color-scheme: light;
 }
 
@@ -327,11 +332,13 @@ main { width: 100%; max-width: 430px; display: flex; flex-direction: column; gap
   visibility: hidden;
   transform: scale(0.62) translateY(26px);
   filter: blur(7px);
+  /* уход: сначала трогается с места, потом гаснет — иначе он «пукал» и пропадал,
+     потому что прозрачность добегала до нуля вдвое раньше движения */
   transition:
-    opacity .34s cubic-bezier(.22, 1, .36, 1),
-    transform .52s cubic-bezier(.22, 1, .36, 1),
-    filter .34s ease,
-    visibility 0s linear .5s,
+    opacity .4s cubic-bezier(.4, 0, .6, 1) .08s,
+    transform .48s cubic-bezier(.4, 0, .6, 1),
+    filter .4s ease .08s,
+    visibility 0s linear .56s,
     left .42s cubic-bezier(.22, 1, .36, 1),
     top .42s cubic-bezier(.22, 1, .36, 1);
   will-change: transform, opacity, left, top;
@@ -584,7 +591,8 @@ main { width: 100%; max-width: 430px; display: flex; flex-direction: column; gap
 }
 .hint { color: var(--text-muted); font-size: 13px; line-height: 1.5; }
 
-.page-foot { color: var(--text-faint); font-size: 13px; padding-top: 36px; }
+/* нижний воздух: последняя строка не должна тонуть под стеклянной кромкой */
+.page-foot { color: var(--text-faint); font-size: 13px; padding-top: 36px; padding-bottom: 54px; }
 
 /* --- модал предложки --- */
 .modal-back {
@@ -980,12 +988,15 @@ body::before {
     radial-gradient(36% 30% at 20% 16%, var(--aurora-1), transparent 70%),
     radial-gradient(32% 28% at 82% 80%, var(--aurora-2), transparent 70%);
   filter: blur(34px);
-  animation: auroraDrift 24s ease-in-out infinite alternate;
+  /* свет не ёрзает: бесконечный дрейф выглядел как болтанка и жёг батарею.
+     Теперь он ровно разгорается при входе и гаснет, когда телефон ушёл из кадра.
+     Анимация без forwards — иначе она залипает и глушит переход */
+  opacity: 1;
+  animation: auroraRise 1.5s cubic-bezier(.22, 1, .36, 1);
+  transition: opacity 1.15s cubic-bezier(.22, 1, .36, 1);
 }
-@keyframes auroraDrift {
-  from { transform: translate3d(-3%, -2%, 0) scale(1); }
-  to   { transform: translate3d(4%, 3%, 0) scale(1.18); }
-}
+@keyframes auroraRise { from { opacity: 0; } }
+body.dim::before { opacity: 0; }
 
 /* вход страницы */
 header { animation: fadeDown .55s cubic-bezier(.22,1,.36,1) both; }
@@ -1008,6 +1019,42 @@ main   { animation: fadeUp .7s cubic-bezier(.22,1,.36,1) both; }
 .primary:active, .secondary:active, .btn:active, .seg button:active { transform: scale(.96); }
 .seg button.on { box-shadow: 0 4px 16px rgba(0,0,0,.4); }
 .field input:focus, .field textarea:focus { box-shadow: 0 0 0 3px rgba(255,255,255,.06); }
+
+/* нажатие зажигает свет за кнопкой — отклик виден и без ховера, пальцем */
+.primary:active {
+  box-shadow: var(--primary-inset), 0 0 0 1px var(--glass-edge), 0 10px 34px var(--press-glow);
+}
+.secondary:active, .btn:active, .seg button:active,
+.pick-grid button:active, .pick-own:active, .avatar-btn:active, .prime-buy:active {
+  box-shadow: 0 8px 26px var(--press-glow);
+}
+.swatch:active { box-shadow: 0 0 0 3px var(--swatch-halo), 0 8px 24px var(--press-glow); }
+.pick-grid button, .pick-own { transition: transform .2s cubic-bezier(.34,1.56,.64,1), box-shadow .3s, border-color .25s, background .25s; }
+
+/* появление на прокрутке: блок поднимается снизу, как стеклянная панель.
+   Класс вешает скрипт — без него страница просто видна целиком */
+.reveal { opacity: 0; transform: translateY(30px); }
+.reveal.in {
+  opacity: 1;
+  transform: none;
+  transition: opacity .58s cubic-bezier(.22, 1, .36, 1), transform .72s cubic-bezier(.22, 1, .36, 1);
+}
+
+/* нижняя кромка: контент утекает под матовое стекло, а не обрывается */
+.glass-hem {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: calc(86px + env(safe-area-inset-bottom, 0px));
+  z-index: 5;
+  pointer-events: none;
+  background: linear-gradient(to top, var(--hem-tint), transparent);
+  backdrop-filter: blur(14px) saturate(1.35);
+  -webkit-backdrop-filter: blur(14px) saturate(1.35);
+  -webkit-mask-image: linear-gradient(to top, #000 0 40%, rgba(0, 0, 0, 0.5) 74%, transparent 100%);
+  mask-image: linear-gradient(to top, #000 0 40%, rgba(0, 0, 0, 0.5) 74%, transparent 100%);
+}
 
 /* телефон — парит + свечение; ховер/тап вспыхивает ярче (drop-shadow не трогает стек рамки) */
 .phone { animation: phoneFloat 7s ease-in-out .9s infinite; transition: filter .5s; cursor: pointer; }
@@ -1043,6 +1090,7 @@ main   { animation: fadeUp .7s cubic-bezier(.22,1,.36,1) both; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001s !important; transition-duration: .08s !important; }
   body::before, .phone { animation: none; }
+  .reveal { opacity: 1; transform: none; }
 }
 
 /* --- лента челленджей: стеклянные карточки --- */
@@ -1603,6 +1651,7 @@ button, a, .seg button, .swatch, .tariff {
   color: var(--seg-on-text);
 }
 .pick-own:active { transform: scale(0.99); }
+.pick-tip { color: var(--text-muted); font-size: 12.5px; line-height: 1.45; margin-top: 9px; }
 
 /* платная опция: замок вместо обещаний, объяснение — в окне по нажатию */
 .seg button.locked { position: relative; padding-right: 30px; }
