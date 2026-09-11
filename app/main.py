@@ -113,6 +113,10 @@ TG_BOT_NAME = os.environ.get("TG_BOT_NAME", "").strip().lstrip("@")
 SELLER_NAME = os.environ.get("SELLER_NAME", "")
 SELLER_INN = os.environ.get("SELLER_INN", "")
 SUPPORT_CONTACT = os.environ.get("SUPPORT_CONTACT", "")
+# Подтверждение прав на сайт в Search Console и Вебмастере. Коды выдают сами
+# панели, поэтому держим их в .env и вклеиваем в <head> главной.
+GOOGLE_VERIFY = os.environ.get("GOOGLE_VERIFY", "").strip()
+YANDEX_VERIFY = os.environ.get("YANDEX_VERIFY", "").strip()
 
 TRIAL_DAYS = 7
 REVIEW_DAYS = 7  # вторая неделя — автоматом за отзыв после использования
@@ -1556,6 +1560,12 @@ def _page(name: str, extra: dict | None = None) -> HTMLResponse:
         "{{INN}}": SELLER_INN or "—",
         "{{SUPPORT}}": SUPPORT_CONTACT or "на почту поддержки",
         "{{UPDATED}}": "10.09.2026",
+        "{{VERIFY}}": (
+            (f'<meta name="google-site-verification" content="{esc(GOOGLE_VERIFY)}">'
+             if GOOGLE_VERIFY else "")
+            + (f'<meta name="yandex-verification" content="{esc(YANDEX_VERIFY)}">'
+               if YANDEX_VERIFY else "")
+        ),
     }
     values.update(extra or {})
     for key, value in values.items():
