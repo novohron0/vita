@@ -105,6 +105,28 @@
     return data;
   }
 
+  // Вход по почте: ключ устройства, который вернул сервер, заменяет прежний —
+  // с этой минуты браузер работает под тем аккаунтом, в который вошли.
+  async function authPost(path, body, fallback) {
+    const response = await fetch('/api/auth/' + path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ownerToken: token(), ...body })
+    });
+    const data = await responseData(response, fallback);
+    if (data.token) localStorage.setItem(TOKEN_KEY, data.token);
+    return data;
+  }
+
+  const register = (email, password) =>
+    authPost('register', { email, password }, 'Не получилось зарегистрироваться');
+  const login = (email, password) =>
+    authPost('login', { email, password }, 'Не получилось войти');
+  const forgot = email =>
+    authPost('forgot', { email }, 'Не получилось отправить код');
+  const resetPass = (email, code, password) =>
+    authPost('reset', { email, code, password }, 'Не получилось сменить пароль');
+
   function logout() {
     localStorage.removeItem(TOKEN_KEY);
   }
@@ -116,5 +138,5 @@
   }
 
   window.VitaID = { token, ensure, library, connect, updateProfile, uploadAvatar, member, access, buy,
-    loginTelegram, logout };
+    loginTelegram, register, login, forgot, resetPass, logout };
 })();

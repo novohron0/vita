@@ -1325,7 +1325,8 @@ async function loadProfile() {
     paintTagNote(profile);
     paintAvatar(profile.avatar);
     paintPrime(access);
-    $('profLogout').hidden = !access.telegram;
+    $('profLogout').hidden = !(access.telegram || access.email);
+    $('profMail').hidden = !!(access.telegram || access.email);
     if (!access.telegram && access.tgBotId) VitaTG.mount($('tgBoxProfile'), access);
     profileLoaded = true;
   } catch (error) {
@@ -1534,11 +1535,132 @@ $('profSave').addEventListener('click', async () => {
   }
 });
 
+$('profMail').addEventListener('click', () => {
+  profModal.hidden = true;
+  openAuth('login');
+});
+
 $('profLogout').addEventListener('click', () => {
   if (!confirm('Выйти из аккаунта? Вернуться сможешь через телеграм.')) return;
   VitaID.logout();
   location.reload();
 });
+
+// --- окно входа ---
+// Без аккаунта обои живут в одном localStorage и исчезают вместе с ним: сменил
+// браузер — и покупка потеряна. Почта с паролем и телеграм ведут в один и тот
+// же профиль, человек выбирает, что ему привычнее.
+const authModal = $('authModal');
+const AUTH_SEEN = 'vitaAuthSeen';
+let authMode = 'login';
+
+function paintAuth() {
+  const reg = authMode === 'register';
+  const reset = authMode === 'reset';
+  $('authTabs').querySelectorAll('button')
+    .forEach(b => b.classList.toggle('on', b.dataset.v === authMode));
+  $('authTabs').hidden = reset;
+  $('authBody').hidden = reset;
+  $('authResetBody').hidden = !reset;
+  $('authPass2Row').hidden = !reg;
+  $('authForgot').hidden = reg || reset;
+  $('authGo').textContent = reset ? 'Сменить пароль' : (reg ? 'Создать аккаунт' : 'Войти');
+  $('authSub').textContent = reset
+    ? 'Код ушёл в телеграм. Введи его и придумай новый пароль.'
+    : (reg
+      ? 'Чтобы обои и покупка остались твоими, а не этого браузера.'
+      : 'С возвращением — обои и покупка на месте.');
+  $('authPass').autocomplete = reg ? 'new-password' : 'current-password';
+  $('authErr').hidden = true;
+}
+
+function authFail(message) {
+  const err = $('authErr');
+  err.textContent = message;
+  err.hidden = false;
+}
+
+async function openAuth(mode = 'login') {
+  authMode = mode;
+  paintAuth();
+  $('authNote').hidden = true;
+  authModal.hidden = false;
+  try {
+    const access = await VitaID.access();
+    if (!access.telegram && access.tgBotId) VitaTG.mount($('tgBoxAuth'), access);
+    else $('tgBoxAuth').hidden = true;
+  } catch { $('tgBoxAuth').hidden = true; }
+}
+
+function closeAuth() {
+  authModal.hidden = true;
+  localStorage.setItem(AUTH_SEEN, '1');   // навязываться второй раз не будем
+}
+
+$('authClose').addEventListener('click', closeAuth);
+authModal.addEventListener('click', e => { if (e.target === authModal) closeAuth(); });
+
+$('authTabs').addEventListener('click', e => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  $('authTabs').querySelectorAll('button').forEach(b => b.classList.toggle('on', b === btn));
+  authMode = btn.dataset.v;
+  paintAuth();
+});
+
+$('authGo').addEventListener('click', async () => {
+  const btn = $('authGo');
+  $('authErr').hidden = true;
+  const email = $('authEmail').value.trim();
+  btn.disabled = true;
+  btn.textContent = 'Минутку…';
+  try {
+    if (authMode === 'register') {
+      if ($('authPass').value !== $('authPass2').value) throw new Error('Пароли не совпали');
+      await VitaID.register(email, $('authPass').value);
+    } else if (authMode === 'login') {
+      await VitaID.login(email, $('authPass').value);
+    } else {
+      await VitaID.resetPass(email, $('authCode').value.trim(), $('authNewPass').value);
+    }
+    localStorage.setItem(AUTH_SEEN, '1');
+    location.reload();   // страница перечитает профиль, обои и доступ под новым ключом
+    return;
+  } catch (error) {
+    paintAuth();
+    authFail(error.message || 'Не получилось');
+  }
+  btn.disabled = false;
+});
+
+$('authForgot').addEventListener('click', async () => {
+  const email = $('authEmail').value.trim();
+  const note = $('authNote');
+  if (!email) { authFail('Сначала впиши почту, на которую регистрировался'); return; }
+  const btn = $('authForgot');
+  btn.disabled = true;
+  try {
+    const data = await VitaID.forgot(email);
+    note.textContent = data.hint;
+    note.hidden = false;
+    if (data.sent) { authMode = 'reset'; paintAuth(); note.hidden = false; }
+  } catch (error) {
+    authFail(error.message || 'Не получилось отправить код');
+  }
+  btn.disabled = false;
+});
+
+// Окно показывается один раз и закрывается крестиком: человеку, который пришёл
+// с ролика, нельзя запирать дверь до того, как он увидел обои.
+async function maybeGreet() {
+  if (localStorage.getItem(AUTH_SEEN)) return;
+  try {
+    const access = await VitaID.access();
+    if (access.email || access.telegram) return;
+    setTimeout(() => { if (authModal.hidden) openAuth('register'); }, 900);
+  } catch {}
+}
+maybeGreet();
 
 // статус Прайма нужен и до открытия карточки: от него зависит замок на логотипе
 (async () => {

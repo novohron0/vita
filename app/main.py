@@ -216,6 +216,24 @@ def _init_schema(conn: sqlite3.Connection) -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS profile_telegram_profile ON profile_telegram(profile_code)"
     )
+    # Вход по почте — вторая дверь в тот же аккаунт рядом с телеграмом.
+    # Сам пароль не хранится: только своя соль и scrypt-отпечаток, так что
+    # даже с базой в руках его не прочитать.
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS profile_auth("
+        "email TEXT PRIMARY KEY, profile_code TEXT NOT NULL, "
+        "pass_salt TEXT NOT NULL, pass_hash TEXT NOT NULL, "
+        "created TEXT NOT NULL DEFAULT (datetime('now')))"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS profile_auth_profile ON profile_auth(profile_code)"
+    )
+    # одноразовые коды на смену забытого пароля
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS auth_reset("
+        "email TEXT PRIMARY KEY, code_hash TEXT NOT NULL, "
+        "expires REAL NOT NULL, tries INTEGER NOT NULL DEFAULT 0)"
+    )
     # Backfill pre-account profiles without exposing their private Vita ID.
     # The first pass also repairs a partially applied migration before adding
     # the case-insensitive unique index. Later requests inspect only incomplete
@@ -780,6 +798,11 @@ RATE_RULES = {
     "/api/feed-post": (15, 3600),
     "/api/review": (10, 3600),
     "/api/focus-wait": (10, 3600),
+    # вход и пароли: подбирать перебором должно быть скучно
+    "/api/auth/register": (8, 900),
+    "/api/auth/login": (12, 300),
+    "/api/auth/forgot": (5, 900),
+    "/api/auth/reset": (10, 600),
 }
 _rate_hits: dict = defaultdict(deque)
 _rate_lock = threading.Lock()
@@ -1067,6 +1090,7 @@ def _profile_access_state(conn: sqlite3.Connection, profile_code: str | None) ->
         "paid": False,
         "code": "",
         "telegram": "",
+        "email": "",
         "tgBot": TG_BOT_NAME,
         "tgBotId": TG_BOT_TOKEN.split(":")[0] if TG_BOT_TOKEN else "",
         "until": None,
@@ -1078,6 +1102,10 @@ def _profile_access_state(conn: sqlite3.Connection, profile_code: str | None) ->
         return state
     state["code"] = profile_code
     state["telegram"] = _telegram_handle(conn, profile_code)
+    row = conn.execute(
+        "SELECT email FROM profile_auth WHERE profile_code = ?", (profile_code,)
+    ).fetchone()
+    state["email"] = row[0] if row else ""
     granted, granted_until = _profile_access_override(conn, profile_code)
     if granted and granted_until is None:
         state["paid"] = True
@@ -1199,6 +1227,196 @@ async def auth_telegram(request: Request):
         "profile": profile,
         "access": access,
     }
+
+
+class AuthIn(BaseModel):
+    email: str = ""
+    password: str = ""
+    ownerToken: str = ""
+
+
+class ResetIn(BaseModel):
+    email: str = ""
+    code: str = ""
+    password: str = ""
+
+
+def _pass_hash(password: str, salt: str) -> str:
+    """scrypt: подбор пароля по базе становится дорогим даже на хорошей машине."""
+    return hashlib.scrypt(
+        password.encode("utf-8"), salt=bytes.fromhex(salt),
+        n=16384, r=8, p=1, dklen=32,
+    ).hex()
+
+
+def _clean_email(raw: str) -> str:
+    email = str(raw or "").strip().lower()[:120]
+    if not EMAIL_RE.fullmatch(email):
+        raise HTTPException(422, "Проверь почту — кажется, в ней опечатка")
+    return email
+
+
+def _clean_password(raw: str) -> str:
+    password = str(raw or "")
+    if len(password) < 6:
+        raise HTTPException(422, "Пароль короче шести знаков — его легко подобрать")
+    if len(password) > 200:
+        raise HTTPException(422, "Пароль слишком длинный")
+    return password
+
+
+def _issue_device(conn: sqlite3.Connection, profile_code: str) -> str:
+    """Новый ключ устройства: прежние остаются жить, вход с телефона не выбивает с ноутбука."""
+    token = secrets.token_hex(24)
+    conn.execute(
+        "INSERT OR IGNORE INTO profile_devices(profile_code, token_hash) VALUES(?, ?)",
+        (profile_code, _token_hash(token)),
+    )
+    return token
+
+
+def _auth_payload(conn: sqlite3.Connection, profile_code: str, token: str) -> dict:
+    return {
+        "token": token,
+        "profile": _profile_payload(conn, profile_code),
+        "access": _profile_access_state(conn, profile_code),
+    }
+
+
+@app.post("/api/auth/register")
+def auth_register(data: AuthIn):
+    """Почта и пароль закрепляют за человеком тот профиль, что уже есть в браузере."""
+    email = _clean_email(data.email)
+    password = _clean_password(data.password)
+    with db() as conn:
+        busy = conn.execute(
+            "SELECT profile_code FROM profile_auth WHERE email = ?", (email,)
+        ).fetchone()
+        if busy:
+            raise HTTPException(409, "На эту почту уже есть аккаунт — войди вместо регистрации")
+        profile_code = _profile_for_token(conn, data.ownerToken, create=True)
+        already = conn.execute(
+            "SELECT email FROM profile_auth WHERE profile_code = ?", (profile_code,)
+        ).fetchone()
+        if already:
+            raise HTTPException(409, "К этому аккаунту уже привязана почта " + already[0])
+        salt = secrets.token_hex(16)
+        conn.execute(
+            "INSERT INTO profile_auth(email, profile_code, pass_salt, pass_hash) "
+            "VALUES(?, ?, ?, ?)",
+            (email, profile_code, salt, _pass_hash(password, salt)),
+        )
+        return _auth_payload(conn, profile_code, _issue_device(conn, profile_code))
+
+
+@app.post("/api/auth/login")
+def auth_login(data: AuthIn):
+    """Вход с любого устройства: возвращает человека в его же аккаунт."""
+    email = _clean_email(data.email)
+    password = str(data.password or "")
+    with db() as conn:
+        row = conn.execute(
+            "SELECT profile_code, pass_salt, pass_hash FROM profile_auth WHERE email = ?",
+            (email,),
+        ).fetchone()
+        # один и тот же ответ на «нет такой почты» и «неверный пароль»:
+        # иначе по форме входа можно перебрать, кто у нас зарегистрирован
+        if not row or not hmac.compare_digest(_pass_hash(password, row[1]), row[2]):
+            raise HTTPException(403, "Почта или пароль не подошли")
+        profile_code = row[0]
+        return _auth_payload(conn, profile_code, _issue_device(conn, profile_code))
+
+
+def _tg_send(chat_id: str, text: str) -> bool:
+    """Короткое сообщение от бота. Ошибка телеграма не должна ронять запрос."""
+    if not TG_BOT_TOKEN:
+        return False
+    import urllib.request
+
+    try:
+        req = urllib.request.Request(
+            f"https://api.telegram.org/bot{TG_BOT_TOKEN}/sendMessage",
+            data=json.dumps({"chat_id": chat_id, "text": text}).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            resp.read()
+        return True
+    except Exception:
+        return False
+
+
+@app.post("/api/auth/forgot")
+def auth_forgot(data: AuthIn):
+    """Код на смену пароля уходит в телеграм — почтовой рассылки у нас нет.
+
+    Отвечаем одинаково независимо от того, есть такая почта или нет: иначе
+    форма превращается в способ узнать, кто у нас зарегистрирован."""
+    email = _clean_email(data.email)
+    with db() as conn:
+        row = conn.execute(
+            "SELECT profile_code FROM profile_auth WHERE email = ?", (email,)
+        ).fetchone()
+        sent = False
+        if row:
+            tg = conn.execute(
+                "SELECT tg_id FROM profile_telegram WHERE profile_code = ?", (row[0],)
+            ).fetchone()
+            if tg:
+                code = f"{secrets.randbelow(1000000):06d}"
+                conn.execute(
+                    "INSERT INTO auth_reset(email, code_hash, expires, tries) "
+                    "VALUES(?, ?, ?, 0) ON CONFLICT(email) DO UPDATE SET "
+                    "code_hash = excluded.code_hash, expires = excluded.expires, tries = 0",
+                    (email, _token_hash(code), time.time() + 900),
+                )
+                sent = _tg_send(
+                    tg[0],
+                    f"Код для смены пароля в Vita: {code}\n"
+                    "Он живёт 15 минут. Если пароль менял не ты — просто не вводи его.",
+                )
+        return {
+            "ok": True,
+            "sent": sent,
+            "hint": (
+                "Код отправлен тебе в телеграм — он живёт 15 минут."
+                if sent else
+                "Код уходит в телеграм, а он к этой почте не привязан. "
+                "Напиши нам " + SUPPORT_CONTACT + " — вернём доступ руками."
+            ),
+        }
+
+
+@app.post("/api/auth/reset")
+def auth_reset(data: ResetIn):
+    """Смена пароля по коду из телеграма."""
+    email = _clean_email(data.email)
+    password = _clean_password(data.password)
+    code = str(data.code or "").strip()
+    with db() as conn:
+        row = conn.execute(
+            "SELECT code_hash, expires, tries FROM auth_reset WHERE email = ?", (email,)
+        ).fetchone()
+        if not row or row[1] < time.time():
+            raise HTTPException(403, "Код устарел — запроси новый")
+        if row[2] >= 5:
+            raise HTTPException(429, "Слишком много попыток — запроси новый код")
+        if not hmac.compare_digest(_token_hash(code), row[0]):
+            conn.execute("UPDATE auth_reset SET tries = tries + 1 WHERE email = ?", (email,))
+            raise HTTPException(403, "Код не подошёл")
+        prof = conn.execute(
+            "SELECT profile_code FROM profile_auth WHERE email = ?", (email,)
+        ).fetchone()
+        if not prof:
+            raise HTTPException(403, "Код устарел — запроси новый")
+        salt = secrets.token_hex(16)
+        conn.execute(
+            "UPDATE profile_auth SET pass_salt = ?, pass_hash = ? WHERE email = ?",
+            (salt, _pass_hash(password, salt), email),
+        )
+        conn.execute("DELETE FROM auth_reset WHERE email = ?", (email,))
+        return _auth_payload(conn, prof[0], _issue_device(conn, prof[0]))
 
 
 @app.post("/api/access")

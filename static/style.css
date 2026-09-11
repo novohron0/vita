@@ -721,6 +721,43 @@ main { width: 100%; max-width: 430px; display: flex; flex-direction: column; gap
 .hero-tune:active { border-color: var(--glass-border); color: var(--text); }
 html { scroll-behavior: smooth; }
 
+/* --- окно входа --- */
+.auth-modal { align-items: stretch; text-align: left; gap: 13px; max-width: 340px; padding: 26px 22px 22px; }
+.auth-seg { align-self: center; }
+.prof-mail {
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg-soft);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  min-height: 40px;
+  padding: 0 18px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.prof-mail:active { transform: scale(0.97); box-shadow: 0 8px 26px var(--press-glow); }
+.auth-seg button { min-width: 118px; }
+.auth-sub { color: var(--text-muted); font-size: 13.5px; line-height: 1.45; text-align: center; }
+.auth-body { display: flex; flex-direction: column; gap: 11px; }
+.auth-modal .field { gap: 6px; }
+.auth-modal > .primary { align-self: stretch; width: 100%; min-width: 0; margin: 2px 0 0; }
+.auth-note { color: var(--text-muted); font-size: 12.5px; line-height: 1.45; text-align: center; }
+.auth-forgot {
+  align-self: center;
+  border: 0;
+  background: none;
+  color: var(--text-nav);
+  font: inherit;
+  font-size: 13px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.auth-forgot:active { color: var(--text); background: var(--glass-bg-soft); }
+/* «или» лежит на линии, а не висит в пустоте */
+.auth-or { display: flex; align-items: center; gap: 12px; color: var(--text-faint); font-size: 12px; }
+.auth-or::before, .auth-or::after { content: ""; flex: 1; height: 1px; background: var(--glass-border); }
+
 /* привязка телеграма стоит после формы: это забота на будущее, а не пропуск
    к оплате — человек, готовый платить, не должен сначала регистрироваться */
 .tg-after { margin-top: 4px; padding-top: 18px; border-top: 1px solid var(--glass-border); }
