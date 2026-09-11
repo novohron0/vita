@@ -6,17 +6,19 @@
   <link rel="icon" type="image/png" href="/static/img/favicon.png">
   <link rel="apple-touch-icon" href="/static/img/apple-touch.png">
 <title>Установка — Vita</title>
-<script src="/static/theme.js?v=3"></script>
-<link rel="stylesheet" href="/static/style.css?v=58">
+<script src="/static/theme.js?v=4"></script>
+<link rel="stylesheet" href="/static/style.css?v=59">
 </head>
 <body>
-<header>
-  <a class="logo" href="/">⠿ vita</a>
-  <span class="tag">установка</span>
+<header class="head-shrink">
+  <div class="head-pill">
+    <a class="logo" href="/">⠿ <span class="logo-word">vita</span></a>
+    <span class="tag">установка</span>
+  </div>
 </header>
 
 <main class="setup">
-  <img class="wp-preview" src="{{URL}}" alt="Твои обои">
+  <div class="phone phone-still"><img class="wp-preview" src="{{URL}}" alt="Твои обои"></div>
   <h1>Осталось 2 минуты</h1>
   <p class="access">{{ACCESS}}</p>
   <p class="sub">Картинка готова и уже сама обновляется каждый день.
@@ -29,7 +31,7 @@
   <div class="step">
     <div class="step-n">1</div>
     <div class="step-body">
-      <h3>Добавь ярлык Vita</h3>
+      <h2>Добавь ярлык Vita</h2>
       <p>При добавлении ярлык спросит твою ссылку — скопируй её:</p>
       <div class="linkbox">
         <code id="myUrl">{{URL}}</code>
@@ -42,7 +44,7 @@
   <div class="step">
     <div class="step-n">2</div>
     <div class="step-body">
-      <h3>Включи автообновление</h3>
+      <h2>Включи автообновление</h2>
       <p>Открой <b>Команды</b> → вкладка <b>«Автоматизация»</b> → <b>+</b> →
         <b>«Время суток»</b> → поставь <b>00:05</b>, каждый день →
         <b>«Выполнять сразу»</b> → выбери ярлык <b>Vita</b>.</p>
@@ -54,7 +56,7 @@
   <div class="step">
     <div class="step-n">3</div>
     <div class="step-body">
-      <h3>Проверь</h3>
+      <h2>Проверь</h2>
       <a class="btn secondary" href="shortcuts://run-shortcut?name=Vita">Поставить обои сейчас</a>
       <p class="hint">Кнопка запустит ярлык — обои встанут сразу, не дожидаясь ночи.</p>
     </div>
@@ -127,7 +129,7 @@ if (reviewSend) {
         return;
       }
       document.getElementById('reviewBlock').innerHTML =
-        '<h3>Спасибо 🙏</h3><p class="hint">Вторая неделя активна до <b>' + d.until_h +
+        '<h2>Спасибо 🙏</h2><p class="hint">Вторая неделя активна до <b>' + d.until_h +
         '</b>. Точки снова оживут этой ночью.</p>';
     } catch (e) {
       status.textContent = 'Сеть подвела — попробуй ещё раз';

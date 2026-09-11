@@ -66,3 +66,59 @@ document.addEventListener('DOMContentLoaded', () => {
     syncThemeToggle(btn);
   });
 });
+
+
+/* Шапка-островок и появление блоков на прокрутке.
+   Живут здесь, а не в app.js: тогда они одинаковы на всех страницах, а не
+   только на главной. Цель ставит скролл, ведёт к ней кадровый цикл —
+   на айфоне события прокрутки во время инерции приходят рывками. */
+(function () {
+  const pill = document.querySelector('.head-pill');
+  const RISE = '.step, .stats, .controls > .field, .controls > .primary,'
+    + ' .controls > .hint, .buy-price, .buy-list, .buy-form, .setup-foot';
+  let target = 0, now = 0, raf = 0;
+  let rising = [];
+
+  function tick() {
+    now += (target - now) * 0.16;
+    if (Math.abs(target - now) < 0.0015) now = target;
+    pill.style.setProperty('--k', now.toFixed(4));
+    raf = now === target ? 0 : requestAnimationFrame(tick);
+  }
+
+  function aim() {
+    if (!pill) return;
+    target = Math.min(1, Math.max(0, (scrollY || 0) / 380));
+    if (target !== now && !raf) raf = requestAnimationFrame(tick);
+  }
+
+  function lift() {
+    if (!rising.length) return;
+    const vh = (window.visualViewport ? visualViewport.height : innerHeight);
+    rising = rising.filter(el => {
+      const box = el.getBoundingClientRect();
+      if (!box.height) return true;          // скрытый блок дождётся своего часа
+      if (box.top > vh * 0.94) return true;
+      el.classList.add('in');
+      return false;
+    });
+  }
+
+  function onScroll() {
+    aim();
+    lift();
+    document.body.classList.toggle('scrolled', (scrollY || 0) > 12);
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    // на главной своим появлением заведует app.js — он знает про скрытые поля
+    if (!document.getElementById('headPill')) {
+      rising = [...document.querySelectorAll(RISE)];
+      for (const el of rising) el.classList.add('reveal');
+      setTimeout(lift, 60);
+    }
+    onScroll();
+  });
+  addEventListener('scroll', onScroll, { passive: true });
+  addEventListener('touchmove', onScroll, { passive: true });
+})();

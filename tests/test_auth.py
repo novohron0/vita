@@ -2,6 +2,7 @@
 
 Гоняется на временном каталоге — боевую ~/vita/data трогать нельзя.
 """
+import json
 import os
 import sys
 import tempfile
@@ -16,12 +17,16 @@ with tempfile.TemporaryDirectory(prefix="vita-auth-") as data_dir:
 
     from app import main
 
+    def body(response):
+        """Ручки входа отдают JSONResponse — из-за куки с ключом устройства."""
+        return json.loads(response.body) if hasattr(response, "body") else response
+
     browser = "0123456789abcdef" * 3
 
     # --- регистрация закрепляет за почтой тот профиль, что уже есть в браузере ---
     before = main.ensure_profile(main.ProfileIn(ownerToken=browser))
-    reg = main.auth_register(main.AuthIn(
-        email="Kot@Primer.RU", password="tochki123", ownerToken=browser))
+    reg = body(main.auth_register(main.AuthIn(
+        email="Kot@Primer.RU", password="tochki123", ownerToken=browser)))
     assert reg["profile"]["code"] == before["code"], "регистрация увела в чужой профиль"
     assert len(reg["token"]) >= 40, "не выдан ключ устройства"
 
@@ -58,7 +63,7 @@ with tempfile.TemporaryDirectory(prefix="vita-auth-") as data_dir:
             assert error.status_code == 422, error.status_code
 
     # --- вход с чистого устройства возвращает в тот же аккаунт ---
-    login = main.auth_login(main.AuthIn(email="kot@primer.ru", password="tochki123"))
+    login = body(main.auth_login(main.AuthIn(email="kot@primer.ru", password="tochki123")))
     assert login["profile"]["code"] == before["code"], "вход привёл не туда"
     assert login["token"] != reg["token"], "переиспользован старый ключ устройства"
 
@@ -99,8 +104,8 @@ with tempfile.TemporaryDirectory(prefix="vita-auth-") as data_dir:
     except HTTPException as error:
         assert error.status_code == 403, error.status_code
 
-    done = main.auth_reset(main.ResetIn(
-        email="kot@primer.ru", code="424242", password="novyparol1"))
+    done = body(main.auth_reset(main.ResetIn(
+        email="kot@primer.ru", code="424242", password="novyparol1")))
     assert done["profile"]["code"] == before["code"]
 
     # старый пароль больше не работает, новый работает
@@ -109,8 +114,8 @@ with tempfile.TemporaryDirectory(prefix="vita-auth-") as data_dir:
         raise AssertionError("старый пароль остался рабочим")
     except HTTPException as error:
         assert error.status_code == 403, error.status_code
-    assert main.auth_login(main.AuthIn(
-        email="kot@primer.ru", password="novyparol1"))["profile"]["code"] == before["code"]
+    assert body(main.auth_login(main.AuthIn(
+        email="kot@primer.ru", password="novyparol1")))["profile"]["code"] == before["code"]
 
     # код одноразовый
     try:

@@ -880,11 +880,10 @@ html.gate body { min-height: 100dvh; }
 .setup { align-items: center; text-align: center; }
 .setup h1 { font-size: 28px; font-weight: 800; }
 .setup .sub { color: var(--text-muted); font-size: 15px; line-height: 1.5; max-width: 320px; }
-.wp-preview {
-  width: 132px;
-  border-radius: 22px;
-  border: 4px solid var(--glass-border);
-}
+/* На установке обои показываются в том же корпусе, что и на главной: человек
+   должен узнать свой телефон, а не увидеть вырезанную картинку. */
+.phone-still { width: 208px; align-self: center; }
+.phone-still .wp-preview { display: block; width: 100%; height: auto; border: 0; border-radius: 45px; }
 .step {
   display: flex;
   gap: 14px;
@@ -1249,7 +1248,7 @@ main   { animation: fadeUp .7s cubic-bezier(.22,1,.36,1) both; }
 @keyframes gbarShine { 0% { transform: translateX(-120%); } 55%,100% { transform: translateX(120%); } }
 
 /* онбординг /s: превью обоев парит, шаги входят друг за другом */
-.setup .wp-preview { animation: fadeUp .7s cubic-bezier(.22,1,.36,1) both, phoneFloat 7s ease-in-out 1.3s infinite; }
+.setup .phone-still { animation: fadeUp .7s cubic-bezier(.22,1,.36,1) both, phoneFloat 7s ease-in-out 1.3s infinite; }
 .setup .step { animation: fadeUp .6s cubic-bezier(.22,1,.36,1) both .1s; }
 .setup .step ~ .step { animation-delay: .24s; }
 .setup .step ~ .step ~ .step { animation-delay: .38s; }
