@@ -1232,10 +1232,14 @@ function paintPrime(access) {
   const paid = !!access?.paid;
   row.classList.toggle('on', paid);
   buy.hidden = paid || !access?.payable;
-  if (paid) state.textContent = 'открыт навсегда';
-  else if (access?.until && !access.expired) state.textContent = 'идут пробные дни';
-  else if (access?.expired) state.textContent = 'проба кончилась';
-  else state.textContent = 'не подключён';
+  // строка молчит, когда рядом стоит кнопка покупки: она и так всё говорит
+  let text = '';
+  if (paid) text = 'Прайм открыт навсегда';
+  else if (access?.until && !access.expired) text = 'идут пробные дни';
+  else if (access?.expired) text = 'проба кончилась';
+  else if (buy.hidden) text = 'Прайм не подключён';
+  state.textContent = text;
+  state.hidden = !text;
   hasFullAccess = paid;
   if (paid) $('brandOff').classList.remove('locked');
 }
@@ -1263,7 +1267,11 @@ $('avatarBtn').addEventListener('click', () => {
 });
 $('profileClose').addEventListener('click', () => { profModal.hidden = true; });
 profModal.addEventListener('click', e => { if (e.target === profModal) profModal.hidden = true; });
-addEventListener('keydown', e => { if (e.key === 'Escape') profModal.hidden = true; });
+addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  if (!cropModal.hidden) { $('cropCancel').click(); return; }
+  profModal.hidden = true;
+});
 
 // --- выбор области фото ---
 // Человек двигает снимок пальцем и меняет размер, в кружок попадает то, что
@@ -1297,7 +1305,7 @@ function cropOpen(file) {
     cropScale = 1;
     cropX = (cropCanvas.width - img.width * cropBase) / 2;
     cropY = (cropCanvas.height - img.height * cropBase) / 2;
-    $('cropZoom').value = '1';
+    cropReset();
     cropModal.hidden = false;
     cropDraw();
   };
@@ -1308,40 +1316,96 @@ function cropOpen(file) {
   img.src = url;
 }
 
-$('cropZoom').addEventListener('input', e => {
-  const next = parseFloat(e.target.value);
-  const size = cropCanvas.width;
-  // приближаем к центру кружка, а не к левому верхнему углу
-  const cx = size / 2, cy = size / 2;
-  const ratio = next / cropScale;
-  cropX = cx - (cx - cropX) * ratio;
-  cropY = cy - (cy - cropY) * ratio;
-  cropScale = next;
-  cropDraw();
-});
-
-let cropDragFrom = null;
+// Размер снимка меняется щипком двух пальцев (и колесом мыши на большом
+// экране) — ползунком на телефоне попасть в нужную область было мучением.
+const cropView = $('cropView');
+const CROP_MAX = 4;
 const cropPointers = new Map();
-$('cropView').addEventListener('pointerdown', e => {
+let cropDragFrom = null, cropPinch = null;
+
+function cropFrame() {
+  const view = cropView.getBoundingClientRect();
+  return { k: cropCanvas.width / view.width, left: view.left, top: view.top };
+}
+
+function cropReset() {
+  cropPointers.clear();
+  cropDragFrom = null;
+  cropPinch = null;
+}
+
+// приближаем так, чтобы точка снимка под пальцами осталась под пальцами
+function cropZoomTo(next, mx, my, from) {
+  const value = Math.min(CROP_MAX, Math.max(1, next));
+  const ratio = value / from.scale;
+  cropX = mx - (from.mx - from.cx) * ratio;
+  cropY = my - (from.my - from.cy) * ratio;
+  cropScale = value;
+  cropDraw();
+}
+
+// палец добавился или пропал — жест начинается заново от нынешнего положения
+function cropRegrip() {
+  const pts = [...cropPointers.values()];
+  cropDragFrom = null;
+  cropPinch = null;
+  if (pts.length >= 2) {
+    const [a, b] = pts;
+    const { k, left, top } = cropFrame();
+    cropPinch = {
+      dist: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)),
+      scale: cropScale,
+      mx: ((a.x + b.x) / 2 - left) * k,
+      my: ((a.y + b.y) / 2 - top) * k,
+      cx: cropX, cy: cropY,
+    };
+  } else if (pts.length === 1) {
+    cropDragFrom = { x: pts[0].x, y: pts[0].y, cx: cropX, cy: cropY };
+  }
+}
+
+cropView.addEventListener('pointerdown', e => {
   cropPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-  if (cropPointers.size === 1) cropDragFrom = { x: e.clientX, y: e.clientY, cx: cropX, cy: cropY };
+  cropRegrip();
   e.preventDefault();
 });
 addEventListener('pointermove', e => {
-  if (!cropPointers.has(e.pointerId) || !cropDragFrom) return;
+  if (!cropPointers.has(e.pointerId)) return;
   cropPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-  const view = $('cropView').getBoundingClientRect();
-  const k = cropCanvas.width / view.width;  // экранные точки → точки холста
-  cropX = cropDragFrom.cx + (e.clientX - cropDragFrom.x) * k;
-  cropY = cropDragFrom.cy + (e.clientY - cropDragFrom.y) * k;
-  cropDraw();
+  const pts = [...cropPointers.values()];
+  const { k, left, top } = cropFrame();  // экранные точки → точки холста
+  if (cropPinch && pts.length >= 2) {
+    const [a, b] = pts;
+    const dist = Math.max(1, Math.hypot(a.x - b.x, a.y - b.y));
+    cropZoomTo(
+      cropPinch.scale * dist / cropPinch.dist,
+      ((a.x + b.x) / 2 - left) * k,
+      ((a.y + b.y) / 2 - top) * k,
+      cropPinch,
+    );
+  } else if (cropDragFrom) {
+    cropX = cropDragFrom.cx + (e.clientX - cropDragFrom.x) * k;
+    cropY = cropDragFrom.cy + (e.clientY - cropDragFrom.y) * k;
+    cropDraw();
+  }
 });
-addEventListener('pointerup', e => {
+function cropRelease(e) {
   cropPointers.delete(e.pointerId);
-  if (cropPointers.size === 0) cropDragFrom = null;
-});
+  cropRegrip();
+}
+addEventListener('pointerup', cropRelease);
+addEventListener('pointercancel', cropRelease);
 
-$('cropCancel').addEventListener('click', () => { cropModal.hidden = true; cropImg = null; });
+cropView.addEventListener('wheel', e => {
+  if (!cropImg) return;
+  e.preventDefault();
+  const { k, left, top } = cropFrame();
+  const mx = (e.clientX - left) * k, my = (e.clientY - top) * k;
+  cropZoomTo(cropScale * (e.deltaY < 0 ? 1.12 : 1 / 1.12), mx, my,
+    { scale: cropScale, mx, my, cx: cropX, cy: cropY });
+}, { passive: false });
+
+$('cropCancel').addEventListener('click', () => { cropModal.hidden = true; cropImg = null; cropReset(); });
 cropModal.addEventListener('click', e => { if (e.target === cropModal) $('cropCancel').click(); });
 
 $('cropDone').addEventListener('click', async () => {
@@ -1357,6 +1421,7 @@ $('cropDone').addEventListener('click', async () => {
     cropImg.height * cropBase * cropScale * scale,
   );
   cropModal.hidden = true;
+  cropReset();
   $('profStatus').textContent = 'Загружаю фото…';
   out.toBlob(async blob => {
     if (!blob) { $('profStatus').textContent = 'Не получилось обрезать фото'; return; }
