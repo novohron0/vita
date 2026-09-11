@@ -39,8 +39,11 @@ document.addEventListener('DOMContentLoaded', () => {
     + '<span class="theme-ico theme-moon"></span>'
     + '<span class="theme-knob"></span></span>';
 
+  const pill = header.querySelector('.head-pill');
   const nav = header.querySelector('.nav');
-  if (nav) {
+  if (pill) {
+    pill.append(btn);
+  } else if (nav) {
     const wrap = document.createElement('div');
     wrap.className = 'head-r';
     header.insertBefore(wrap, nav);

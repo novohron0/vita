@@ -603,6 +603,7 @@ function animateJump() {
 // перетащить в любой угол (позиция запоминается) и рассмотреть двумя пальцами.
 const phoneEl = document.querySelector('.phone');
 const miniWrap = $('miniWrap'), miniBox = $('mini');
+const headPill = document.getElementById('headPill');
 const MINI_EDGE = 14;
 const CORNER_KEY = 'vitaMiniCorner';
 const TIP_KEY = 'vitaMiniTipSeen';
@@ -663,6 +664,12 @@ function updateMini() {
   const show = r.height > 0 && visible / r.height < 0.5;
   // свет за телефоном горит, пока сам телефон в кадре: на прокрутке он не нужен
   document.body.classList.toggle('dim', show);
+  // шапка садится в островок: трогается с первых пикселей прокрутки и успевает
+  // собраться задолго до того, как выедет экранчик
+  if (headPill) {
+    const k = Math.min(1, Math.max(0, (scrollY || 0) / 380));
+    headPill.style.setProperty('--k', k.toFixed(3));
+  }
   if (show === miniWrap.classList.contains('show')) return;
   if (show) miniPlace(false);  // панель браузера могла сдвинуть видимую область
   miniWrap.classList.toggle('show', show);

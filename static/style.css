@@ -148,6 +148,78 @@ header {
   border: 1px solid var(--glass-border);
   box-shadow: var(--glass-inset), var(--glass-shadow);
 }
+/* Шапка главной, которая садится в островок.
+   Стекло переехало с самой шапки на пилюлю внутри: так высота контейнера
+   остаётся постоянной и контент под шапкой не прыгает при прокрутке.
+   `--k` от 0 (раскрыта) до 1 (островок) ставит скрипт по тому же счёту, по
+   которому выезжает экранчик: к его появлению шапка уже собралась. */
+.head-shrink {
+  height: 64px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  background-image: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+  justify-content: center;
+}
+.head-shrink::after { display: none; }
+
+.head-pill {
+  --k: 0;
+  display: flex;
+  align-items: center;
+  width: calc(100% - (100% - 150px) * var(--k));
+  gap: calc(10px - 6px * var(--k));
+  padding: calc(9px - 3px * var(--k)) calc(16px - 8px * var(--k));
+  border-radius: 999px;
+  background: var(--header-bg);
+  background-image: var(--glass-shine);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-inset), var(--glass-shadow);
+  position: relative;
+  transition: width .26s ease-out, padding .26s ease-out, gap .26s ease-out,
+              box-shadow .45s ease;
+}
+body.scrolled .head-pill { box-shadow: var(--glass-inset), var(--glass-shadow), 0 10px 30px rgba(0, 0, 0, 0.22); }
+/* чем меньше островок, тем плотнее его стекло: сквозь узкую пилюлю не должны
+   просвечивать кнопки, иначе она перестаёт читаться как предмет */
+.head-pill::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--header-bg);
+  opacity: var(--k);
+  pointer-events: none;
+}
+.head-pill > * { position: relative; }
+
+/* слово «vita» сворачивается первым — значку островка хватает одной решётки */
+.head-shrink .logo { font-size: calc(17px - 2px * var(--k)); white-space: nowrap; }
+.logo-word {
+  display: inline-block;
+  max-width: calc(3.4em - 3.4em * var(--k));
+  opacity: calc(1 - 1.9 * var(--k));
+  overflow: hidden;
+  vertical-align: bottom;
+  transition: max-width .26s ease-out, opacity .2s ease-out;
+}
+.head-shrink .avatar-btn {
+  width: calc(34px - 6px * var(--k));
+  height: calc(34px - 6px * var(--k));
+  transition: width .26s ease-out, height .26s ease-out, border-color .2s, transform .15s;
+}
+.head-shrink .theme-toggle {
+  transform: scale(calc(1 - 0.24 * var(--k)));
+  transform-origin: right center;
+  transition: transform .26s ease-out;
+}
+
 /* кромка стекла: загорается, когда под шапку уехал контент — тогда размытие
    действительно работает, а не тонирует пустоту */
 header::after {
