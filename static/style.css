@@ -740,6 +740,9 @@ html.gate body { min-height: 100dvh; }
 /* --- окно входа --- */
 .auth-modal { align-items: stretch; text-align: left; gap: 13px; max-width: 340px; padding: 26px 22px 22px; }
 .auth-seg { align-self: center; }
+/* телеграм стоит первым: это вход в один тап, форма — для тех, кому он не подходит */
+.auth-lead { text-align: center; color: var(--text-2); font-size: 15px; font-weight: 600; }
+.tg-lead .tg-btn { width: 100%; min-height: 48px; font-size: 15.5px; }
 .prof-mail {
   border: 1px solid var(--glass-border);
   background: var(--glass-bg-soft);

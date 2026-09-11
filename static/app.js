@@ -607,7 +607,6 @@ const headPill = document.getElementById('headPill');
 let headTarget = 0, headNow = 0, headRaf = 0;
 const MINI_EDGE = 14;
 const CORNER_KEY = 'vitaMiniCorner';
-const TIP_KEY = 'vitaMiniTipSeen';
 const ORIGIN = { br: 'bottom right', bl: 'bottom left', tr: 'top right', tl: 'top left' };
 
 let miniCorner = ['br', 'bl', 'tr', 'tl'].includes(localStorage.getItem(CORNER_KEY))
@@ -657,7 +656,7 @@ addEventListener('orientationchange', () => setTimeout(() => miniPlace(false), 2
 // Порог ровно тот, что просили: экранчик выезжает, когда телефон скрыт больше
 // чем наполовину. Считаем на скролле — это работает в любом браузере, в отличие
 // от наблюдателя пересечений, который в некоторых обёртках молчит.
-let miniTick = 0;
+let miniTick = 0, miniTipTimer = 0;
 function updateMini() {
   const r = phoneEl.getBoundingClientRect();
   const vh = viewport().h;
@@ -670,10 +669,13 @@ function updateMini() {
   if (show) miniPlace(false);  // панель браузера могла сдвинуть видимую область
   miniWrap.classList.toggle('show', show);
   miniWrap.setAttribute('aria-hidden', show ? 'false' : 'true');
-  if (show && !localStorage.getItem(TIP_KEY)) {
+  // подсказку показываем при каждом выезде: с первого раза её легко не заметить
+  clearTimeout(miniTipTimer);
+  if (show) {
     miniWrap.classList.add('tip');
-    setTimeout(() => miniWrap.classList.remove('tip'), 4200);
-    localStorage.setItem(TIP_KEY, '1');
+    miniTipTimer = setTimeout(() => miniWrap.classList.remove('tip'), 4000);
+  } else {
+    miniWrap.classList.remove('tip');
   }
 }
 function queueMini() {

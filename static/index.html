@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" type="image/png" href="/static/img/favicon.png">
   <link rel="apple-touch-icon" href="/static/img/apple-touch.png">
-<title>Vita (витадотс) — твоя жизнь в точках: живые обои-календарь</title>
-<meta name="description" content="Vita (vitadots, витадотс) — живые обои-календарь жизни для айфона: каждый день закрашивается одна точка. Месяц, год, жизнь или цель + трекер целей со стриками.">
+<title>Vita — твоя жизнь в точках. Живые обои-календарь</title>
+<meta name="description" content="Живые обои-календарь для айфона: каждый день закрашивается одна точка. Месяц, год, вся жизнь или своя цель — обои обновляются сами, каждую ночь.">
 <meta property="og:title" content="Vita — твоя жизнь в точках">
 <meta property="og:description" content="Живые обои-календарь жизни + трекер целей и фокус. Каждый день — одна точка.">
 <meta property="og:image" content="https://vitadots.ru/static/img/og.jpg">
@@ -19,7 +19,7 @@
   try { if (!localStorage.getItem('vitaSignedIn')) document.documentElement.classList.add('gate'); } catch (e) {}
 </script>
 <script src="/static/theme.js?v=4"></script>
-<link rel="stylesheet" href="/static/style.css?v=59">
+<link rel="stylesheet" href="/static/style.css?v=60">
 <style>
   .home-hero { animation: fadeUp .7s cubic-bezier(.22,1,.36,1) both; }
   .phone { animation: phoneReveal .85s cubic-bezier(.22,1,.36,1) both, phoneFloat 7s ease-in-out 1.1s infinite; }
@@ -205,6 +205,15 @@
     </button>
 
     <div class="auth-mark" aria-hidden="true">⠿</div>
+    <p class="auth-lead">Заходи в один тап</p>
+
+    <div class="tg-login tg-lead" id="tgBoxAuth">
+      <div class="tg-widget"></div>
+      <p class="tg-status"></p>
+    </div>
+
+    <div class="auth-or"><span>или почтой</span></div>
+
     <div class="seg auth-seg" id="authTabs">
       <button data-v="login" class="on" type="button">Войти</button>
       <button data-v="register" type="button">Регистрация</button>
@@ -215,15 +224,13 @@
     <div class="auth-body" id="authBody">
       <label class="field">Почта
         <input id="authEmail" type="email" inputmode="email" autocomplete="email"
-          placeholder="ты@почта.рф" spellcheck="false">
+          spellcheck="false">
       </label>
       <label class="field">Пароль
-        <input id="authPass" type="password" autocomplete="current-password"
-          placeholder="не короче шести знаков">
+        <input id="authPass" type="password" autocomplete="current-password">
       </label>
       <label class="field" id="authPass2Row" hidden>Ещё раз
-        <input id="authPass2" type="password" autocomplete="new-password"
-          placeholder="тот же пароль">
+        <input id="authPass2" type="password" autocomplete="new-password">
       </label>
     </div>
 
@@ -243,11 +250,6 @@
     <p class="auth-note" id="authNote" hidden role="status" aria-live="polite"></p>
     <button class="auth-forgot" id="authForgot" type="button">Забыл пароль</button>
 
-    <div class="auth-or"><span>или</span></div>
-    <div class="tg-login" id="tgBoxAuth">
-      <div class="tg-widget"></div>
-      <p class="tg-status"></p>
-    </div>
   </div>
 </div>
 
@@ -332,6 +334,6 @@
 
 <script src="/static/vita-id.js?v=5"></script>
 <script src="/static/tg-login.js?v=2"></script>
-<script src="/static/app.js?v=41"></script>
+<script src="/static/app.js?v=42"></script>
 </body>
 </html>
