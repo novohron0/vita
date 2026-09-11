@@ -16,6 +16,24 @@
     return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
   }
 
+  // Хранилище браузера могли почистить (Safari сам стирает его через неделю
+  // без захода), но ключ устройства лежит ещё и в куке — забираем его оттуда,
+  // пока никто не успел создать новый профиль на пустом месте.
+  let session = null;
+  function ensureSession() {
+    if (session) return session;
+    session = (async () => {
+      const stored = localStorage.getItem(TOKEN_KEY) || '';
+      if (stored.length >= 20) return;
+      try {
+        const response = await fetch('/api/auth/session');
+        const data = await response.json();
+        if (data && data.token) localStorage.setItem(TOKEN_KEY, data.token);
+      } catch {}
+    })();
+    return session;
+  }
+
   function token() {
     let value = localStorage.getItem(TOKEN_KEY) || '';
     if (value.length < 20) {
@@ -26,6 +44,7 @@
   }
 
   async function ensure(name = '') {
+    await ensureSession();
     const response = await fetch('/api/profile', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -35,6 +54,7 @@
   }
 
   async function library() {
+    await ensureSession();
     const response = await fetch('/api/me', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -44,6 +64,7 @@
   }
 
   async function connect(profileCode) {
+    await ensureSession();
     const nextToken = makeToken();
     const response = await fetch('/api/profile/connect', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -55,6 +76,7 @@
   }
 
   async function updateProfile(values) {
+    await ensureSession();
     const response = await fetch('/api/profile', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -69,6 +91,7 @@
   }
 
   async function uploadAvatar(file) {
+    await ensureSession();
     const form = new FormData();
     form.append('ownerToken', token());
     form.append('file', file);
@@ -77,6 +100,7 @@
   }
 
   async function access() {
+    await ensureSession();
     const response = await fetch('/api/access', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -86,6 +110,7 @@
   }
 
   async function buy(email) {
+    await ensureSession();
     const response = await fetch('/api/buy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -101,7 +126,10 @@
       body: JSON.stringify({ ...user, ownerToken: token() })
     });
     const data = await responseData(response, 'Телеграм не подтвердил вход');
-    if (data.token) localStorage.setItem(TOKEN_KEY, data.token);
+    if (data.token) {
+      localStorage.setItem(TOKEN_KEY, data.token);
+      localStorage.setItem('vitaSignedIn', '1');
+    }
     return data;
   }
 
@@ -114,7 +142,10 @@
       body: JSON.stringify({ ownerToken: token(), ...body })
     });
     const data = await responseData(response, fallback);
-    if (data.token) localStorage.setItem(TOKEN_KEY, data.token);
+    if (data.token) {
+      localStorage.setItem(TOKEN_KEY, data.token);
+      localStorage.setItem('vitaSignedIn', '1');   // чтобы вход не мигал при следующем заходе
+    }
     return data;
   }
 
@@ -129,6 +160,10 @@
 
   function logout() {
     localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem('vitaSignedIn');
+    session = null;
+    // куку гасит сервер: без этого следующий заход молча вернул бы в аккаунт
+    fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
   }
 
   async function member(handle) {

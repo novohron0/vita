@@ -13,8 +13,13 @@
 <meta property="og:type" content="website">
 <link rel="canonical" href="https://vitadots.ru/">
 <meta name="twitter:card" content="summary_large_image">
+<script>
+  /* Пока человек не вошёл, главную показывать нельзя. Решаем это до первой
+     отрисовки: иначе экран успевает мигнуть содержимым и спрятаться. */
+  try { if (!localStorage.getItem('vitaSignedIn')) document.documentElement.classList.add('gate'); } catch (e) {}
+</script>
 <script src="/static/theme.js?v=3"></script>
-<link rel="stylesheet" href="/static/style.css?v=57">
+<link rel="stylesheet" href="/static/style.css?v=58">
 <style>
   .home-hero { animation: fadeUp .7s cubic-bezier(.22,1,.36,1) both; }
   .phone { animation: phoneReveal .85s cubic-bezier(.22,1,.36,1) both, phoneFloat 7s ease-in-out 1.1s infinite; }
@@ -193,12 +198,13 @@
 
 <div class="modal-back center" id="authModal" hidden>
   <div class="modal card auth-modal">
-    <button class="modal-x" id="authClose" type="button" aria-label="Закрыть">
+    <button class="modal-x" id="authClose" type="button" aria-label="Закрыть" hidden>
       <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
         <path d="M7 7l10 10M17 7L7 17"></path>
       </svg>
     </button>
 
+    <div class="auth-mark" aria-hidden="true">⠿</div>
     <div class="seg auth-seg" id="authTabs">
       <button data-v="login" class="on" type="button">Войти</button>
       <button data-v="register" type="button">Регистрация</button>
@@ -324,8 +330,8 @@
 
 <footer class="page-foot"><a href="/me" style="color:inherit">Мои обои</a> · <a href="/buy" style="color:inherit">{{PRICE}} ₽ один раз</a> · <a href="/offer" style="color:inherit">Оферта</a> · <a href="/privacy" style="color:inherit">Конфиденциальность</a><br>Связь: {{SUPPORT}} · {{SELLER}}, ИНН {{INN}}</footer>
 
-<script src="/static/vita-id.js?v=4"></script>
+<script src="/static/vita-id.js?v=5"></script>
 <script src="/static/tg-login.js?v=2"></script>
-<script src="/static/app.js?v=40"></script>
+<script src="/static/app.js?v=41"></script>
 </body>
 </html>

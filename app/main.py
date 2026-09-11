@@ -1220,13 +1220,13 @@ async def auth_telegram(request: Request):
         )
         profile = _profile_payload(conn, profile_code)
         access = _profile_access_state(conn, profile_code)
-    return {
+    return _with_session({
         "token": token,
         "linked": linked,
         "telegram": ("@" + username) if username else (name or "телеграм"),
         "profile": profile,
         "access": access,
-    }
+    }, token)
 
 
 class AuthIn(BaseModel):
@@ -1283,6 +1283,23 @@ def _auth_payload(conn: sqlite3.Connection, profile_code: str, token: str) -> di
     }
 
 
+# Safari стирает localStorage сайта через семь дней без захода — человек
+# вылетал бы из аккаунта на ровном месте. Кука живёт дольше и переживает
+# чистку хранилища, поэтому ключ устройства кладём в оба места.
+SESSION_COOKIE = "vita_device"
+SESSION_MAX_AGE = 400 * 24 * 3600
+
+
+def _with_session(payload: dict, token: str) -> JSONResponse:
+    response = JSONResponse(payload)
+    response.set_cookie(
+        SESSION_COOKIE, token,
+        max_age=SESSION_MAX_AGE, httponly=True, samesite="lax",
+        secure=not DEV_MODE, path="/",
+    )
+    return response
+
+
 @app.post("/api/auth/register")
 def auth_register(data: AuthIn):
     """Почта и пароль закрепляют за человеком тот профиль, что уже есть в браузере."""
@@ -1306,7 +1323,8 @@ def auth_register(data: AuthIn):
             "VALUES(?, ?, ?, ?)",
             (email, profile_code, salt, _pass_hash(password, salt)),
         )
-        return _auth_payload(conn, profile_code, _issue_device(conn, profile_code))
+        token = _issue_device(conn, profile_code)
+        return _with_session(_auth_payload(conn, profile_code, token), token)
 
 
 @app.post("/api/auth/login")
@@ -1324,7 +1342,8 @@ def auth_login(data: AuthIn):
         if not row or not hmac.compare_digest(_pass_hash(password, row[1]), row[2]):
             raise HTTPException(403, "Почта или пароль не подошли")
         profile_code = row[0]
-        return _auth_payload(conn, profile_code, _issue_device(conn, profile_code))
+        token = _issue_device(conn, profile_code)
+        return _with_session(_auth_payload(conn, profile_code, token), token)
 
 
 def _tg_send(chat_id: str, text: str) -> bool:
@@ -1416,7 +1435,29 @@ def auth_reset(data: ResetIn):
             (salt, _pass_hash(password, salt), email),
         )
         conn.execute("DELETE FROM auth_reset WHERE email = ?", (email,))
-        return _auth_payload(conn, prof[0], _issue_device(conn, prof[0]))
+        token = _issue_device(conn, prof[0])
+        return _with_session(_auth_payload(conn, prof[0], token), token)
+
+
+@app.get("/api/auth/session")
+def auth_session(request: Request):
+    """Если хранилище браузера почистили, ключ ещё жив в куке — вернём его."""
+    token = request.cookies.get(SESSION_COOKIE, "")
+    if not token:
+        return {"token": ""}
+    with db() as conn:
+        profile_code = _profile_for_token(conn, token)
+        if not profile_code:
+            return {"token": ""}
+        return {"token": token, "access": _profile_access_state(conn, profile_code)}
+
+
+@app.post("/api/auth/logout")
+def auth_logout():
+    """Выход гасит и куку — иначе следующий заход молча вернул бы в аккаунт."""
+    response = JSONResponse({"ok": True})
+    response.delete_cookie(SESSION_COOKIE, path="/")
+    return response
 
 
 @app.post("/api/access")

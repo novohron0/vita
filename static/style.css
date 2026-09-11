@@ -721,6 +721,22 @@ main { width: 100%; max-width: 430px; display: flex; flex-direction: column; gap
 .hero-tune:active { border-color: var(--glass-border); color: var(--text); }
 html { scroll-behavior: smooth; }
 
+/* Запертая дверь: до входа на странице нет ничего, кроме самого окна.
+   Прячем не прозрачностью, а display — чтобы ни один тап не проходил мимо. */
+html.gate body > header,
+html.gate body > main,
+html.gate body > .page-foot,
+html.gate body > .mini-wrap { display: none !important; }
+html.gate body { min-height: 100dvh; }
+.auth-mark {
+  align-self: center;
+  font-size: 26px;
+  letter-spacing: 4px;
+  color: var(--text);
+  line-height: 1;
+  margin-bottom: 2px;
+}
+
 /* --- окно входа --- */
 .auth-modal { align-items: stretch; text-align: left; gap: 13px; max-width: 340px; padding: 26px 22px 22px; }
 .auth-seg { align-self: center; }

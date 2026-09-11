@@ -1593,12 +1593,16 @@ async function openAuth(mode = 'login') {
 }
 
 function closeAuth() {
+  if (document.documentElement.classList.contains('gate')) return;
   authModal.hidden = true;
-  localStorage.setItem(AUTH_SEEN, '1');   // навязываться второй раз не будем
+  localStorage.setItem(AUTH_SEEN, '1');
 }
 
 $('authClose').addEventListener('click', closeAuth);
-authModal.addEventListener('click', e => { if (e.target === authModal) closeAuth(); });
+authModal.addEventListener('click', e => {
+  // мимо запертой двери не пройти: фон закрывает окно только тем, кто уже вошёл
+  if (e.target === authModal && !document.documentElement.classList.contains('gate')) closeAuth();
+});
 
 $('authTabs').addEventListener('click', e => {
   const btn = e.target.closest('button');
@@ -1624,6 +1628,7 @@ $('authGo').addEventListener('click', async () => {
       await VitaID.resetPass(email, $('authCode').value.trim(), $('authNewPass').value);
     }
     localStorage.setItem(AUTH_SEEN, '1');
+    localStorage.setItem('vitaSignedIn', '1');
     location.reload();   // страница перечитает профиль, обои и доступ под новым ключом
     return;
   } catch (error) {
@@ -1650,17 +1655,31 @@ $('authForgot').addEventListener('click', async () => {
   btn.disabled = false;
 });
 
-// Окно показывается один раз и закрывается крестиком: человеку, который пришёл
-// с ролика, нельзя запирать дверь до того, как он увидел обои.
-async function maybeGreet() {
-  if (localStorage.getItem(AUTH_SEEN)) return;
+// Главная открывается только своим: пока человек не завёл аккаунт или не вошёл,
+// под окном ничего нет. Решение о двери принято владельцем осознанно.
+function unlock() {
+  document.documentElement.classList.remove('gate');
+  localStorage.setItem('vitaSignedIn', '1');
+  authModal.hidden = true;
+  $('authClose').hidden = true;
+}
+
+async function guard() {
+  let signed = false;
   try {
     const access = await VitaID.access();
-    if (access.email || access.telegram) return;
-    setTimeout(() => { if (authModal.hidden) openAuth('register'); }, 900);
-  } catch {}
+    signed = !!(access.email || access.telegram);
+  } catch {
+    // сервер молчит — держать человека перед запертой дверью нечестно
+    unlock();
+    return;
+  }
+  if (signed) { unlock(); return; }
+  document.documentElement.classList.add('gate');
+  localStorage.removeItem('vitaSignedIn');
+  openAuth('register');
 }
-maybeGreet();
+guard();
 
 // статус Прайма нужен и до открытия карточки: от него зависит замок на логотипе
 (async () => {
