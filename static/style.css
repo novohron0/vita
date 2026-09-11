@@ -54,6 +54,7 @@ html { touch-action: manipulation; }
 }
 
 [data-theme="light"] {
+  --accent: #15733c;
   --accent-soft: #1a7f43;
   --glass-bg: rgba(255, 252, 246, 0.78);
   --glass-bg-soft: rgba(252, 247, 239, 0.7);
@@ -697,7 +698,9 @@ main { width: 100%; max-width: 430px; display: flex; flex-direction: column; gap
 }
 .hint { color: var(--text-muted); font-size: 13px; line-height: 1.5; }
 
-.page-foot { color: var(--text-faint); font-size: 13px; padding-top: 36px; padding-bottom: 18px; }
+/* подвал несёт оферту и реквизиты продавца: самый бледный тон тут не годится,
+   он давал 2.3:1 на тёмном и 3.2:1 на светлом при норме 4.5 */
+.page-foot { color: var(--text-muted); font-size: 13px; padding-top: 36px; padding-bottom: 18px; }
 
 /* --- модал предложки --- */
 .modal-back {
