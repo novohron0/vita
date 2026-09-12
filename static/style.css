@@ -2425,3 +2425,39 @@ body.login-page::before { display: none; }
 /* Кнопка сверху подвозит человека к настройкам: отступ — чтобы первая строка
    не уехала под шапку-островок. */
 .stats, .controls { scroll-margin-top: 78px; }
+
+/* Низ главной собран, как на двери: две строки ссылок вместо простыни с
+   реквизитами — сами реквизиты живут в оферте, куда ведёт «Реквизиты». */
+.page-foot {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+}
+.foot-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 18px;
+}
+.foot-links a, .foot-help {
+  color: var(--text-2);
+  font-size: 14px;
+  text-decoration: none;
+}
+.foot-help { color: var(--text-muted); }
+@media (hover: hover) and (pointer: fine) {
+  .foot-links a:hover, .foot-help:hover { color: var(--text); }
+}
+
+/* Подпись под кнопкой «Сделать обои»: три короткие строки вместо абзаца */
+.get-hint { text-align: center; line-height: 1.6; }
+.get-hint a {
+  color: var(--text);
+  text-decoration: underline;
+  text-decoration-color: var(--glass-edge);
+  text-underline-offset: 3px;
+}
+.get-hint span { color: var(--text-faint); font-size: 12.5px; }

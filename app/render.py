@@ -25,6 +25,7 @@ BGS = {
     "sunset": "#2a1230", "mountains": "#0e1520", "ocean": "#0a1a2b",
     "dembel": "#1a1f14", "ramadan": "#0a1228", "honeymoon": "#2a1520",
     "custom": "#1a1a1a",
+    "owncolor": "#101014",   # фон, который человек выбрал сам
 }
 SCENE_GRADS = {
     "sunset": (("#331539", 0.0), ("#4a1c40", 0.45), ("#1c0d24", 1.0)),
@@ -70,6 +71,16 @@ def _bg_key(raw) -> str:
     return raw if raw in BGS else "black"
 
 
+def _bg_base(cfg: dict, bg_key: str) -> str:
+    """Опорный цвет фона: от него считаются пустые точки и текст. Для своего
+    цвета берём тот, что выбрал человек, иначе цвет темы."""
+    if bg_key == "owncolor":
+        own = str(cfg.get("bgColor") or "")
+        if re.fullmatch(r"#[0-9a-fA-F]{6}", own):
+            return own
+    return BGS[bg_key]
+
+
 def cover_crop(img: Image.Image, tw: int, th: int) -> Image.Image:
     iw, ih = img.size
     scale = max(tw / iw, th / ih)
@@ -87,6 +98,8 @@ def _load_custom_bg(bg_id: str) -> Image.Image | None:
 
 
 def _paint_wallpaper_bg(cfg: dict, bg_key: str) -> Image.Image:
+    if bg_key == "owncolor":
+        return Image.new("RGB", (W, H), _bg_base(cfg, bg_key))
     if bg_key == "custom":
         bg_id = cfg.get("bgImage", "")
         custom = _load_custom_bg(bg_id) if bg_id else None
@@ -426,7 +439,7 @@ def render_goal(goal: dict, done: set[str], today: date | None = None) -> Image.
     """Обои-виджет цели: сетка дней (клетка = день), закрашены выполненные, сегодня — кольцо."""
     today = today or date.today()
     bg_key = _bg_key(goal.get("bg", ""))
-    bg = BGS[bg_key]
+    bg = _bg_base(goal, bg_key)
     color = goal.get("color") or "#34c759"
     if not re.fullmatch(r"#[0-9a-fA-F]{6}", color):
         color = "#34c759"
@@ -487,7 +500,7 @@ def render_wallpaper(cfg: dict, today: date | None = None, expired: bool = False
     today = today or date.today()
     mode = cfg.get("mode") if cfg.get("mode") in MODES else "month"
     bg_key = _bg_key(cfg.get("bg", ""))
-    bg = BGS[bg_key]
+    bg = _bg_base(cfg, bg_key)
     color = cfg.get("color") or "#f2f2f2"
     if not re.fullmatch(r"#[0-9a-fA-F]{6}", color):
         color = "#f2f2f2"

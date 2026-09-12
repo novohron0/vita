@@ -404,6 +404,7 @@ class LinkIn(BaseModel):
     color: str = "#f2f2f2"
     bg: str = "black"
     bgImage: str = ""
+    bgColor: str = "#101014"
     shape: str = "circle"
     glass: bool = False
     title: str = ""

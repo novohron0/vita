@@ -8,6 +8,7 @@ const BGS = {
   black: '#000000', white: '#f4f1ec', navy: '#0d1526',
   sunset: '#2a1230', mountains: '#0e1520', ocean: '#0a1a2b',
   dembel: '#1a1f14', ramadan: '#0a1228', honeymoon: '#2a1520',
+  owncolor: '#101014',   // фон, который человек выбрал сам
 };
 const SCENE_GRADS = {
   sunset: [['#331539', 0], ['#4a1c40', .45], ['#1c0d24', 1]],
@@ -31,7 +32,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
 const plus30 = new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10);
 
 const state = {
-  mode: 'month', color: '#f2f2f2', bg: 'black', bgImageId: null, shape: 'circle',
+  mode: 'month', color: '#f2f2f2', bg: 'black', bgColor: '#101014', bgImageId: null, shape: 'circle',
   glass: false, title: TITLES.month, footer: true, brand: true, birth: '2000-01-01',
   start: todayISO, end: plus30,
 };
@@ -64,6 +65,33 @@ const $ = id => document.getElementById(id);
 const cv = $('cv'), ctx = cv.getContext('2d');
 const cv2 = $('cv2'), ctx2 = cv2.getContext('2d');
 
+// Превью — растр размером настоящих обоев (1179 точек). Пока телефон на
+// странице шириной 250 точек, этого с запасом, но щипковый зум растягивает
+// уже готовую картинку, и точки становятся ступенчатыми. Поэтому на зуме
+// перерисовываем канву крупнее: координаты рисования те же, множитель уходит
+// в transform, так что весь код рисования об этом не знает.
+let cvScale = 1;
+function setCanvasScale(k) {
+  k = Math.min(2.5, Math.max(1, Math.round(k * 10) / 10));
+  if (k === cvScale) return false;
+  cvScale = k;
+  cv.width = Math.round(W * k);
+  cv.height = Math.round(H * k);
+  return true;
+}
+
+if (window.visualViewport) {
+  let zoomTimer = 0;
+  const onZoom = () => {
+    clearTimeout(zoomTimer);
+    zoomTimer = setTimeout(() => {
+      const scale = window.visualViewport.scale || 1;
+      if (setCanvasScale(scale > 1.15 ? scale : 1)) draw();
+    }, 160);
+  };
+  window.visualViewport.addEventListener('resize', onZoom);
+}
+
 const rgb = hx => [1, 3, 5].map(i => parseInt(hx.slice(i, i + 2), 16));
 const blend = (fg, bg, a) => {
   const f = rgb(fg), b = rgb(bg);
@@ -77,6 +105,11 @@ const easeOutBack = t => { const u = t - 1; return 1 + 3.6 * u * u * u + 2.6 * u
 
 // фон: сплошной цвет, сцена или своё фото (cover-crop 1:1 с render.py)
 function paintBG(c) {
+  if (state.bg === 'owncolor') {
+    c.fillStyle = state.bgColor;
+    c.fillRect(0, 0, W, H);
+    return;
+  }
   if (state.bg === 'custom' && customBgImg) {
     const iw = customBgImg.width, ih = customBgImg.height;
     const scale = Math.max(W / iw, H / ih);
@@ -447,6 +480,7 @@ const drawDot = (c, x, y, d, color, mode, pulse, isLead) =>
 
 function effectiveBgHex() {
   if (state.bg === 'custom') return '#1a1a1a';
+  if (state.bg === 'owncolor') return state.bgColor;
   return BGS[state.bg] || '#000000';
 }
 
@@ -483,6 +517,7 @@ function draw(reveal = 1, pulse = 0, fx = null) {
   const lead = fx || reveal >= 1 ? -2 : current; // ведущая точка при анимации подсвечивается ярче
   const cols = gridCols(total), rows = Math.ceil(total / cols);
 
+  ctx.setTransform(cvScale, 0, 0, cvScale, 0, 0);
   paintBG(ctx);
 
   let dot = Math.min(W * 0.72 / (cols + (cols - 1) * GAP), H * 0.50 / (rows + (rows - 1) * GAP));
@@ -928,6 +963,19 @@ async function uploadBgFile(file) {
 
 $('bgOwn').addEventListener('click', () => $('bgFile').click());
 
+// Свой цвет фона: выбор гасит и картинки-темы, и своё фото — фон один.
+$('bgColorPick').addEventListener('input', e => {
+  state.bg = 'owncolor';
+  state.bgColor = e.target.value;
+  state.bgImageId = null;
+  customBgImg = null;
+  $('bgOwn').classList.remove('on');
+  $('bg').querySelectorAll('button').forEach(b => b.classList.remove('on'));
+  showBgTip('');
+  refreshSwatches();
+  draw();
+});
+
 $('bgFile').addEventListener('change', e => {
   const file = e.target.files?.[0];
   e.target.value = '';
@@ -1011,7 +1059,7 @@ async function makeWallpaper(btn, err) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        mode: state.mode, color: state.color, bg: state.bg,
+        mode: state.mode, color: state.color, bg: state.bg, bgColor: state.bgColor,
         bgImage: state.bgImageId || '', shape: state.shape, glass: state.glass,
         title: state.title, footer: state.footer, brand: state.brand, birth: state.birth,
         start: state.start, end: state.end,
