@@ -1842,7 +1842,11 @@ def wallpaper(code: str):
 
 @app.get("/goals")
 def goals_new():
-    return FileResponse(ROOT / "static" / "goals.html", headers={"Cache-Control": "no-cache", "X-Robots-Tag": "noindex, follow"})
+    # Ветка отложена: сайт сейчас — одна страница про обои. Адрес остаётся
+    # живым только чтобы гости из поиска попадали на главную, а не внутрь
+    # продукта, которого для них ещё нет.
+    return RedirectResponse("/", status_code=302,
+                            headers={"X-Robots-Tag": "noindex", "Cache-Control": "no-cache"})
 
 
 @app.get("/focus")
@@ -1872,7 +1876,11 @@ def cabinet_page():
 
 @app.get("/u/{handle}")
 def member_page(handle: str):
-    return FileResponse(ROOT / "static" / "member.html", headers={"Cache-Control": "no-cache", "X-Robots-Tag": "noindex, follow"})
+    # Ветка отложена: сайт сейчас — одна страница про обои. Адрес остаётся
+    # живым только чтобы гости из поиска попадали на главную, а не внутрь
+    # продукта, которого для них ещё нет.
+    return RedirectResponse("/", status_code=302,
+                            headers={"X-Robots-Tag": "noindex", "Cache-Control": "no-cache"})
 
 
 @app.post("/api/profile")
@@ -2109,7 +2117,11 @@ def focus_wait(fw: FocusWaitIn):
 
 @app.get("/feed")
 def feed_page():
-    return FileResponse(ROOT / "static" / "feed.html", headers={"Cache-Control": "no-cache", "X-Robots-Tag": "noindex, follow"})
+    # Ветка отложена: сайт сейчас — одна страница про обои. Адрес остаётся
+    # живым только чтобы гости из поиска попадали на главную, а не внутрь
+    # продукта, которого для них ещё нет.
+    return RedirectResponse("/", status_code=302,
+                            headers={"X-Robots-Tag": "noindex", "Cache-Control": "no-cache"})
 
 
 @app.get("/api/feed")
@@ -2220,7 +2232,7 @@ def goal_page(code: str):
     html = (ROOT / "static" / "goal.html").read_text(encoding="utf-8")
     return HTMLResponse(
         html.replace("{{CODE}}", code).replace("{{SHORTCUT_URL}}", SHORTCUT_ICLOUD_URL),
-        headers={"Cache-Control": "no-cache"},
+        headers={"Cache-Control": "no-cache", "X-Robots-Tag": "noindex"},
     )
 
 
@@ -2230,7 +2242,8 @@ def challenge_page(code: str):
     if g is None:
         raise HTTPException(404, "Нет такой цели")
     html = (ROOT / "static" / "challenge.html").read_text(encoding="utf-8")
-    return HTMLResponse(html.replace("{{CODE}}", code), headers={"Cache-Control": "no-cache"})
+    return HTMLResponse(html.replace("{{CODE}}", code),
+                        headers={"Cache-Control": "no-cache", "X-Robots-Tag": "noindex"})
 
 
 @app.get("/api/goal/{code}")

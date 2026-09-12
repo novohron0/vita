@@ -9,7 +9,6 @@
 <title>Vita — цель</title>
 <script src="/static/theme.js?v=6"></script>
 <script src="/static/vita-id.js?v=5"></script>
-<script src="/static/gate.js?v=1"></script>
 <link rel="stylesheet" href="/static/style.css?v=76">
 </head>
 <body>
@@ -18,8 +17,7 @@
     <a class="logo" href="/">⠿ <span class="logo-word">vita</span></a>
     <nav class="nav">
       <a href="/">Обои</a>
-      <a href="/goals" class="on">Цели</a>
-      <a href="/feed">Лента</a>
+
       <a href="/me">Моя Vita</a>
     </nav>
   </div>
@@ -130,7 +128,6 @@ function render(anim) {
     <div class="gt-grid" style="grid-template-columns:repeat(${cols},1fr)">${cells.join('')}</div>
     <div class="actions">
       <button class="primary" id="share">Поделиться</button>
-      <a class="btn secondary" href="/goals">Новая цель</a>
     </div>
     <a class="btn primary" href="vita://goal/${CODE}" style="display:block;text-align:center;text-decoration:none;margin-top:10px">Открыть в Vita</a>
     <button class="btn secondary" id="join" style="margin-top:10px">🔥 Начать эту цель у себя →</button>

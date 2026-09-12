@@ -9,7 +9,6 @@
 <title>Vita — челлендж</title>
 <script src="/static/theme.js?v=6"></script>
 <script src="/static/vita-id.js?v=5"></script>
-<script src="/static/gate.js?v=1"></script>
 <link rel="stylesheet" href="/static/style.css?v=76">
 </head>
 <body>
@@ -18,8 +17,7 @@
     <a class="logo" href="/">⠿ <span class="logo-word">vita</span></a>
     <nav class="nav">
       <a href="/">Обои</a>
-      <a href="/goals">Цели</a>
-      <a href="/feed" class="on">Лента</a>
+
       <a href="/me">Моя Vita</a>
     </nav>
   </div>
@@ -83,7 +81,6 @@ function render() {
     <div class="gbar"><i style="width:${pct}%;background:${G.color}"></i></div>
     <div class="gt-grid" style="grid-template-columns:repeat(${cols},1fr)">${cells.join('')}</div>
     <button class="primary" id="join">🔥 Начать эту цель у себя →</button>
-    <a class="btn secondary" href="/goals" style="margin-top:4px">Создать свою цель</a>
     <p class="page-foot" style="text-align:center">Присоединяйся — веди свой прогресс и не разрывай цепочку</p>`;
 
   document.getElementById('join').addEventListener('click', join);
