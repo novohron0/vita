@@ -2267,6 +2267,8 @@ body.login-page::before { display: none; }
    снизу кадр растворяется в фон, который подобран ровно под его цвет. */
 .login-logo {
   display: block;
+  position: relative;
+  overflow: hidden;
   width: 58%;
   max-width: 230px;
   margin: 0 auto 4px;
@@ -2304,6 +2306,29 @@ body.login-page::before { display: none; }
   font-weight: 600;
   letter-spacing: 0.08em;
 }
+/* Отблеск: полоса света раз в несколько секунд проходит по буквам. Режим
+   overlay почти не трогает чёрный фон и вспыхивает на светлом металле —
+   светится ровно надпись, а не прямоугольник. В светлой теме не нужен:
+   там металл и без того контрастный. */
+.logo-shine {
+  position: absolute;
+  inset: -10% -30%;
+  pointer-events: none;
+  mix-blend-mode: overlay;
+  background: linear-gradient(104deg,
+    transparent 38%, rgba(255, 255, 255, 0.72) 48%, rgba(255, 255, 255, 0.2) 53%, transparent 62%);
+  transform: translateX(-130%);
+  animation: logo-shine 6.5s cubic-bezier(.22, 1, .36, 1) 1.4s infinite;
+}
+@keyframes logo-shine {
+  0% { transform: translateX(-130%); }
+  22%, 100% { transform: translateX(130%); }
+}
+[data-theme="light"] .logo-shine { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .logo-shine { display: none; }
+}
+
 .login-logo.no-art picture { display: none !important; }
 .login-logo.no-art .login-logo-word { display: block; }
 
