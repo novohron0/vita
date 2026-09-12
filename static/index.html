@@ -20,7 +20,7 @@
   try { if (!localStorage.getItem('vitaSignedIn')) document.documentElement.classList.add('gate'); } catch (e) {}
 </script>
 <script src="/static/theme.js?v=6"></script>
-<link rel="stylesheet" href="/static/style.css?v=94">
+<link rel="stylesheet" href="/static/style.css?v=96">
 <style>
   .home-hero { animation: fadeUp .7s cubic-bezier(.22,1,.36,1) both; }
   .phone { animation: phoneReveal .85s cubic-bezier(.22,1,.36,1) both, phoneFloat 7s ease-in-out 1.1s infinite; }
@@ -148,6 +148,19 @@
       <input id="title" maxlength="24" value="ТВОЙ МЕСЯЦ" autocomplete="off"
         placeholder="пусто — обои без заголовка">
     </label>
+
+    <div class="field">Шрифт заголовка
+      <div class="seg roll" id="font">
+        <button data-v="system" class="on">Vita</button>
+        <button data-v="montserrat">Vita</button>
+        <button data-v="playfair">Vita</button>
+        <button data-v="oswald">Vita</button>
+        <button data-v="unbounded">Vita</button>
+        <button data-v="russo">Vita</button>
+        <button data-v="caveat">Vita</button>
+        <button data-v="pacifico">Vita</button>
+      </div>
+    </div>
 
     <div class="field">Фон
       <div class="pick-grid" id="bg">
@@ -299,6 +312,6 @@
 
 <script src="/static/vita-id.js?v=5"></script>
 <script src="/static/tg-login.js?v=3"></script>
-<script src="/static/app.js?v=54"></script>
+<script src="/static/app.js?v=55"></script>
 </body>
 </html>

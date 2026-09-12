@@ -18,7 +18,7 @@ W, H = 1179, 2556  # iPhone Pro, любое iOS-устройство отмас�
 GAP = 0.45  # зазор между точками, в долях диаметра
 LIFE_YEARS = 90
 
-COLORS = ["#f2f2f2", "#000000", "#3da9fc", "#34c759", "#ff9500", "#c7c7cc", "#a78bfa", "#ff6b81", "#ff5fa2"]
+COLORS = ["#f2f2f2", "#2b2b30", "#3da9fc", "#34c759", "#ff9500", "#c7c7cc", "#a78bfa", "#ff6b81", "#ff5fa2"]
 # base-цвет фона (для пустых точек и текста); сцены дорисовываются в _paint_bg —
 # координаты 1:1 с paintBG в static/app.js, чтобы превью было честным
 BGS = {
@@ -48,6 +48,22 @@ FONT_PATHS = [
 ]
 
 
+# Шрифты заголовка. Файлы лежат в static/fonts и едут в образ вместе с кодом:
+# ставить пакеты в Dockerfile нельзя — в браузере должны быть ровно эти же
+# начертания, иначе превью разойдётся с обоями. k — поправка размера, те же
+# числа лежат в static/app.js.
+TITLE_FONTS = {
+    "montserrat": ("montserrat.ttf", 0.96),
+    "playfair": ("playfair.ttf", 1.02),
+    "oswald": ("oswald.ttf", 1.08),
+    "unbounded": ("unbounded.ttf", 0.88),
+    "russo": ("russo.ttf", 0.98),
+    "caveat": ("caveat.ttf", 1.3),
+    "pacifico": ("pacifico.ttf", 0.98),
+}
+FONT_DIR = Path(__file__).resolve().parent.parent / "static" / "fonts"
+
+
 def _font(size: int):
     for path in FONT_PATHS:
         try:
@@ -55,6 +71,18 @@ def _font(size: int):
         except OSError:
             continue
     return ImageFont.load_default(size)
+
+
+def _title_font(size: int, key: str):
+    """Шрифт заголовка обоев; незнакомое имя и системный — обычный шрифт."""
+    item = TITLE_FONTS.get(str(key or "").strip())
+    if not item:
+        return _font(size)
+    name, k = item
+    try:
+        return ImageFont.truetype(str(FONT_DIR / name), int(round(size * k)))
+    except OSError:
+        return _font(size)
 
 
 # Эмодзи обычным шрифтом не рисуются — выходят пустые квадраты. Noto Color
@@ -613,7 +641,8 @@ def render_goal(goal: dict, done: set[str], today: date | None = None) -> Image.
             _dot(img, box, color, shape, "empty", False, bg)
 
     if title:
-        draw_text(img, draw, (W / 2, y0 - 190), title, _font(64), color)
+        draw_text(img, draw, (W / 2, y0 - 190), title,
+                  _title_font(64, goal.get("font", "")), color)
     _watermark(draw, W / 2, y0 - 110, text)
     footer = f"{done_count} из {days} · стрик {streak}"
     if done_count >= days:
@@ -665,7 +694,8 @@ def render_wallpaper(cfg: dict, today: date | None = None, expired: bool = False
             _dot(img, box, color, shape, "empty", glass, bg)
 
     if title:
-        draw_text(img, draw, (W / 2, y0 - 190), title, _font(64), color)
+        draw_text(img, draw, (W / 2, y0 - 190), title,
+                  _title_font(64, cfg.get("font", "")), color)
     if cfg.get("brand", True):
         _watermark(draw, W / 2, y0 - 110, text)
     if expired:

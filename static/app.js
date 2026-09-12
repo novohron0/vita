@@ -1,7 +1,7 @@
 // Превью и скачивание рендерятся на канвасе 1:1 с серверным рендером (app/render.py).
 const W = 1179, H = 2556, GAP = 0.45, LIFE_YEARS = 90;
 
-const COLORS = ['#f2f2f2', '#000000', '#3da9fc', '#34c759', '#ff9500', '#c7c7cc', '#a78bfa', '#ff6b81', '#ff5fa2'];
+const COLORS = ['#f2f2f2', '#2b2b30', '#3da9fc', '#34c759', '#ff9500', '#c7c7cc', '#a78bfa', '#ff6b81', '#ff5fa2'];
 // base — опорный цвет фона: от него считаются пустые точки и контраст свотчей;
 // сцены (закат/горы/океан) рисуются градиентом + силуэтами в paintBG (зеркало render.py)
 const BGS = {
@@ -20,6 +20,23 @@ const SCENE_GRADS = {
 };
 const TITLES = { month: 'ТВОЙ МЕСЯЦ', year: 'ТВОЙ ГОД', life: 'ТВОЯ ЖИЗНЬ', goal: 'ДО ЦЕЛИ' };
 const SHAPES = ['circle', 'square', 'rounded', 'heart', 'star', 'diamond', 'hex'];
+// Шрифты заголовка. k — поправка размера: у рукописных мелкая буква, и без неё
+// «Каveat» выглядит вдвое меньше соседей. Те же числа лежат в app/render.py,
+// иначе превью разойдётся с настоящими обоями.
+const FONTS = {
+  system:     { css: '-apple-system, "SF Pro Display", system-ui, sans-serif', w: 600, k: 1 },
+  montserrat: { css: 'Montserrat, sans-serif', w: 700, k: 0.96 },
+  playfair:   { css: '"Playfair Display", serif', w: 700, k: 1.02 },
+  oswald:     { css: 'Oswald, sans-serif', w: 600, k: 1.08 },
+  unbounded:  { css: 'Unbounded, sans-serif', w: 700, k: 0.88 },
+  russo:      { css: '"Russo One", sans-serif', w: 400, k: 0.98 },
+  caveat:     { css: 'Caveat, cursive', w: 700, k: 1.3 },
+  pacifico:   { css: 'Pacifico, cursive', w: 400, k: 0.98 },
+};
+const titleFont = (px = 64) => {
+  const f = FONTS[state.font] || FONTS.system;
+  return `${f.w} ${Math.round(px * f.k)}px ${f.css}`;
+};
 const BG_TITLES = { dembel: 'ДО ДЕМБЕЛЯ', ramadan: 'МЕСЯЦ РАМАДАН', honeymoon: 'МЕДОВЫЙ МЕСЯЦ' };
 const STAT_LABELS = {
   month: ['дней позади', 'впереди'],
@@ -32,7 +49,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
 const plus30 = new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10);
 
 const state = {
-  mode: 'month', color: '#f2f2f2', bg: 'black', bgColor: '#101014', bgImageId: null, shape: 'circle',
+  mode: 'month', color: '#f2f2f2', bg: 'black', bgColor: '#101014', bgImageId: null, shape: 'circle', font: 'system',
   glass: false, title: TITLES.month, footer: true, brand: true, birth: '2000-01-01',
   start: todayISO, end: plus30,
 };
@@ -558,7 +575,7 @@ function draw(reveal = 1, pulse = 0, fx = null) {
   ctx.textBaseline = 'middle';
   if (state.title.trim()) {
     ctx.fillStyle = state.color;
-    ctx.font = '600 64px -apple-system, "SF Pro Display", system-ui, sans-serif';
+    ctx.font = titleFont();
     ctx.fillText(state.title.trim(), W / 2, y0 - 190);
   }
   if (state.brand) drawWatermark(W / 2, y0 - 110, text);
@@ -900,6 +917,19 @@ bindSeg('mode', v => {
   }
 }, true);
 bindSeg('shape', v => { state.shape = v; });
+// Канва не умеет ждать шрифт сама: пока файл не подгружен, она молча рисует
+// системным. Поэтому сначала просим шрифт под нынешний текст, потом перерисовываем.
+async function useFont(key) {
+  state.font = key;
+  const f = FONTS[key];
+  if (key !== 'system' && document.fonts) {
+    const family = f.css.split(',')[0].trim();
+    try { await document.fonts.load(`${f.w} 64px ${family}`, (state.title || 'Vita') + 'Vita'); } catch {}
+  }
+  draw();
+}
+bindSeg('font', v => { useFont(v); });
+
 bindSeg('glass', v => { state.glass = v === '1'; }, true);
 bindSeg('footer', v => { state.footer = v === '1'; });
 // Логотип на обоях убирается только на полном доступе: клик по «Убрать» без
@@ -1079,7 +1109,7 @@ async function makeWallpaper(btn, err) {
       body: JSON.stringify({
         mode: state.mode, color: state.color, bg: state.bg, bgColor: state.bgColor,
         bgImage: state.bgImageId || '', shape: state.shape, glass: state.glass,
-        title: state.title, footer: state.footer, brand: state.brand, birth: state.birth,
+        title: state.title, font: state.font, footer: state.footer, brand: state.brand, birth: state.birth,
         start: state.start, end: state.end,
         ownerToken: window.VitaID?.token() || '',
       }),
