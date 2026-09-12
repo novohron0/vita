@@ -2251,19 +2251,25 @@ body.login-page {
   text-decoration: none;
   -webkit-tap-highlight-color: transparent;
 }
-.login-logo img {
+.login-logo picture, .login-logo img {
   display: block;
-  height: 52px;
+  height: 54px;
   width: auto;
   max-width: 100%;
 }
+/* Имя набрано жидким металлом — он живёт только на черноте. В светлой теме
+   блики теряются, поэтому там логотип пишем буквами. */
 .login-logo-word {
-  display: block;
+  display: none;
   color: var(--text);
   font-size: 34px;
   font-weight: 600;
   letter-spacing: 0.08em;
 }
+[data-theme="light"] .login-logo picture,
+.login-logo.no-art picture { display: none; }
+[data-theme="light"] .login-logo-word,
+.login-logo.no-art .login-logo-word { display: block; }
 
 .login-seg { margin: 0; }
 

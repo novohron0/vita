@@ -23,7 +23,7 @@
     document.head.appendChild(meta);
   })();
 </script>
-<link rel="stylesheet" href="/static/style.css?v=67">
+<link rel="stylesheet" href="/static/style.css?v=68">
 </head>
 <body class="login-page">
 
@@ -37,9 +37,12 @@
 
 <main class="login">
   <a class="login-logo" href="/" aria-label="Vita, на главную">
-    <img src="/static/img/logo-vita.png" alt="Vita" id="logoImg"
-      onerror="this.hidden=true;document.getElementById('logoWord').hidden=false">
-    <span class="login-logo-word" id="logoWord" hidden>vita</span>
+    <picture>
+      <source srcset="/static/img/logo-vita.webp" type="image/webp">
+      <img src="/static/img/logo-vita.png" alt="Vita" width="580" height="195"
+        onerror="this.closest('.login-logo').classList.add('no-art')">
+    </picture>
+    <span class="login-logo-word">vita</span>
   </a>
 
   <div class="seg wide login-seg" id="authTabs">
