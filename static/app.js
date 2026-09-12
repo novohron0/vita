@@ -33,10 +33,19 @@ const FONTS = {
   caveat:     { css: 'Caveat, cursive', w: 700, k: 1.3 },
   pacifico:   { css: 'Pacifico, cursive', w: 400, k: 0.98 },
 };
-const titleFont = (px = 64) => {
+// Выбранным шрифтом пишется всё на обоях: заголовок, счётчик и значок vita.
+// Насыщенность подменяем только у системного — у остальных в наборе одно
+// начертание, и просить у него 400 бессмысленно.
+const wallFont = (px, systemWeight) => {
   const f = FONTS[state.font] || FONTS.system;
-  return `${f.w} ${Math.round(px * f.k)}px ${f.css}`;
+  const w = state.font === 'system' ? systemWeight : f.w;
+  return `${w} ${Math.round(px * f.k)}px ${f.css}`;
 };
+const titleFont = (px = 64) => wallFont(px, 600);
+// Строка для прогрева шрифта: в ней есть и латиница значка, и слова счётчика,
+// иначе канва нарисует их запасным шрифтом — она сама файлы не ждёт.
+const FONT_SAMPLE = 'vita Vita 0123456789 день дней из осталось прошло недели '
+  + 'прожито впереди стрик цель закрыта награда замерли точки';
 const BG_TITLES = { dembel: 'ДО ДЕМБЕЛЯ', ramadan: 'МЕСЯЦ РАМАДАН', honeymoon: 'МЕДОВЫЙ МЕСЯЦ' };
 const STAT_LABELS = {
   month: ['дней позади', 'впереди'],
@@ -503,7 +512,7 @@ function effectiveBgHex() {
 
 function drawWatermark(cx, cy, fill) {
   const r = 5, dx = 17, dy = 15;
-  ctx.font = '400 32px -apple-system, system-ui, sans-serif';
+  ctx.font = wallFont(32, 400);
   const textW = ctx.measureText('vita').width;
   const dotsW = 2 * dx + 2 * r;
   const x = cx - (dotsW + 14 + textW) / 2;
@@ -581,7 +590,7 @@ function draw(reveal = 1, pulse = 0, fx = null) {
   if (state.brand) drawWatermark(W / 2, y0 - 110, text);
   if (state.footer) {
     ctx.fillStyle = text;
-    ctx.font = '400 40px -apple-system, system-ui, sans-serif';
+    ctx.font = wallFont(40, 400);
     ctx.fillText(footerText(total, done), W / 2, y0 + gridH + 130);
   }
 
@@ -924,7 +933,7 @@ async function useFont(key) {
   const f = FONTS[key];
   if (key !== 'system' && document.fonts) {
     const family = f.css.split(',')[0].trim();
-    try { await document.fonts.load(`${f.w} 64px ${family}`, (state.title || 'Vita') + 'Vita'); } catch {}
+    try { await document.fonts.load(`${f.w} 64px ${family}`, FONT_SAMPLE + (state.title || '')); } catch {}
   }
   draw();
 }

@@ -561,9 +561,9 @@ def _footer(mode: str, total: int, done: int) -> str:
     return f"день {min(done + 1, total)} из {total}"
 
 
-def _watermark(draw: ImageDraw.ImageDraw, cx: float, cy: float, fill) -> None:
+def _watermark(draw: ImageDraw.ImageDraw, cx: float, cy: float, fill, font_key: str = "") -> None:
     """Мини-логотип: 6 точек + «vita» (вирусный штамп на бесплатных обоях)."""
-    font = _font(32)
+    font = _title_font(32, font_key)
     label = "vita"
     r, dx, dy = 5, 17, 15
     dots_w = 2 * dx + 2 * r
@@ -643,11 +643,12 @@ def render_goal(goal: dict, done: set[str], today: date | None = None) -> Image.
     if title:
         draw_text(img, draw, (W / 2, y0 - 190), title,
                   _title_font(64, goal.get("font", "")), color)
-    _watermark(draw, W / 2, y0 - 110, text)
+    _watermark(draw, W / 2, y0 - 110, text, goal.get("font", ""))
     footer = f"{done_count} из {days} · стрик {streak}"
     if done_count >= days:
         footer = "цель закрыта · 🎁 забирай награду"
-    draw_text(img, draw, (W / 2, y0 + grid_h + 130), footer, _font(40), text)
+    draw_text(img, draw, (W / 2, y0 + grid_h + 130), footer,
+              _title_font(40, goal.get("font", "")), text)
     return img
 
 
@@ -696,17 +697,18 @@ def render_wallpaper(cfg: dict, today: date | None = None, expired: bool = False
     if title:
         draw_text(img, draw, (W / 2, y0 - 190), title,
                   _title_font(64, cfg.get("font", "")), color)
+    font_key = cfg.get("font", "")
     if cfg.get("brand", True):
-        _watermark(draw, W / 2, y0 - 110, text)
+        _watermark(draw, W / 2, y0 - 110, text, font_key)
     if expired:
         # доступ кончился: прогресс заморожен (today = дата окончания), обои сами напоминают
         draw.text((W / 2, y0 + grid_h + 130), "точки замерли · vitadots.ru",
-                  font=_font(40), fill=color, anchor="mm")
+                  font=_title_font(40, font_key), fill=color, anchor="mm")
     elif cfg.get("footer", True):
         draw.text(
             (W / 2, y0 + grid_h + 130),
             _footer(mode, total, done),
-            font=_font(40),
+            font=_title_font(40, font_key),
             fill=text,
             anchor="mm",
         )
