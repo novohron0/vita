@@ -2269,8 +2269,8 @@ body.login-page::before { display: none; }
   display: block;
   position: relative;
   overflow: hidden;
-  width: 76%;
-  max-width: 300px;
+  width: 58%;
+  max-width: 230px;
   margin: 0 auto 4px;
   text-decoration: none;
   -webkit-tap-highlight-color: transparent;
