@@ -6,7 +6,14 @@
    почта → код из письма → новый пароль. */
 const $ = id => document.getElementById(id);
 
-let mode = 'login';                       // login | register | forgot | reset
+// Новый человек первым делом видит регистрацию: без аккаунта входить некуда.
+// Кто с этого браузера уже заходил — того встречаем формой входа.
+let mode = (() => {
+  try {
+    if (localStorage.getItem('vitaAuthSeen') || localStorage.getItem('vitaSignedIn')) return 'login';
+  } catch (e) {}
+  return 'register';
+})();                                     // login | register | forgot | reset
 
 // Возвращаемся туда, откуда человека сюда отправили. Берём только свой путь:
 // «//чужой.сайт» и абсолютные адреса игнорируем, иначе это открытый редирект.
@@ -31,6 +38,9 @@ function paint() {
 
   $('authTabs').querySelectorAll('button')
     .forEach(b => b.classList.toggle('on', b.dataset.v === mode));
+  // пилюля стоит слева на регистрации и переезжает вправо на вход
+  $('authTabs').classList.toggle('at-login', mode === 'login');
+  $('authOr').hidden = !entry || !tgReady;
 
   const label = mode === 'forgot' ? 'Отправить код'
     : mode === 'reset' ? 'Сменить пароль'

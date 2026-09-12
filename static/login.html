@@ -23,7 +23,7 @@
     document.head.appendChild(meta);
   })();
 </script>
-<link rel="stylesheet" href="/static/style.css?v=68">
+<link rel="stylesheet" href="/static/style.css?v=75">
 </head>
 <body class="login-page">
 
@@ -37,17 +37,22 @@
 
 <main class="login">
   <a class="login-logo" href="/" aria-label="Vita, на главную">
-    <picture>
+    <picture class="art-dark">
       <source srcset="/static/img/logo-vita.webp" type="image/webp">
-      <img src="/static/img/logo-vita.png" alt="Vita" width="580" height="195"
+      <img src="/static/img/logo-vita.jpg" alt="Vita" width="668" height="312"
         onerror="this.closest('.login-logo').classList.add('no-art')">
+    </picture>
+    <picture class="art-light">
+      <source srcset="/static/img/logo-vita-light.webp" type="image/webp">
+      <img src="/static/img/logo-vita-light.jpg" alt="" width="650" height="308">
     </picture>
     <span class="login-logo-word">vita</span>
   </a>
 
   <div class="seg wide login-seg" id="authTabs">
-    <button data-v="login" class="on" type="button">Вход</button>
-    <button data-v="register" type="button">Регистрация</button>
+    <span class="seg-pill" aria-hidden="true"></span>
+    <button data-v="register" class="on" type="button">Регистрация</button>
+    <button data-v="login" type="button">Вход</button>
   </div>
 
   <form class="login-form" id="authForm" novalidate>
@@ -99,6 +104,8 @@
     <button class="primary login-go" id="authGo" type="submit">Войти</button>
   </form>
 
+  <div class="auth-or login-or" id="authOr" hidden><span>или</span></div>
+
   <div class="login-tg" id="tgBox" hidden>
     <div class="tg-widget"></div>
     <p class="tg-status"></p>
@@ -116,6 +123,6 @@
 
 <script src="/static/vita-id.js?v=5"></script>
 <script src="/static/tg-login.js?v=2"></script>
-<script src="/static/login.js?v=1"></script>
+<script src="/static/login.js?v=2"></script>
 </body>
 </html>
