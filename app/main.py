@@ -16,7 +16,7 @@ from html import escape as esc
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -1842,12 +1842,15 @@ def wallpaper(code: str):
 
 @app.get("/goals")
 def goals_new():
-    return FileResponse(ROOT / "static" / "goals.html", headers={"Cache-Control": "no-cache"})
+    return FileResponse(ROOT / "static" / "goals.html", headers={"Cache-Control": "no-cache", "X-Robots-Tag": "noindex, follow"})
 
 
 @app.get("/focus")
 def focus_page():
-    return FileResponse(ROOT / "static" / "focus.html", headers={"Cache-Control": "no-cache"})
+    # Vita Focus отложен, а Гугль успел проиндексировать его страницу и водит
+    # людей туда вместо главной. Пока продукта нет — уводим на главную.
+    return RedirectResponse("/", status_code=302,
+                            headers={"X-Robots-Tag": "noindex", "Cache-Control": "no-cache"})
 
 
 @app.get("/privacy")
@@ -1864,12 +1867,12 @@ def login_page():
 
 @app.get("/me")
 def cabinet_page():
-    return FileResponse(ROOT / "static" / "me.html", headers={"Cache-Control": "no-cache"})
+    return FileResponse(ROOT / "static" / "me.html", headers={"Cache-Control": "no-cache", "X-Robots-Tag": "noindex, follow"})
 
 
 @app.get("/u/{handle}")
 def member_page(handle: str):
-    return FileResponse(ROOT / "static" / "member.html", headers={"Cache-Control": "no-cache"})
+    return FileResponse(ROOT / "static" / "member.html", headers={"Cache-Control": "no-cache", "X-Robots-Tag": "noindex, follow"})
 
 
 @app.post("/api/profile")
@@ -2106,7 +2109,7 @@ def focus_wait(fw: FocusWaitIn):
 
 @app.get("/feed")
 def feed_page():
-    return FileResponse(ROOT / "static" / "feed.html", headers={"Cache-Control": "no-cache"})
+    return FileResponse(ROOT / "static" / "feed.html", headers={"Cache-Control": "no-cache", "X-Robots-Tag": "noindex, follow"})
 
 
 @app.get("/api/feed")

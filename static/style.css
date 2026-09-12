@@ -2267,9 +2267,9 @@ body.login-page::before { display: none; }
    снизу кадр растворяется в фон, который подобран ровно под его цвет. */
 .login-logo {
   display: block;
-  width: 100vw;
-  max-width: 100vw;
-  margin: -14px calc(50% - 50vw) 2px;
+  width: 58%;
+  max-width: 230px;
+  margin: 0 auto 4px;
   text-decoration: none;
   -webkit-tap-highlight-color: transparent;
 }
@@ -2278,17 +2278,11 @@ body.login-page::before { display: none; }
   width: 100%;
   height: auto;
 }
+/* Кадр растворяем по кругу: снимок со своими тенями остаётся целым, а границы
+   его фона уходят в фон страницы — он подобран ровно под цвет снимка. */
 .login-logo picture {
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 22%, #000 78%, transparent 100%);
-  mask-image: linear-gradient(to bottom, transparent 0, #000 22%, #000 78%, transparent 100%);
-}
-/* Экран шире кадра — тогда ограничиваем ширину и растворяем кадр по кругу. */
-@media (min-width: 680px) {
-  .login-logo { width: 668px; max-width: 100%; margin: 0 auto 2px; }
-  .login-logo picture {
-    -webkit-mask-image: radial-gradient(76% 66% at 50% 50%, #000 34%, rgba(0,0,0,.6) 60%, transparent 84%);
-    mask-image: radial-gradient(76% 66% at 50% 50%, #000 34%, rgba(0,0,0,.6) 60%, transparent 84%);
-  }
+  -webkit-mask-image: radial-gradient(74% 64% at 50% 50%, #000 30%, rgba(0,0,0,.6) 58%, transparent 84%);
+  mask-image: radial-gradient(74% 64% at 50% 50%, #000 30%, rgba(0,0,0,.6) 58%, transparent 84%);
 }
 /* Снимок кладём целиком, вместе с его тенями — в них вся красота. Фон кадра
    растворяем наложением: на тёмной теме screen съедает чёрный фон, на светлой
