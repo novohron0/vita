@@ -325,6 +325,10 @@ def _init_schema(conn: sqlite3.Connection) -> None:
         "text TEXT NOT NULL, "
         "created TEXT NOT NULL DEFAULT (datetime('now')))"
     )
+    try:  # оценка звёздами появилась позже самих отзывов
+        conn.execute("ALTER TABLE reviews ADD COLUMN stars INTEGER NOT NULL DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
     # трекер целей «тыкалка»: цель + отметки дней (checkins)
     conn.execute(
         "CREATE TABLE IF NOT EXISTS goals("
@@ -426,6 +430,7 @@ class BuyIn(BaseModel):
 class ReviewIn(BaseModel):
     code: str
     text: str = ""
+    stars: int = 0
 
 
 class GoalIn(BaseModel):
@@ -1038,7 +1043,10 @@ def create_review(rv: ReviewIn):
         effective_until = _effective_access_until(conn, row[0], row[2])
         if effective_until is None:
             raise HTTPException(409, "Бессрочный доступ уже активен")
-        conn.execute("INSERT INTO reviews(code, text) VALUES(?, ?)", (rv.code, text))
+        stars = min(5, max(0, int(rv.stars or 0)))
+        conn.execute(
+            "INSERT INTO reviews(code, text, stars) VALUES(?, ?, ?)", (rv.code, text, stars)
+        )
         conn.execute(
             "UPDATE links SET review_at = datetime('now') WHERE code = ?", (rv.code,)
         )
@@ -1740,7 +1748,8 @@ def setup_page(code: str, request: Request):
     _, fetches, review_at, _ = row
     url = str(request.base_url).rstrip("/") + f"/w/{code}.png"
     if SHORTCUT_ICLOUD_URL:
-        btn = f'<a class="btn primary" href="{SHORTCUT_ICLOUD_URL}">Добавить ярлык</a>'
+        btn = (f'<a class="btn primary" id="shortcutBtn" href="{SHORTCUT_ICLOUD_URL}">'
+               'Добавить ярлык</a>')
     else:
         btn = '<span class="btn primary disabled">Ярлык готовится — скоро здесь</span>'
     expired, until = _access_state(effective_until)
@@ -1753,8 +1762,8 @@ def setup_page(code: str, request: Request):
                '<p class="hint">Один платёж, без подписки. Обои начнут обновляться этой же ночью.</p>')
     else:
         access = f"Бесплатно до {until.strftime('%d.%m')}."
-        buy = (f'<p class="hint">Дальше — {billing.PRICE} ₽ один раз, и обои остаются навсегда. '
-               '<a href="/buy" style="color:var(--text-2)">Открыть сейчас</a></p>')
+        buy = ('<p class="hint">7 дней бесплатно, дальше нужен '
+               '<a href="/buy" style="color:var(--text-2)">prime</a>.</p>')
     # блок отзыва: только тем, кто уже пользовался (обои реально тянулись) или у кого доступ истёк,
     # и только если вторую неделю ещё не дарили — иначе пусто/благодарность
     if until is None:
@@ -1772,6 +1781,7 @@ def setup_page(code: str, request: Request):
         .replace("{{ACCESS}}", access)
         .replace("{{BUY}}", buy)
         .replace("{{REVIEW}}", review)
+        .replace("{{CAN_REVIEW}}", "1" if (until is not None and not review_at) else "")
         .replace("{{CODE}}", code),
         headers={"Cache-Control": "no-cache"},
     )
@@ -2505,7 +2515,7 @@ def admin(token: str = ""):
             for created, idea, contact, code, access_until, fetches, owner_code in raw_rows
         ]
         rv_rows = conn.execute(
-            "SELECT code, text FROM reviews ORDER BY id"
+            "SELECT code, text, stars FROM reviews ORDER BY id"
         ).fetchall()
         fw_rows = conn.execute(
             "SELECT contact, created FROM focus_wait ORDER BY created DESC"
@@ -2546,8 +2556,9 @@ def admin(token: str = ""):
             "ORDER BY cnt.peers DESC LIMIT 40"
         ).fetchall()
     reviews: dict[str, list[str]] = {}
-    for r_code, r_text in rv_rows:
-        reviews.setdefault(r_code, []).append(r_text)
+    for r_code, r_text, r_stars in rv_rows:
+        mark = ("★" * r_stars + " ") if r_stars else ""
+        reviews.setdefault(r_code, []).append(mark + r_text)
     cards = []
     for created, idea, contact, code, access_until, fetches in rows:
         expired, until = _access_state(access_until)

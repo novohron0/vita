@@ -865,11 +865,15 @@ if (headLogo) {
 // снятия класса вторая вспышка подряд просто не начнётся.
 const phoneFlash = document.querySelector('.phone-flash');
 if (phoneFlash) {
+  const unpress = () => phoneEl.classList.remove('press');
   phoneEl.addEventListener('pointerdown', () => {
+    phoneEl.classList.add('press');
     phoneFlash.classList.remove('on');
     void phoneFlash.offsetWidth;
     phoneFlash.classList.add('on');
   }, { passive: true });
+  addEventListener('pointerup', unpress, { passive: true });
+  addEventListener('pointercancel', unpress, { passive: true });
   phoneFlash.addEventListener('animationend', () => phoneFlash.classList.remove('on'));
 }
 
@@ -1346,7 +1350,7 @@ async function reelLife() {
 }
 
 // --- профиль в шапке ---
-// Кружок открывает карточку: фото, имя, тег и статус Прайма. Всё, что человек
+// Кружок открывает карточку: фото, имя, тег и статус prime. Всё, что человек
 // меняет здесь, попадает в тот же аккаунт, что и обои.
 const profModal = $('profileModal');
 let profileLoaded = false;
@@ -1375,10 +1379,10 @@ function paintPrime(access) {
   buy.hidden = paid || !access?.payable;
   // строка молчит, когда рядом стоит кнопка покупки: она и так всё говорит
   let text = '';
-  if (paid) text = 'Прайм открыт навсегда';
+  if (paid) text = 'prime открыт навсегда';
   else if (access?.until && !access.expired) text = 'идут пробные дни';
   else if (access?.expired) text = 'проба кончилась';
-  else if (buy.hidden) text = 'Прайм не подключён';
+  else if (buy.hidden) text = 'prime не подключён';
   state.textContent = text;
   state.hidden = !text;
   hasFullAccess = paid;
@@ -1701,7 +1705,7 @@ async function guard() {
 }
 guard();
 
-// статус Прайма нужен и до открытия карточки: от него зависит замок на логотипе.
+// статус prime нужен и до открытия карточки: от него зависит замок на логотипе.
 // Заодно сразу ставим аватарку: человек уже вошёл, ждать нажатия на кружок
 // незачем — он видел своё фото в прошлый раз и ждёт его снова.
 (async () => {

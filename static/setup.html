@@ -8,22 +8,27 @@
   <link rel="apple-touch-icon" href="/static/img/apple-touch.png">
 <title>Установка — Vita</title>
 <script src="/static/theme.js?v=6"></script>
-<link rel="stylesheet" href="/static/style.css?v=91">
+<link rel="stylesheet" href="/static/style.css?v=94">
 </head>
 <body>
 <header class="head-shrink">
-  <div class="head-pill">
+  <div class="head-pill solo">
     <a class="logo" href="/">⠿ <span class="logo-word">vita</span></a>
-    <span class="tag">установка</span>
+    <a class="avatar-btn" id="avatarBtn" href="/me" aria-label="Мои обои">
+      <img id="avatarBtnImg" alt="" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <circle cx="12" cy="8.6" r="3.7"></circle>
+        <path d="M4.6 20.4c0-4.1 3.3-6.6 7.4-6.6s7.4 2.5 7.4 6.6"></path>
+      </svg>
+    </a>
   </div>
 </header>
 
 <main class="setup">
-  <div class="phone phone-still"><img class="wp-preview" src="{{URL}}" alt="Твои обои"></div>
+  <div class="phone phone-still"><span class="phone-glow" aria-hidden="true"></span><img class="wp-preview" src="{{URL}}" alt="Твои обои"></div>
   <h1>Осталось 2 минуты</h1>
   <p class="access">{{ACCESS}}</p>
-  <p class="sub">Картинка готова и уже сама обновляется каждый день.
-    Осталось подружить её с обоями айфона.</p>
+  <p class="sub">Обои готовы — осталось подружить их с устройством.</p>
 
   {{BUY}}
 
@@ -85,6 +90,26 @@
     К обоям, которые ставит автоматика, Apple его не применяет.</p>
 </main>
 
+<div class="modal-back center" id="rvModal" hidden>
+  <div class="modal card rv-card">
+    <h2>Ещё 7 дней — за отзыв</h2>
+    <p class="sub">Поставь оценку и напиши пару фраз: что понравилось, чего не хватает.
+      Неделя добавится сразу, ярлык откроется следом.</p>
+    <div class="stars" id="rvStars">
+      <button type="button" data-v="1" aria-label="1 из 5"><svg viewBox="0 0 24 24"><path d="m12 3.6 2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.6 9.7l5.8-.8z"/></svg></button>
+      <button type="button" data-v="2" aria-label="2 из 5"><svg viewBox="0 0 24 24"><path d="m12 3.6 2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.6 9.7l5.8-.8z"/></svg></button>
+      <button type="button" data-v="3" aria-label="3 из 5"><svg viewBox="0 0 24 24"><path d="m12 3.6 2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.6 9.7l5.8-.8z"/></svg></button>
+      <button type="button" data-v="4" aria-label="4 из 5"><svg viewBox="0 0 24 24"><path d="m12 3.6 2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.6 9.7l5.8-.8z"/></svg></button>
+      <button type="button" data-v="5" aria-label="5 из 5"><svg viewBox="0 0 24 24"><path d="m12 3.6 2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.6 9.7l5.8-.8z"/></svg></button>
+    </div>
+    <textarea id="rvText" rows="3"
+      placeholder="Например: наконец вижу, сколько недель уже прожито — отрезвляет и бодрит одновременно…"></textarea>
+    <p class="hint err" id="rvStatus"></p>
+    <button class="btn primary" id="rvSend" type="button">Отправить и забрать ярлык</button>
+    <button class="rv-skip" id="rvSkip" type="button">Просто забрать ярлык</button>
+  </div>
+</div>
+
 <footer class="page-foot"><a href="/buy" style="color:inherit">Открыть навсегда</a> · <a href="/offer" style="color:inherit">Оферта</a> · <a href="/privacy" style="color:inherit">Конфиденциальность</a></footer>
 
 <script src="/static/vita-id.js?v=5"></script>
@@ -109,6 +134,92 @@ document.getElementById('copy').addEventListener('click', () => {
   navigator.clipboard.writeText(document.getElementById('myUrl').textContent);
   document.getElementById('copy').textContent = 'Скопировано ✓';
 });
+
+// Отзыв просим ровно в тот момент, когда человек тянется за ярлыком: это
+// единственное место, где он точно доволен и ещё не ушёл со страницы.
+const CAN_REVIEW = "{{CAN_REVIEW}}" === "1";
+const rvModal = document.getElementById('rvModal');
+const shortcutBtn = document.getElementById('shortcutBtn');
+let rvStars = 0, rvDone = false, rvHref = '';
+
+function paintStars() {
+  document.querySelectorAll('#rvStars button').forEach(b => {
+    b.classList.toggle('on', Number(b.dataset.v) <= rvStars);
+  });
+}
+document.getElementById('rvStars').addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  rvStars = Number(b.dataset.v);
+  document.getElementById('rvStatus').textContent = '';
+  paintStars();
+});
+
+function closeRv() { rvModal.hidden = true; }
+rvModal.addEventListener('click', e => { if (e.target === rvModal) closeRv(); });
+document.getElementById('rvSkip').addEventListener('click', () => {
+  closeRv();
+  if (rvHref) location.href = rvHref;
+});
+
+if (shortcutBtn) {
+  shortcutBtn.addEventListener('click', e => {
+    if (!CAN_REVIEW || rvDone) return;   // неделю уже дарили или доступ бессрочный
+    e.preventDefault();
+    rvHref = shortcutBtn.getAttribute('href');
+    rvModal.hidden = false;
+  });
+}
+
+document.getElementById('rvSend').addEventListener('click', async () => {
+  const btn = document.getElementById('rvSend');
+  const status = document.getElementById('rvStatus');
+  const text = document.getElementById('rvText').value.trim();
+  status.textContent = '';
+  if (!rvStars) { status.textContent = 'Поставь оценку — это один тап.'; return; }
+  if (text.length < 15) { status.textContent = 'Напиши чуть подробнее — хотя бы строчку.'; return; }
+  btn.disabled = true;
+  btn.textContent = 'Отправляю…';
+  try {
+    const r = await fetch('/api/review', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: CODE, text, stars: rvStars }),
+    });
+    const d = await r.json();
+    if (!r.ok) {
+      status.textContent = d.detail || 'Что-то пошло не так, попробуй ещё раз';
+      btn.disabled = false;
+      btn.textContent = 'Отправить и забрать ярлык';
+      return;
+    }
+    rvDone = true;
+    const inline = document.getElementById('reviewBlock');
+    if (inline) inline.innerHTML =
+      '<h3>Спасибо 🙏</h3><p class="hint">Вторая неделя активна до <b>' + d.until_h + '</b>.</p>';
+    closeRv();
+    if (rvHref) location.href = rvHref;
+  } catch {
+    status.textContent = 'Сеть подвела — попробуй ещё раз';
+    btn.disabled = false;
+    btn.textContent = 'Отправить и забрать ярлык';
+  }
+});
+
+// Фото профиля в шапке — такое же, как на главной. Только тем, у кого профиль
+// уже есть: открыли ссылку на чужом телефоне — лишний профиль там не заводим.
+(async () => {
+  try {
+    if (!(localStorage.getItem('vitaOwnerToken') || '').length) return;
+    const me = await VitaID.ensure();
+    if (me && me.avatar) {
+      const img = document.getElementById('avatarBtnImg');
+      img.src = me.avatar;
+      img.hidden = false;
+      document.getElementById('avatarBtn').classList.add('filled');
+    }
+  } catch {}
+})();
 
 const reviewSend = document.getElementById('reviewSend');
 if (reviewSend) {

@@ -20,7 +20,7 @@
   try { if (!localStorage.getItem('vitaSignedIn')) document.documentElement.classList.add('gate'); } catch (e) {}
 </script>
 <script src="/static/theme.js?v=6"></script>
-<link rel="stylesheet" href="/static/style.css?v=91">
+<link rel="stylesheet" href="/static/style.css?v=94">
 <style>
   .home-hero { animation: fadeUp .7s cubic-bezier(.22,1,.36,1) both; }
   .phone { animation: phoneReveal .85s cubic-bezier(.22,1,.36,1) both, phoneFloat 7s ease-in-out 1.1s infinite; }
@@ -80,7 +80,7 @@
 </head>
 <body>
 <header class="head-shrink">
-  <div class="head-pill" id="headPill">
+  <div class="head-pill solo" id="headPill">
     <a class="logo" href="/">⠿ <span class="logo-word">vita</span></a>
     <button class="avatar-btn" id="avatarBtn" type="button" aria-label="Профиль">
       <img id="avatarBtnImg" alt="" hidden>
@@ -254,7 +254,7 @@
 
     <div class="prime" id="primeRow">
       <span class="prime-state" id="primeState">проверяем…</span>
-      <a class="prime-buy" id="primeBuy" href="/buy" hidden>Открыть Прайм — <b>{{PRICE}} ₽</b></a>
+      <a class="prime-buy" id="primeBuy" href="/buy" hidden>Открыть prime — <b>{{PRICE}} ₽</b></a>
     </div>
 
     <button class="prof-mail" id="profMail" type="button" hidden>Войти по почте</button>
@@ -299,6 +299,6 @@
 
 <script src="/static/vita-id.js?v=5"></script>
 <script src="/static/tg-login.js?v=3"></script>
-<script src="/static/app.js?v=52"></script>
+<script src="/static/app.js?v=54"></script>
 </body>
 </html>
