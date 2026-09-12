@@ -1,7 +1,9 @@
 FROM python:3.12-slim
 
-# DejaVuSans — кириллица для серверного рендера обоев (см. app/render.py FONT_PATHS)
-RUN apt-get update && apt-get install -y --no-install-recommends fonts-dejavu-core \
+# DejaVuSans — кириллица для серверного рендера обоев (см. app/render.py FONT_PATHS);
+# Noto Color Emoji — чтобы эмодзи в заголовке не превращались в квадраты
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        fonts-dejavu-core fonts-noto-color-emoji \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

@@ -5,6 +5,7 @@ import calendar
 import math
 import os
 import re
+import unicodedata
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -54,6 +55,127 @@ def _font(size: int):
         except OSError:
             continue
     return ImageFont.load_default(size)
+
+
+# Эмодзи обычным шрифтом не рисуются — выходят пустые квадраты. Noto Color
+# Emoji хранит картинки только в одном размере (109 точек), поэтому рисуем
+# эмодзи отдельным слоем в родном размере и уменьшаем до высоты строки.
+EMOJI_FONT_PATHS = [
+    "/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf",
+    "/System/Library/Fonts/Apple Color Emoji.ttc",
+]
+EMOJI_NATIVE = 109
+# Что считать эмодзи. Перечислять диапазоны руками мало: у Apple на клавиатуре
+# есть и флаги, и клавиши-цифры, и склейки семей через ZWJ. Поэтому берём все
+# эмодзи-блоки Unicode плюс любой «прочий символ» (категория So) — это и есть
+# полный набор стандарта, который Noto Color Emoji умеет рисовать.
+_EMOJI_JOINERS = {0x200D, 0xFE0F, 0xFE0E, 0x20E3, 0x1F3FB, 0x1F3FC, 0x1F3FD, 0x1F3FE, 0x1F3FF}
+_EMOJI_EXTRA = {0x00A9, 0x00AE, 0x2122, 0x24C2, 0x3030, 0x303D, 0x3297, 0x3299}
+
+
+def _is_emoji(ch: str) -> bool:
+    cp = ord(ch)
+    if cp in _EMOJI_JOINERS or cp in _EMOJI_EXTRA:
+        return True
+    if 0x1F000 <= cp <= 0x1FAFF:          # все эмодзи-блоки, включая флаги
+        return True
+    if 0x2190 <= cp <= 0x2BFF:            # стрелки, значки, геометрия
+        return True
+    if 0x2900 <= cp <= 0x297F:
+        return True
+    return unicodedata.category(ch) == "So" and cp > 0x2000
+
+
+def _split_emoji(text: str) -> list[tuple[bool, str]]:
+    """Режем строку на куски: (это эмодзи, содержимое). Клавиши вида 1️⃣ —
+    цифра плюс модификаторы, поэтому цифру забираем в кусок задним числом."""
+    out: list[list] = []
+    for i, ch in enumerate(text):
+        emoji = _is_emoji(ch)
+        # «1» перед вариационным селектором — часть клавиши, а не текст
+        if not emoji and i + 1 < len(text) and ord(text[i + 1]) in (0xFE0F, 0x20E3):
+            emoji = True
+        if out and out[-1][0] == emoji:
+            out[-1][1] += ch
+        else:
+            out.append([emoji, ch])
+    return [(bool(k), v) for k, v in out]
+
+
+_emoji_font_cache: dict[str, object] = {}
+
+
+def _emoji_font():
+    if "f" in _emoji_font_cache:
+        return _emoji_font_cache["f"]
+    font = None
+    for path in EMOJI_FONT_PATHS:
+        try:
+            font = ImageFont.truetype(path, EMOJI_NATIVE)
+            break
+        except OSError:
+            continue
+    _emoji_font_cache["f"] = font
+    return font
+
+
+def _emoji_image(chunk: str, height: int) -> Image.Image | None:
+    """Кусок с эмодзи, отрисованный цветным шрифтом и уменьшенный до height."""
+    font = _emoji_font()
+    if font is None:
+        return None
+    try:
+        pad = EMOJI_NATIVE // 4
+        box = Image.new("RGBA", (EMOJI_NATIVE * (len(chunk) + 1) + pad * 2, EMOJI_NATIVE * 2), (0, 0, 0, 0))
+        d = ImageDraw.Draw(box)
+        d.text((pad, pad), chunk, font=font, embedded_color=True)
+        box = box.crop(box.getbbox() or (0, 0, 1, 1))
+    except Exception:
+        return None
+    if box.width < 1 or box.height < 1:
+        return None
+    scale = height / box.height
+    return box.resize((max(1, round(box.width * scale)), height), Image.Resampling.LANCZOS)
+
+
+def draw_text(img: Image.Image, draw: ImageDraw.ImageDraw, xy, text: str,
+              font, fill, anchor: str = "mm") -> None:
+    """Текст, в котором эмодзи рисуются картинками, а остальное — шрифтом.
+    Держит те же якоря, что и draw.text, чтобы вызовы не переписывать."""
+    if not text:
+        return
+    parts = _split_emoji(text)
+    if not any(is_emoji for is_emoji, _ in parts):
+        draw.text(xy, text, font=font, fill=fill, anchor=anchor)
+        return
+
+    size = getattr(font, "size", 40)
+    eh = round(size * 1.08)
+    pieces = []            # (вид, содержимое, ширина)
+    for is_emoji, part in parts:
+        if is_emoji:
+            im = _emoji_image(part, eh)
+            if im is None:
+                continue   # шрифта нет — лучше без эмодзи, чем квадраты
+            pieces.append(("img", im, im.width))
+        else:
+            pieces.append(("txt", part, draw.textlength(part, font=font)))
+    if not pieces:
+        return
+
+    total = sum(p[2] for p in pieces)
+    x, y = xy
+    if anchor[0] == "m":
+        x -= total / 2
+    elif anchor[0] == "r":
+        x -= total
+    for kind, body, width in pieces:
+        if kind == "txt":
+            draw.text((x, y), body, font=font, fill=fill, anchor="l" + anchor[1])
+        else:
+            top = y - eh // 2 if anchor[1] == "m" else y
+            img.paste(body, (round(x), round(top)), body)
+        x += width
 
 
 def _rgb(hx: str) -> tuple[int, int, int]:
@@ -444,7 +566,8 @@ def render_goal(goal: dict, done: set[str], today: date | None = None) -> Image.
     if not re.fullmatch(r"#[0-9a-fA-F]{6}", color):
         color = "#34c759"
     shape = goal.get("shape", "circle")
-    title = (goal.get("title") or "").strip().upper()
+    # заголовок рисуем ровно так, как его набрали: капс больше не навязываем
+    title = (goal.get("title") or "").strip()
     start = _parse_date(goal.get("start"), today)
     days = max(1, min(int(goal.get("days", 30)), 365))
 
@@ -487,12 +610,12 @@ def render_goal(goal: dict, done: set[str], today: date | None = None) -> Image.
             _dot(img, box, color, shape, "empty", False, bg)
 
     if title:
-        draw.text((W / 2, y0 - 190), title, font=_font(64), fill=color, anchor="mm")
+        draw_text(img, draw, (W / 2, y0 - 190), title, _font(64), color)
     _watermark(draw, W / 2, y0 - 110, text)
     footer = f"{done_count} из {days} · стрик {streak}"
     if done_count >= days:
         footer = "цель закрыта · 🎁 забирай награду"
-    draw.text((W / 2, y0 + grid_h + 130), footer, font=_font(40), fill=text, anchor="mm")
+    draw_text(img, draw, (W / 2, y0 + grid_h + 130), footer, _font(40), text)
     return img
 
 
@@ -506,7 +629,7 @@ def render_wallpaper(cfg: dict, today: date | None = None, expired: bool = False
         color = "#f2f2f2"
     shape = cfg.get("shape", "circle")
     glass = cfg.get("glass", False)
-    title = (cfg.get("title") or "").strip().upper()
+    title = (cfg.get("title") or "").strip()
 
     text = "#8a857a" if bg_key == "white" else "#8e8e8e"
 
@@ -539,7 +662,7 @@ def render_wallpaper(cfg: dict, today: date | None = None, expired: bool = False
             _dot(img, box, color, shape, "empty", glass, bg)
 
     if title:
-        draw.text((W / 2, y0 - 190), title, font=_font(64), fill=color, anchor="mm")
+        draw_text(img, draw, (W / 2, y0 - 190), title, _font(64), color)
     if cfg.get("brand", True):
         _watermark(draw, W / 2, y0 - 110, text)
     if expired:

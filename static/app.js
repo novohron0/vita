@@ -559,7 +559,7 @@ function draw(reveal = 1, pulse = 0, fx = null) {
   if (state.title.trim()) {
     ctx.fillStyle = state.color;
     ctx.font = '600 64px -apple-system, "SF Pro Display", system-ui, sans-serif';
-    ctx.fillText(state.title.trim().toUpperCase(), W / 2, y0 - 190);
+    ctx.fillText(state.title.trim(), W / 2, y0 - 190);
   }
   if (state.brand) drawWatermark(W / 2, y0 - 110, text);
   if (state.footer) {
