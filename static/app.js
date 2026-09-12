@@ -1036,7 +1036,28 @@ async function makeWallpaper(btn, err) {
 }
 
 $('getBtn').addEventListener('click', () => makeWallpaper($('getBtn'), $('getErr')));
-if ($('heroBtn')) $('heroBtn').addEventListener('click', () => makeWallpaper($('heroBtn'), $('heroErr')));
+// Кнопка сверху больше не делает обои сразу: она раскрывает конструктор и
+// подвозит его под палец. Обои человек делает ниже, уже выбрав вид.
+function unfoldTune(scroll = true) {
+  const parts = [$('stats'), $('tune')].filter(Boolean);
+  const wasFolded = parts.some(el => el.classList.contains('folded'));
+  parts.forEach(el => {
+    if (!el.classList.contains('folded')) return;
+    el.classList.remove('folded');
+    el.classList.add('unfolding');
+    el.addEventListener('animationend', () => el.classList.remove('unfolding'), { once: true });
+  });
+  if (scroll) {
+    const target = $('stats') || $('tune');
+    requestAnimationFrame(() => target.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  }
+  return wasFolded;
+}
+
+if ($('heroBtn')) $('heroBtn').addEventListener('click', () => unfoldTune());
+
+// пришёл по ссылке с якорем — конструктор уже нужен раскрытым
+if (location.hash === '#tune') unfoldTune(false);
 
 // ——— рилс-сценарий: сон на rAF (не троттлится в видимой вкладке, тайминг стабильный для съёмки)
 const rafSleep = ms => new Promise(r => {
@@ -1577,7 +1598,16 @@ async function guard() {
 }
 guard();
 
-// статус Прайма нужен и до открытия карточки: от него зависит замок на логотипе
+// статус Прайма нужен и до открытия карточки: от него зависит замок на логотипе.
+// Заодно сразу ставим аватарку: человек уже вошёл, ждать нажатия на кружок
+// незачем — он видел своё фото в прошлый раз и ждёт его снова.
 (async () => {
-  try { paintPrime(await VitaID.access()); } catch {}
+  try {
+    const access = await VitaID.access();
+    paintPrime(access);
+    if (access.email || access.telegram) {
+      const profile = await VitaID.ensure();
+      paintAvatar(profile.avatar);
+    }
+  } catch {}
 })();
