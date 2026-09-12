@@ -2216,6 +2216,20 @@ header { transition: box-shadow .45s ease; }
   -webkit-mask: radial-gradient(circle at 50% 50%, transparent 0 49%, #000 49.4%);
   mask: radial-gradient(circle at 50% 50%, transparent 0 49%, #000 49.4%);
 }
+/* Фон обоев: рамка — это сам экран телефона, с его пропорциями и скруглением,
+   поэтому человек видит ровно тот кадр, который ляжет на заставку. */
+.crop-view.crop-phone {
+  --crop-h: min(46vh, 392px);
+  width: auto;
+  height: var(--crop-h);
+  aspect-ratio: 1179 / 2556;
+  max-width: none;
+  max-height: none;
+  border-radius: calc(var(--crop-h) * 0.0645);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18), 0 20px 44px rgba(0, 0, 0, 0.5);
+}
+.crop-view.crop-phone .crop-ring { display: none; }
+
 .crop-actions { display: flex; gap: 10px; width: 100%; }
 .crop-actions button { flex: 1; margin: 0; border-radius: 999px; padding: 12px 18px; font-size: 15px; }
 

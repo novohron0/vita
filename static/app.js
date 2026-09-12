@@ -979,21 +979,7 @@ $('bgColorPick').addEventListener('input', e => {
 $('bgFile').addEventListener('change', e => {
   const file = e.target.files?.[0];
   e.target.value = '';
-  if (!file) return;
-  const url = URL.createObjectURL(file);
-  const img = new Image();
-  img.onload = async () => {
-    customBgImg = img;
-    state.bg = 'custom';
-    $('bg').querySelectorAll('button').forEach(b => b.classList.remove('on'));
-    $('bgOwn').classList.add('on');
-    refreshSwatches();
-    animateReveal();
-    URL.revokeObjectURL(url);
-    try { await uploadBgFile(file); } catch { state.bgImageId = null; }
-  };
-  img.onerror = () => URL.revokeObjectURL(url);
-  img.src = url;
+  if (file) cropOpen(file, 'bg');
 });
 
 const swatches = $('colors');
@@ -1402,44 +1388,76 @@ addEventListener('keydown', e => {
 });
 
 // --- выбор области фото ---
-// Человек двигает снимок пальцем и меняет размер, в кружок попадает то, что
-// видно; на сервер уходит уже обрезанный квадрат, а не весь файл.
+// Человек двигает снимок пальцем и меняет размер, в рамку попадает то, что
+// видно; на сервер уходит уже готовый кадр, а не весь файл.
 const cropModal = $('cropModal'), cropCanvas = $('cropCanvas');
 const cropCtx = cropCanvas.getContext('2d');
-const CROP_OUT = 512;
+// Два режима одного окна: кружок аватарки и фон обоев в пропорциях экрана.
+// Рамка фона — ровно 1179×2556, поделённые на три, поэтому кадр уходит на
+// сервер без растягивания: каждая точка холста становится тремя точками обоев.
+const CROP_MODES = {
+  ava: {
+    cw: 560, ch: 560, ow: 512, oh: 512,
+    title: 'Область фото',
+    hint: 'Двигай пальцем, щипком двух пальцев меняй размер — в кружок попадёт то, что видно.',
+  },
+  bg: {
+    cw: W / 3, ch: H / 3, ow: W, oh: H,
+    title: 'Как встанет фото',
+    hint: 'Двигай пальцем, меняй размер щипком — на обои попадёт то, что в рамке.',
+  },
+};
+let cropMode = 'ava';
 let cropImg = null, cropScale = 1, cropBase = 1, cropX = 0, cropY = 0;
 
 function cropDraw() {
-  const size = cropCanvas.width;
-  cropCtx.clearRect(0, 0, size, size);
+  const w0 = cropCanvas.width, h0 = cropCanvas.height;
+  cropCtx.clearRect(0, 0, w0, h0);
   cropCtx.fillStyle = '#000';
-  cropCtx.fillRect(0, 0, size, size);
+  cropCtx.fillRect(0, 0, w0, h0);
   if (!cropImg) return;
   const k = cropBase * cropScale;
   const w = cropImg.width * k, h = cropImg.height * k;
-  // не даём утащить снимок так, чтобы в кружке появилась пустота
-  cropX = Math.min(0, Math.max(size - w, cropX));
-  cropY = Math.min(0, Math.max(size - h, cropY));
+  // не даём утащить снимок так, чтобы в рамке появилась пустота
+  cropX = Math.min(0, Math.max(w0 - w, cropX));
+  cropY = Math.min(0, Math.max(h0 - h, cropY));
   cropCtx.drawImage(cropImg, cropX, cropY, w, h);
+  if (cropMode === 'bg') {
+    // на обоях снимок приглушён, чтобы точки читались — показываем как есть
+    cropCtx.fillStyle = 'rgba(0,0,0,0.12)';
+    cropCtx.fillRect(0, 0, w0, h0);
+  }
 }
 
-function cropOpen(file) {
+function cropFail(text) {
+  if (cropMode === 'bg') showBgTip(text.toLowerCase());
+  else $('profStatus').textContent = text;
+}
+
+function cropOpen(file, mode = 'ava') {
+  const m = CROP_MODES[mode] || CROP_MODES.ava;
+  cropMode = m === CROP_MODES.bg ? 'bg' : 'ava';
   const url = URL.createObjectURL(file);
   const img = new Image();
   img.onload = () => {
     URL.revokeObjectURL(url);
+    cropCanvas.width = m.cw;
+    cropCanvas.height = m.ch;
+    cropView.classList.toggle('crop-phone', cropMode === 'bg');
+    $('cropTitle').textContent = m.title;
+    $('cropHint').textContent = m.hint;
     cropImg = img;
-    cropBase = Math.max(cropCanvas.width / img.width, cropCanvas.height / img.height);
+    cropBase = Math.max(m.cw / img.width, m.ch / img.height);
     cropScale = 1;
-    cropX = (cropCanvas.width - img.width * cropBase) / 2;
-    cropY = (cropCanvas.height - img.height * cropBase) / 2;
+    cropX = (m.cw - img.width * cropBase) / 2;
+    cropY = (m.ch - img.height * cropBase) / 2;
     cropReset();
     cropModal.hidden = false;
     cropDraw();
   };
   img.onerror = () => {
     URL.revokeObjectURL(url);
-    $('profStatus').textContent = 'Не получилось открыть это фото';
+    cropFail('Не получилось открыть это фото');
   };
   img.src = url;
 }
@@ -1538,10 +1556,13 @@ cropModal.addEventListener('click', e => { if (e.target === cropModal) $('cropCa
 
 $('cropDone').addEventListener('click', async () => {
   if (!cropImg) return;
+  const m = CROP_MODES[cropMode];
+  const mode = cropMode;
   const out = document.createElement('canvas');
-  out.width = out.height = CROP_OUT;
+  out.width = m.ow;
+  out.height = m.oh;
   const ctx = out.getContext('2d');
-  const scale = CROP_OUT / cropCanvas.width;
+  const scale = m.ow / cropCanvas.width;
   ctx.drawImage(
     cropImg,
     cropX * scale, cropY * scale,
@@ -1550,6 +1571,29 @@ $('cropDone').addEventListener('click', async () => {
   );
   cropModal.hidden = true;
   cropReset();
+  cropImg = null;
+
+  if (mode === 'bg') {
+    // кадр уже ровно под экран, поэтому превью и обои совпадут точка в точку
+    customBgImg = out;
+    state.bg = 'custom';
+    $('bg').querySelectorAll('button').forEach(b => b.classList.remove('on'));
+    $('bgOwn').classList.add('on');
+    showBgTip('');
+    refreshSwatches();
+    animateReveal();
+    out.toBlob(async blob => {
+      if (!blob) { showBgTip('не получилось обрезать фото, попробуй другое'); return; }
+      try {
+        await uploadBgFile(new File([blob], 'bg.jpg', { type: 'image/jpeg' }));
+      } catch {
+        state.bgImageId = null;
+        showBgTip('фото не загрузилось — нажми «своё фото» ещё раз');
+      }
+    }, 'image/jpeg', 0.92);
+    return;
+  }
+
   $('profStatus').textContent = 'Загружаю фото…';
   out.toBlob(async blob => {
     if (!blob) { $('profStatus').textContent = 'Не получилось обрезать фото'; return; }
@@ -1560,7 +1604,6 @@ $('cropDone').addEventListener('click', async () => {
     } catch (error) {
       $('profStatus').textContent = error.message || 'Не получилось загрузить фото';
     }
-    cropImg = null;
   }, 'image/jpeg', 0.92);
 });
 

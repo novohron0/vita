@@ -226,7 +226,10 @@ def _paint_wallpaper_bg(cfg: dict, bg_key: str) -> Image.Image:
         bg_id = cfg.get("bgImage", "")
         custom = _load_custom_bg(bg_id) if bg_id else None
         if custom:
-            return custom
+            # та же вуаль, что в превью браузера: без неё точки тонут в светлом
+            # снимке, а обои выходят светлее, чем человек видел на сайте
+            veil = Image.new("RGB", custom.size, (0, 0, 0))
+            return Image.blend(custom, veil, 0.12)
         return Image.new("RGB", (W, H), BGS["custom"])
     bg = BGS[bg_key]
     img = Image.new("RGB", (W, H), bg)
