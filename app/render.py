@@ -9,7 +9,7 @@ import unicodedata
 from datetime import date, timedelta
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageChops, ImageDraw, ImageFont, ImageOps
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA = Path(os.environ.get("VITA_DATA") or (ROOT / "data"))
@@ -185,7 +185,9 @@ def draw_text(img: Image.Image, draw: ImageDraw.ImageDraw, xy, text: str,
             im = _emoji_image(part, eh)
             if im is None:
                 continue   # шрифта нет — лучше без эмодзи, чем квадраты
-            pieces.append(("img", im, im.width))
+            if im.width > eh:  # флаги шире квадрата — ужимаем в своё окно
+                im = im.resize((eh, max(1, round(im.height * eh / im.width))))
+            pieces.append(("img", im, eh))
         else:
             pieces.append(("txt", part, draw.textlength(part, font=font)))
     if not pieces:
@@ -201,8 +203,8 @@ def draw_text(img: Image.Image, draw: ImageDraw.ImageDraw, xy, text: str,
         if kind == "txt":
             draw.text((x, y), body, font=font, fill=fill, anchor="l" + anchor[1])
         else:
-            top = y - eh // 2 if anchor[1] == "m" else y
-            img.paste(body, (round(x), round(top)), body)
+            top = y - body.height // 2 if anchor[1] == "m" else y
+            img.paste(body, (round(x + (width - body.width) / 2), round(top)), body)
         x += width
 
 
@@ -213,8 +215,9 @@ def text_width(draw: ImageDraw.ImageDraw, text: str, font) -> float:
     total = 0.0
     for is_emoji, part in _split_emoji(text):
         if is_emoji:
-            im = _emoji_image(part, eh)
-            total += im.width if im is not None else 0
+            # окно всегда квадратное, каким бы ни была картинка: браузер меряет
+            # так же, иначе строки рвались бы в разных местах
+            total += eh if _emoji_image(part, eh) is not None else 0
         else:
             total += draw.textlength(part, font=font)
     return total
@@ -229,22 +232,25 @@ TITLE_TOP = H * 0.085
 
 
 def _wrap_title(draw: ImageDraw.ImageDraw, text: str, font, max_w: float) -> list[str]:
+    """Пробелы человека сохраняем: ими он сам двигает слово по строке. Гаснет
+    только тот пробел, на котором строка сломалась."""
     out: list[str] = []
     for part in str(text).split("\n"):
         cur = ""
-        for word in part.split():
-            probe = f"{cur} {word}" if cur else word
-            if text_width(draw, probe, font) <= max_w:
-                cur = probe
+        for token in re.findall(r"\s+|\S+", part):
+            if text_width(draw, cur + token, font) <= max_w:
+                cur += token
                 continue
             if cur:
                 out.append(cur)
                 cur = ""
-            if text_width(draw, word, font) <= max_w:
-                cur = word
+            if not token.strip():
+                continue
+            if text_width(draw, token, font) <= max_w:
+                cur = token
                 continue
             chunk = ""
-            for ch in word:
+            for ch in token:
                 if not chunk or text_width(draw, chunk + ch, font) <= max_w:
                     chunk += ch
                 else:
@@ -363,43 +369,88 @@ def _shape_points(shape: str, w: int, h: int) -> list[tuple[float, float]] | Non
     return None
 
 
+def _radial(w: int, h: int, cx: float, cy: float, radius: float,
+            inner: int, outer: int) -> Image.Image:
+    """Круглый градиент как маска прозрачности: inner в середине, outer к краю."""
+    size = max(2, int(radius * 2))
+    grad = ImageOps.invert(Image.radial_gradient("L")).resize((size, size), Image.BILINEAR)
+    canvas = Image.new("L", (w, h), 0)
+    canvas.paste(grad, (int(cx - radius), int(cy - radius)))
+    return canvas.point(lambda v: int(outer + (inner - outer) * v / 255))
+
+
+def _vertical(w: int, h: int, top_frac: float, inner: int, outer: int) -> Image.Image:
+    """Тень снизу: ровный переход от прозрачного к outer у нижнего края."""
+    band = max(2, int(h * (1 - top_frac)))
+    grad = Image.linear_gradient("L").resize((w, band), Image.BILINEAR)
+    canvas = Image.new("L", (w, h), inner)
+    canvas.paste(grad.point(lambda v: int(inner + (outer - inner) * v / 255)), (0, h - band))
+    return canvas
+
+
+def _tint(w: int, h: int, rgb: tuple[int, int, int], alpha: Image.Image) -> Image.Image:
+    layer = Image.new("RGBA", (w, h), rgb + (0,))
+    layer.putalpha(alpha)
+    return layer
+
+
 def _glass_dot(img: Image.Image, box, color: str, shape: str, mode: str = "filled") -> None:
-    """Точка «жидкое стекло» — блик, глубина, светлая кромка."""
+    """Точка «жидкое стекло»: блик, глубина, светлая кромка.
+
+    Блики обязательно режутся по силуэту точки. Раньше они рисовались
+    простыми эллипсами поверх слоя, и на звезде или сердце наружу вылезал
+    круглый серый блин — в браузере этого не было видно, там canvas сам
+    обрезает по clip(), и превью расходилось с обоями.
+    """
     x0, y0, x1, y1 = int(box[0]), int(box[1]), int(box[2]), int(box[3])
     w, h = x1 - x0, y1 - y0
     if w < 2:
         return
-    layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    d = ImageDraw.Draw(layer)
     r, g, b = _rgb(color)
     rad = int(min(w, h) * 0.3) if shape == "rounded" else 0
     ib = (0, 0, w - 1, h - 1)
 
-    def shape_draw(fill=None, outline=None, width=0):
+    def paint(dr, fill=None, outline=None, width=0):
         poly = _shape_points(shape, w, h)
         if poly is not None:
             if fill:
-                d.polygon(poly, fill=fill)
+                dr.polygon(poly, fill=fill)
             if outline:
-                d.polygon(poly, outline=outline, width=width)
+                dr.polygon(poly, outline=outline, width=width)
         elif shape == "circle":
-            d.ellipse(ib, fill=fill, outline=outline, width=width)
+            dr.ellipse(ib, fill=fill, outline=outline, width=width)
         elif shape == "square":
-            d.rectangle(ib, fill=fill, outline=outline, width=width)
+            dr.rectangle(ib, fill=fill, outline=outline, width=width)
         else:
-            d.rounded_rectangle(ib, radius=rad, fill=fill, outline=outline, width=width)
+            dr.rounded_rectangle(ib, radius=rad, fill=fill, outline=outline, width=width)
 
+    silhouette = Image.new("L", (w, h), 0)
+    paint(ImageDraw.Draw(silhouette), fill=255)
+
+    layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     if mode == "empty":
-        shape_draw((255, 255, 255, 62), (255, 255, 255, 82), max(1, round(w * 0.06)))
-        d.ellipse((int(w * 0.08), int(h * 0.06), int(w * 0.55), int(h * 0.38)), fill=(255, 255, 255, 28))
+        layer.alpha_composite(_tint(w, h, (255, 255, 255),
+                                    _radial(w, h, w * 0.28, h * 0.22, w * 0.78, 87, 12)))
     elif mode == "ring":
-        shape_draw((255, 255, 255, 52))
-        shape_draw(None, (r, g, b, 230), max(2, round(w * 0.09)))
+        layer.alpha_composite(_tint(w, h, (255, 255, 255),
+                                    _radial(w, h, w * 0.3, h * 0.25, w * 0.76, 66, 20)))
     else:
-        shape_draw((r, g, b, 178))
-        d.ellipse((int(w * 0.1), int(h * 0.06), int(w * 0.58), int(w * 0.4)), fill=(255, 255, 255, 105))
-        d.ellipse((int(w * 0.52), int(h * 0.48), int(w * 0.98), int(h * 0.96)), fill=(0, 0, 0, 38))
-        shape_draw(None, (255, 255, 255, 118), max(1, round(w * 0.065)))
+        layer.alpha_composite(_tint(w, h, (r, g, b), Image.new("L", (w, h), 198)))
+        layer.alpha_composite(_tint(w, h, (255, 255, 255),
+                                    _radial(w, h, w * 0.18, h * 0.14, w * 0.82, 205, 0)))
+        layer.alpha_composite(_tint(w, h, (0, 0, 0), _vertical(w, h, 0.42, 0, 56)))
+        layer.alpha_composite(_tint(w, h, (255, 255, 255),
+                                    _radial(w, h, w * 0.35, h * 0.28, w * 0.28, 130, 0)))
+
+    layer.putalpha(ImageChops.multiply(layer.getchannel("A"), silhouette))
+    # кромка идёт по самому силуэту, её обрезать не нужно
+    edge = ImageDraw.Draw(layer)
+    if mode == "ring":
+        paint(edge, outline=(r, g, b, 230), width=max(2, round(w * 0.09)))
+    elif mode == "empty":
+        paint(edge, outline=(255, 255, 255, 82), width=max(1, round(w * 0.06)))
+    else:
+        paint(edge, outline=(255, 255, 255, 118), width=max(1, round(w * 0.065)))
     img.paste(layer, (x0, y0), layer)
 
 

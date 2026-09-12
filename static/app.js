@@ -517,19 +517,74 @@ function effectiveBgHex() {
 const TITLE_W = W * 0.84;
 const TITLE_TOP = H * 0.085;   // ниже «таблетки» айфона
 
-function wrapTitle(text, maxW) {
+// Эмодзи тут глиф шрифта, а на сервере — картинка ростом 1.08 от кегля.
+// Мерить их браузерной меркой нельзя: строки порвутся не там, где на обоях.
+// Поэтому и меряем, и рисуем по серверной: каждому эмодзи своё окно.
+const PIC = '\\p{Extended_Pictographic}(?:[\\u{1F3FB}-\\u{1F3FF}])?(?:\\uFE0F|\\uFE0E)?';
+const EMOJI_RE = new RegExp(
+  `(?:[\\u{1F1E6}-\\u{1F1FF}]{2}|[0-9#*]\\uFE0F?\\u20E3|${PIC}(?:\\u200D${PIC})*)`, 'gu');
+
+function splitEmoji(text) {
+  const out = [];
+  let last = 0;
+  for (const m of text.matchAll(EMOJI_RE)) {
+    if (m.index > last) out.push([false, text.slice(last, m.index)]);
+    out.push([true, m[0]]);
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) out.push([false, text.slice(last)]);
+  return out;
+}
+
+const realPx = px => Math.round(px * (FONTS[state.font] || FONTS.system).k);
+const emojiSlot = px => Math.round(realPx(px) * 1.08);
+
+function measureRich(text, px) {
+  let total = 0;
+  for (const [isEmoji, part] of splitEmoji(text)) {
+    total += isEmoji ? emojiSlot(px) : ctx.measureText(part).width;
+  }
+  return total;
+}
+
+function fillRich(text, cx, y, px) {
+  const slot = emojiSlot(px);
+  let x = cx - measureRich(text, px) / 2;
+  const prev = ctx.textAlign;
+  ctx.textAlign = 'left';
+  for (const [isEmoji, part] of splitEmoji(text)) {
+    if (!isEmoji) {
+      ctx.fillText(part, x, y);
+      x += ctx.measureText(part).width;
+      continue;
+    }
+    const own = ctx.measureText(part).width || slot;
+    ctx.save();
+    ctx.translate(x, y);
+    if (own > slot) ctx.scale(slot / own, 1);   // чтобы не наехал на соседа
+    ctx.fillText(part, 0, 0);
+    ctx.restore();
+    x += slot;
+  }
+  ctx.textAlign = prev;
+}
+
+// Пробелы человека не трогаем: ими он сам двигает слово по строке. Гасим
+// только тот пробел, на котором строка сломалась, иначе следующая уехала бы
+// вправо на ровном месте.
+function wrapTitle(text, maxW, px) {
   const out = [];
   for (const part of String(text).split('\n')) {
     let cur = '';
-    for (const word of part.split(/\s+/).filter(Boolean)) {
-      const probe = cur ? cur + ' ' + word : word;
-      if (ctx.measureText(probe).width <= maxW) { cur = probe; continue; }
+    for (const token of part.match(/\s+|\S+/gu) || []) {
+      if (measureRich(cur + token, px) <= maxW) { cur += token; continue; }
       if (cur) { out.push(cur); cur = ''; }
-      if (ctx.measureText(word).width <= maxW) { cur = word; continue; }
+      if (!token.trim()) continue;                     // перенос съедает пробел
+      if (measureRich(token, px) <= maxW) { cur = token; continue; }
       // одно слово шире строки (склеенный текст) — режем по буквам
       let chunk = '';
-      for (const ch of word) {
-        if (!chunk || ctx.measureText(chunk + ch).width <= maxW) chunk += ch;
+      for (const ch of [...token]) {
+        if (!chunk || measureRich(chunk + ch, px) <= maxW) chunk += ch;
         else { out.push(chunk); chunk = ch; }
       }
       cur = chunk;
@@ -543,14 +598,14 @@ function drawTitle(text, baseY) {
   let px = 64, lines = [], lineH = 0;
   for (;;) {
     ctx.font = titleFont(px);
-    lines = wrapTitle(text, TITLE_W);
+    lines = wrapTitle(text, TITLE_W, px);
     lineH = Math.round(px * 1.2);
     const top = baseY - (lines.length - 1) * lineH - lineH * 0.7;
     if (top >= TITLE_TOP || px <= 30) break;
     px -= 3;
   }
   lines.forEach((line, i) => {
-    ctx.fillText(line, W / 2, baseY - (lines.length - 1 - i) * lineH);
+    fillRich(line, W / 2, baseY - (lines.length - 1 - i) * lineH, px);
   });
 }
 
