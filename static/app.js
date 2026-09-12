@@ -850,6 +850,17 @@ addEventListener('pointercancel', endPointer);
 // тап по телефону — точки прыгают друг за другом (в демо уже крутится свой цикл)
 if (!DEMO) phoneEl.addEventListener('click', () => animateJump());
 
+// Логотип в шапке на главной никуда не уводит — просто мотает к началу:
+// перезагружать ту же страницу ради этого незачем.
+const headLogo = document.querySelector('header .logo');
+if (headLogo) {
+  headLogo.addEventListener('click', e => {
+    if (location.pathname !== '/') return;
+    e.preventDefault();
+    scrollTo({ top: 0, behavior: 'smooth' });
+  });
+}
+
 // Свет за телефоном вспыхивает от нажатия. Слой перезапускаем вручную: без
 // снятия класса вторая вспышка подряд просто не начнётся.
 const phoneFlash = document.querySelector('.phone-flash');

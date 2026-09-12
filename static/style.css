@@ -224,15 +224,11 @@ body.scrolled .head-pill { box-shadow: var(--glass-inset), var(--glass-shadow), 
 .head-pill:has(.nav) { gap: 10px; }
 
 /* название никуда не девается: шапка просто собирается вокруг кружка профиля */
-.head-shrink .logo { font-size: calc(17px - 3px * var(--k)); white-space: nowrap; }
+.head-shrink .logo { font-size: 20px; white-space: nowrap; }
 .head-shrink .avatar-btn {
-  width: calc(34px - 6px * var(--k));
-  height: calc(34px - 6px * var(--k));
+  width: 34px;
+  height: 34px;
   transition: border-color .2s, transform .15s;
-}
-.head-shrink .theme-toggle {
-  transform: scale(calc(1 - 0.2 * var(--k)));
-  transform-origin: right center;
 }
 
 /* кромка стекла: загорается, когда под шапку уехал контент — тогда размытие
@@ -422,10 +418,12 @@ main { width: 100%; max-width: 430px; display: flex; flex-direction: column; gap
   background: #050506;
   border: 3px solid #3f3f45;
   border-radius: 56px;
+  /* белого ореола тут больше нет: он постоянно горел и глушил дыхание,
+     из-за чего живого свечения не было видно вовсе — теперь его держит
+     отдельный слой .phone-glow */
   box-shadow:
     inset 0 1px 1px rgba(255, 255, 255, 0.10),
     0 0 0 1px rgba(0, 0, 0, 0.85),
-    0 0 70px rgba(255, 255, 255, 0.12),
     0 24px 60px rgba(0, 0, 0, 0.5);
 }
 .phone canvas { display: block; width: 100%; height: auto; border-radius: 45px; }
@@ -560,14 +558,33 @@ main { width: 100%; max-width: 430px; display: flex; flex-direction: column; gap
 
 .controls { display: flex; flex-direction: column; gap: 22px; }
 
-.field.two { flex-direction: row; gap: 12px; }
+.field.two { flex-direction: row; align-items: flex-end; gap: 8px; }
 .field.two label {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 .field.two input { width: 100%; }
+/* стрелка показывает, что это дорога: от старта к финишу */
+.two-arrow {
+  flex: none;
+  align-self: flex-end;
+  display: grid;
+  place-items: center;
+  height: 50px;
+  color: var(--text-nav);
+}
+.two-arrow svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 
 .field {
   display: flex;
@@ -2482,24 +2499,30 @@ body.login-page::before { display: none; }
    ничего не весит и считается видеокартой, телефон этого не замечает. */
 .phone-glow, .phone-flash {
   position: absolute;
-  inset: -14%;
-  z-index: 0;
+  inset: 0;
+  z-index: -1;            /* за корпусом: сам корпус непрозрачный */
   pointer-events: none;
-  border-radius: 50%;
+  border-radius: 56px;    /* повторяет корпус, чтобы свет шёл по его контуру */
   will-change: opacity;
 }
 .phone-glow {
-  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.08) 58%, transparent 76%);
-  opacity: .16;
+  box-shadow: 0 0 70px 6px rgba(255, 255, 255, 0.26), 0 0 155px 42px rgba(255, 255, 255, 0.16);
+  opacity: .14;
   animation: phone-breathe 4.6s ease-in-out infinite;
 }
 @keyframes phone-breathe {
-  0%, 100% { opacity: .16; }
-  50% { opacity: .82; }
+  0%, 100% { opacity: .14; }
+  50% { opacity: 1; }
+}
+[data-theme="light"] .phone-glow {
+  box-shadow: 0 0 70px 6px rgba(90, 86, 78, 0.22), 0 0 155px 42px rgba(90, 86, 78, 0.14);
+}
+[data-theme="light"] .phone-flash {
+  box-shadow: 0 0 66px 10px rgba(90, 86, 78, 0.3), 0 0 170px 46px rgba(90, 86, 78, 0.2);
 }
 /* нажали — свет разгорается заметно сильнее дыхания и сам уходит обратно */
 .phone-flash {
-  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.13) 58%, transparent 78%);
+  box-shadow: 0 0 66px 10px rgba(255, 255, 255, 0.34), 0 0 170px 46px rgba(255, 255, 255, 0.22);
   opacity: 0;
 }
 .phone-flash.on { animation: phone-flash 1.35s cubic-bezier(.33, 0, .2, 1); }
