@@ -691,7 +691,7 @@ addEventListener('orientationchange', () => setTimeout(() => miniPlace(false), 2
 // Порог ровно тот, что просили: экранчик выезжает, когда телефон скрыт больше
 // чем наполовину. Считаем на скролле — это работает в любом браузере, в отличие
 // от наблюдателя пересечений, который в некоторых обёртках молчит.
-let miniTick = 0, miniTipTimer = 0;
+let miniTick = 0, miniTipTimer = 0, miniTipSeen = false;
 function updateMini() {
   const r = phoneEl.getBoundingClientRect();
   const vh = viewport().h;
@@ -704,9 +704,10 @@ function updateMini() {
   if (show) miniPlace(false);  // панель браузера могла сдвинуть видимую область
   miniWrap.classList.toggle('show', show);
   miniWrap.setAttribute('aria-hidden', show ? 'false' : 'true');
-  // подсказку показываем при каждом выезде: с первого раза её легко не заметить
+  // подсказку показываем при каждом выезде: с первого раза её легко не заметить.
+  // Но если по экранчику уже тыкали — человек всё понял, больше не мозолим
   clearTimeout(miniTipTimer);
-  if (show) {
+  if (show && !miniTipSeen) {
     miniWrap.classList.add('tip');
     miniTipTimer = setTimeout(() => miniWrap.classList.remove('tip'), 4000);
   } else {
@@ -777,6 +778,10 @@ const pointers = new Map();
 let dragFrom = null, pinchFrom = null, moved = false;
 
 miniBox.addEventListener('pointerdown', e => {
+  // ткнули — подсказка больше не нужна и не должна лежать поверх картинки
+  miniTipSeen = true;
+  clearTimeout(miniTipTimer);
+  miniWrap.classList.remove('tip');
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   // захват — приятный бонус, но не условие работы: палец спокойно уезжает за
   // край экранчика, движение мы всё равно слушаем на окне
@@ -844,6 +849,18 @@ addEventListener('pointercancel', endPointer);
 
 // тап по телефону — точки прыгают друг за другом (в демо уже крутится свой цикл)
 if (!DEMO) phoneEl.addEventListener('click', () => animateJump());
+
+// Свет за телефоном вспыхивает от нажатия. Слой перезапускаем вручную: без
+// снятия класса вторая вспышка подряд просто не начнётся.
+const phoneFlash = document.querySelector('.phone-flash');
+if (phoneFlash) {
+  phoneEl.addEventListener('pointerdown', () => {
+    phoneFlash.classList.remove('on');
+    void phoneFlash.offsetWidth;
+    phoneFlash.classList.add('on');
+  }, { passive: true });
+  phoneFlash.addEventListener('animationend', () => phoneFlash.classList.remove('on'));
+}
 
 // --- контролы ---
 

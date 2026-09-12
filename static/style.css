@@ -2476,31 +2476,41 @@ body.login-page::before { display: none; }
 }
 .get-hint span { color: var(--text-faint); font-size: 12.5px; }
 
-/* Свечение за телефоном дышит: тихо разгорается и гаснет само, а по нажатию
-   вспыхивает заметно сильнее и возвращается в тот же цикл. Анимируется только
-   прозрачность одного слоя — это ничего не весит и не грузит телефон. */
-.phone-glow {
+/* Свечение за телефоном дышит: тихо разгорается и гаснет само, по кругу.
+   Вспышка по нажатию — отдельный слой поверх: на одном элементе она мешала бы
+   дыханию и гасла вместе с ним. Оба слоя гоняют только прозрачность — это
+   ничего не весит и считается видеокартой, телефон этого не замечает. */
+.phone-glow, .phone-flash {
   position: absolute;
   inset: -14%;
   z-index: 0;
   pointer-events: none;
   border-radius: 50%;
-  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.07) 58%, transparent 76%);
-  opacity: .3;
-  animation: phone-breathe 5.4s ease-in-out infinite;
   will-change: opacity;
 }
-@keyframes phone-breathe {
-  0%, 100% { opacity: .22; }
-  50% { opacity: .6; }
+.phone-glow {
+  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.08) 58%, transparent 76%);
+  opacity: .16;
+  animation: phone-breathe 4.6s ease-in-out infinite;
 }
-/* вспышка по нажатию: ярче дыхания, цикл после отпускания продолжается */
-.phone:active .phone-glow {
-  opacity: 1;
-  animation-play-state: paused;
-  transition: opacity .14s ease-out;
+@keyframes phone-breathe {
+  0%, 100% { opacity: .16; }
+  50% { opacity: .82; }
+}
+/* нажали — свет разгорается заметно сильнее дыхания и сам уходит обратно */
+.phone-flash {
+  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.13) 58%, transparent 78%);
+  opacity: 0;
+}
+.phone-flash.on { animation: phone-flash 1.35s cubic-bezier(.33, 0, .2, 1); }
+@keyframes phone-flash {
+  0% { opacity: 0; }
+  14% { opacity: 1; }
+  45% { opacity: .46; }
+  100% { opacity: 0; }
 }
 .phone canvas { position: relative; z-index: 1; }
 @media (prefers-reduced-motion: reduce) {
   .phone-glow { animation: none; opacity: .34; }
+  .phone-flash { display: none; }
 }
