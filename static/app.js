@@ -1553,7 +1553,7 @@ $('profLogout').addEventListener('click', () => {
 // сторож: не свой — отправляем к двери и запоминаем, куда он шёл.
 function toLogin() {
   const back = location.pathname + location.search;
-  location.replace('/login?next=' + encodeURIComponent(back));
+  location.replace('/register?next=' + encodeURIComponent(back));
 }
 
 async function guard() {

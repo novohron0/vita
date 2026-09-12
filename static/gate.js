@@ -17,7 +17,7 @@
   VitaID.access()
     .then(access => {
       if (access.email || access.telegram) { open(); return; }
-      location.replace('/login?next=' + encodeURIComponent(location.pathname + location.search));
+      location.replace('/register?next=' + encodeURIComponent(location.pathname + location.search));
     })
     .catch(open);
 })();

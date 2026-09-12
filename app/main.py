@@ -917,7 +917,8 @@ def sitemap():
     # политика, отложенный Focus) только размывали выдачу: человек искал сайт,
     # а первой строкой ему попадалась «Vita — конфиденциальность».
     urls = "".join(
-        f"<url><loc>https://vitadots.ru/{p}</loc></url>" for p in ("", "buy")
+        f"<url><loc>https://vitadots.ru/{p}</loc></url>"
+        for p in ("", "register", "login", "buy")
     )
     return Response(
         f'<?xml version="1.0" encoding="UTF-8"?>'
@@ -1862,11 +1863,38 @@ def privacy_page():
     return _page("privacy.html")
 
 
+# Дверь отдаётся по двум адресам с разными заголовками: так у сайта в поиске
+# есть ровно два понятных пункта — «Вход» и «Регистрация», а не безымянная
+# страница. Внутри это одна и та же страница, выбрана нужная половина капсулы.
+DOOR = {
+    "/login": (
+        "Вход в Vita",
+        "Вход в Vita по почте или через телеграм: живые обои-календарь, где каждый день закрашивается точка.",
+    ),
+    "/register": (
+        "Регистрация в Vita",
+        "Регистрация в Vita: почта и пароль или вход через телеграм. Обои-календарь остаются за твоим аккаунтом.",
+    ),
+}
+
+
+def _door(path: str) -> HTMLResponse:
+    title, desc = DOOR[path]
+    return _page("login.html", {
+        "{{DOOR_TITLE}}": title,
+        "{{DOOR_DESC}}": desc,
+        "{{DOOR_PATH}}": path,
+    })
+
+
 @app.get("/login")
 def login_page():
-    # Вход и регистрация живут отдельной страницей, а не окном поверх обоев:
-    # человек должен видеть, куда он вошёл, и мочь дать ссылку на эту дверь.
-    return _page("login.html")
+    return _door("/login")
+
+
+@app.get("/register")
+def register_page():
+    return _door("/register")
 
 
 @app.get("/me")

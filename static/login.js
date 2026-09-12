@@ -6,14 +6,11 @@
    почта → код из письма → новый пароль. */
 const $ = id => document.getElementById(id);
 
-// Новый человек первым делом видит регистрацию: без аккаунта входить некуда.
-// Кто с этого браузера уже заходил — того встречаем формой входа.
-let mode = (() => {
-  try {
-    if (localStorage.getItem('vitaAuthSeen') || localStorage.getItem('vitaSignedIn')) return 'login';
-  } catch (e) {}
-  return 'register';
-})();                                     // login | register | forgot | reset
+// Адрес решает, какая половина капсулы открыта: /register — регистрация,
+// /login — вход. Сторож с главной приводит новых людей на /register: без
+// аккаунта входить некуда.
+let mode = location.pathname === '/login' ? 'login' : 'register';
+                                          // login | register | forgot | reset
 
 // Возвращаемся туда, откуда человека сюда отправили. Берём только свой путь:
 // «//чужой.сайт» и абсолютные адреса игнорируем, иначе это открытый редирект.
@@ -91,6 +88,9 @@ $('authTabs').addEventListener('click', e => {
   if (!btn) return;
   mode = btn.dataset.v;
   paint();
+  // адрес идёт за капсулой: ссылку на нужную половину можно дать кому угодно
+  const path = mode === 'login' ? '/login' : '/register';
+  history.replaceState(null, '', path + location.search);
   $('authEmail').focus();
 });
 
