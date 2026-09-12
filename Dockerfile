@@ -1,9 +1,12 @@
 FROM python:3.12-slim
 
 # DejaVuSans — кириллица для серверного рендера обоев (см. app/render.py FONT_PATHS);
-# Noto Color Emoji — чтобы эмодзи в заголовке не превращались в квадраты
+# Noto Color Emoji — чтобы эмодзи в заголовке не превращались в квадраты;
+# libraqm — без неё Pillow не склеивает составные эмодзи: флаг выходил двумя
+# буквами RU, семья четырьмя точками, клавиша 1️⃣ цифрой и синим квадратом,
+# а тон кожи отдельным кубиком. Pillow 12 подхватывает её сама, в рантайме.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        fonts-dejavu-core fonts-noto-color-emoji \
+        fonts-dejavu-core fonts-noto-color-emoji libraqm0 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
