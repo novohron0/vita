@@ -10,7 +10,7 @@ import sqlite3
 import threading
 import time
 from collections import defaultdict, deque
-from contextlib import contextmanager
+from contextlib import asynccontextmanager, contextmanager
 from datetime import date, timedelta
 from html import escape as esc
 from pathlib import Path
@@ -108,6 +108,12 @@ DEV_MODE = os.environ.get("VITA_DEV", "").strip() == "1"
 
 TG_BOT_TOKEN = os.environ.get("TG_BOT_TOKEN", "").strip()
 TG_BOT_NAME = os.environ.get("TG_BOT_NAME", "").strip().lstrip("@")
+# Чат Vita, куда бот пересказывает отзывы со звёздами. Пусто = отзывы видны
+# только в админке. Ставит его на сервере scripts/reviews-chat.sh.
+TG_REVIEWS_CHAT = os.environ.get("TG_REVIEWS_CHAT", "").strip()
+# адрес сайта снаружи: по нему телеграм приносит боту «Старт» (вебхук)
+PUBLIC_URL = os.environ.get("PUBLIC_URL", "https://vitadots.ru").strip().rstrip("/")
+TG_LOGIN_TTL = 1800  # ссылка входа через бота живёт полчаса
 
 # Письма (код на смену забытого пароля). Ключи — в .env на сервере, пусто =
 # писем нет и код уходит в телеграм, как раньше. Отправлять умеем двумя путями:
@@ -245,6 +251,20 @@ def _init_schema(conn: sqlite3.Connection) -> None:
     )
     conn.execute(
         "CREATE INDEX IF NOT EXISTS profile_telegram_profile ON profile_telegram(profile_code)"
+    )
+    # Вход через бота: сайт заводит пару «старт + секрет», бот по /start
+    # отмечает, какой телеграм её подтвердил, а страница забирает вход секретом.
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS tg_login("
+        "start TEXT PRIMARY KEY, secret_hash TEXT NOT NULL, created REAL NOT NULL, "
+        "tg_id TEXT NOT NULL DEFAULT '', username TEXT NOT NULL DEFAULT '', "
+        "name TEXT NOT NULL DEFAULT '', confirmed REAL)"
+    )
+    # чаты, куда добавили бота: из них скрипт выбирает чат для отзывов
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS tg_chats("
+        "chat_id TEXT PRIMARY KEY, kind TEXT NOT NULL DEFAULT '', "
+        "title TEXT NOT NULL DEFAULT '', seen TEXT NOT NULL DEFAULT (datetime('now')))"
     )
     # Вход по почте — вторая дверь в тот же аккаунт рядом с телеграмом.
     # Сам пароль не хранится: только своя соль и scrypt-отпечаток, так что
@@ -817,7 +837,14 @@ def _profile_payload(conn: sqlite3.Connection, profile_code: str) -> dict:
     }
 
 
-app = FastAPI(title="vita")
+@asynccontextmanager
+async def _lifespan(_app):
+    # при старте говорим телеграму, куда нести апдейты бота
+    _tg_hook_register()
+    yield
+
+
+app = FastAPI(title="vita", lifespan=_lifespan)
 # CSS и JS уходили на телефон несжатыми: gzip режет их примерно вчетверо
 app.add_middleware(GZipMiddleware, minimum_size=700)
 
@@ -840,6 +867,9 @@ RATE_RULES = {
     "/api/auth/login": (12, 300),
     "/api/auth/forgot": (5, 900),
     "/api/auth/reset": (10, 600),
+    # вход через бота: пару заводим при показе кнопки, спрашиваем, пока человек в телеграме
+    "/api/auth/tg/start": (40, 600),
+    "/api/auth/tg/check": (900, 600),
 }
 _rate_hits: dict = defaultdict(deque)
 _rate_lock = threading.Lock()
@@ -1053,6 +1083,10 @@ def create_review(rv: ReviewIn):
             "UPDATE links SET review_at = datetime('now') WHERE code = ?", (rv.code,)
         )
         new_until = _extend(conn, rv.code, REVIEW_DAYS, effective_until)
+        nick = _review_nick(conn, row[2])
+    if TG_REVIEWS_CHAT:
+        # в чат Vita — фоном: телеграм может думать секунды, человек ждать не должен
+        _in_background(_tg_send, TG_REVIEWS_CHAT, _review_note(stars, nick, text))
     until_d = date.fromisoformat(new_until)
     return {"code": rv.code, "until": new_until, "until_h": until_d.strftime("%d.%m")}
 
@@ -1237,41 +1271,191 @@ async def auth_telegram(request: Request):
     ).strip()[:80]
     owner_token = str(payload.get("ownerToken") or "")
     with db() as conn:
-        row = conn.execute(
-            "SELECT profile_code FROM profile_telegram WHERE tg_id = ?", (tg_id,)
-        ).fetchone()
-        if row:
-            # уже входил — возвращаем в его аккаунт, даже если браузер чужой
-            profile_code = row[0]
-            conn.execute(
-                "UPDATE profile_telegram SET username = ?, name = ? WHERE tg_id = ?",
-                (username, name, tg_id),
-            )
-            linked = False
-        else:
-            # первый вход: закрепляем за телеграмом тот профиль, что уже есть в браузере
-            profile_code = _profile_for_token(conn, owner_token, create=True)
-            conn.execute(
-                "INSERT INTO profile_telegram(tg_id, profile_code, username, name) "
-                "VALUES(?, ?, ?, ?)",
-                (tg_id, profile_code, username, name),
-            )
-            linked = True
-        # новый ключ устройства: старый остаётся жить, если это то же самое устройство
-        token = secrets.token_hex(24)
+        body, token = _telegram_enter(conn, tg_id, username, name, owner_token)
+    return _with_session(body, token)
+
+
+def _telegram_enter(
+    conn: sqlite3.Connection, tg_id: str, username: str, name: str, owner_token: str
+) -> tuple[dict, str]:
+    """Вход подтверждённым телеграмом — общий для виджета и для бота."""
+    row = conn.execute(
+        "SELECT profile_code FROM profile_telegram WHERE tg_id = ?", (tg_id,)
+    ).fetchone()
+    if row:
+        # уже входил — возвращаем в его аккаунт, даже если браузер чужой
+        profile_code = row[0]
         conn.execute(
-            "INSERT OR IGNORE INTO profile_devices(profile_code, token_hash) VALUES(?, ?)",
-            (profile_code, _token_hash(token)),
+            "UPDATE profile_telegram SET username = ?, name = ? WHERE tg_id = ?",
+            (username, name, tg_id),
         )
-        profile = _profile_payload(conn, profile_code)
-        access = _profile_access_state(conn, profile_code)
-    return _with_session({
+        linked = False
+    else:
+        # первый вход: закрепляем за телеграмом тот профиль, что уже есть в браузере
+        profile_code = _profile_for_token(conn, owner_token, create=True)
+        conn.execute(
+            "INSERT INTO profile_telegram(tg_id, profile_code, username, name) "
+            "VALUES(?, ?, ?, ?)",
+            (tg_id, profile_code, username, name),
+        )
+        linked = True
+    # новый ключ устройства: старый остаётся жить, если это то же самое устройство
+    token = _issue_device(conn, profile_code)
+    return {
         "token": token,
         "linked": linked,
         "telegram": ("@" + username) if username else (name or "телеграм"),
-        "profile": profile,
-        "access": access,
-    }, token)
+        "profile": _profile_payload(conn, profile_code),
+        "access": _profile_access_state(conn, profile_code),
+    }, token
+
+
+# ---------- вход через бота ----------
+# Кнопка на сайте — ссылка t.me/бот?start=<старт>. Человек жмёт «Старт»,
+# телеграм приносит /start <старт> на вебхук, мы отмечаем, чей это телеграм.
+# Страница всё это время спрашивает сервер секретом, который знает только она,
+# и, как только старт подтверждён, получает ключ устройства и куку.
+
+class TgCheckIn(BaseModel):
+    start: str = ""
+    secret: str = ""
+    ownerToken: str = ""
+
+
+TG_START_RE = re.compile(r"/start(?:@\w+)?(?:\s+([A-Za-z0-9_-]{8,64}))?\s*")
+TG_GONE = "Ссылка устарела — нажми кнопку ещё раз"
+
+
+def _tg_hook_secret() -> str:
+    """Пароль вебхука: телеграм кладёт его в заголовок каждого апдейта.
+    Выводим из токена бота — отдельный ключ в .env не нужен."""
+    if not TG_BOT_TOKEN:
+        return ""
+    return hmac.new(TG_BOT_TOKEN.encode("utf-8"), b"vita-webhook", hashlib.sha256).hexdigest()
+
+
+@app.post("/api/auth/tg/start")
+def auth_tg_start():
+    """Пара для кнопки: старт уходит в ссылку t.me и виден телеграму, секрет
+    остаётся в браузере — без него вход не забрать, даже зная ссылку."""
+    if not (TG_BOT_TOKEN and TG_BOT_NAME):
+        raise HTTPException(503, "Вход через телеграм ещё не подключён")
+    start = secrets.token_urlsafe(18)
+    secret = secrets.token_urlsafe(24)
+    now = time.time()
+    with db() as conn:
+        conn.execute("DELETE FROM tg_login WHERE created < ?", (now - 2 * TG_LOGIN_TTL,))
+        conn.execute(
+            "INSERT INTO tg_login(start, secret_hash, created) VALUES(?, ?, ?)",
+            (start, _token_hash(secret), now),
+        )
+    return {
+        "start": start,
+        "secret": secret,
+        "link": f"https://t.me/{TG_BOT_NAME}?start={start}",
+        "ttl": TG_LOGIN_TTL,
+    }
+
+
+@app.post("/api/auth/tg/check")
+def auth_tg_check(data: TgCheckIn):
+    """Страница спрашивает, нажал ли человек «Старт». Нажал — входит."""
+    start = data.start.strip()[:64]
+    with db() as conn:
+        row = conn.execute(
+            "SELECT secret_hash, created, tg_id, username, name, confirmed "
+            "FROM tg_login WHERE start = ?", (start,),
+        ).fetchone()
+        if row is None or not hmac.compare_digest(row[0], _token_hash(data.secret.strip())):
+            raise HTTPException(410, TG_GONE)
+        if not row[5]:
+            if time.time() - row[1] > TG_LOGIN_TTL:
+                raise HTTPException(410, TG_GONE)
+            return {"wait": True}
+        # пара одноразовая: второй запрос с тем же секретом войти уже не сможет
+        if conn.execute("DELETE FROM tg_login WHERE start = ?", (start,)).rowcount != 1:
+            raise HTTPException(410, TG_GONE)
+        body, token = _telegram_enter(conn, row[2], row[3], row[4], data.ownerToken)
+    return _with_session(body, token)
+
+
+@app.post("/tg/hook")
+async def tg_hook(request: Request):
+    """Апдейты бота. Без пароля из setWebhook сюда не достучаться."""
+    secret = _tg_hook_secret()
+    got = request.headers.get("x-telegram-bot-api-secret-token", "")
+    if not secret or not hmac.compare_digest(got, secret):
+        raise HTTPException(403, "forbidden")
+    try:
+        update = await request.json()
+    except ValueError:
+        return {"ok": True}
+    # ответ сразу в теле вебхука: сообщение отправит сам телеграм
+    return (_tg_update(update) if isinstance(update, dict) else None) or {"ok": True}
+
+
+def _tg_reply(chat_id, text: str) -> dict:
+    return {"method": "sendMessage", "chat_id": chat_id, "text": text}
+
+
+def _tg_remember_chat(conn: sqlite3.Connection, chat: dict) -> None:
+    conn.execute(
+        "INSERT INTO tg_chats(chat_id, kind, title) VALUES(?, ?, ?) "
+        "ON CONFLICT(chat_id) DO UPDATE SET kind = excluded.kind, "
+        "title = excluded.title, seen = datetime('now')",
+        (str(chat.get("id")), str(chat.get("type") or ""), str(chat.get("title") or "")[:120]),
+    )
+
+
+def _tg_update(update: dict) -> dict | None:
+    """Разбирает апдейт. Возвращает ответ бота или None, если молчим."""
+    member = update.get("my_chat_member")
+    if isinstance(member, dict):
+        chat = member.get("chat") or {}
+        status = (member.get("new_chat_member") or {}).get("status", "")
+        if chat.get("id") is not None and chat.get("type") != "private":
+            with db() as conn:
+                if status in ("member", "administrator"):
+                    _tg_remember_chat(conn, chat)
+                elif status in ("left", "kicked"):
+                    conn.execute("DELETE FROM tg_chats WHERE chat_id = ?", (str(chat["id"]),))
+        return None
+    msg = update.get("message")
+    if not isinstance(msg, dict):
+        return None
+    chat = msg.get("chat") or {}
+    if chat.get("id") is None:
+        return None
+    if chat.get("type") != "private":
+        # в группах бот молчит и только запоминает чат — для отзывов
+        with db() as conn:
+            _tg_remember_chat(conn, chat)
+        return None
+    user = msg.get("from") or {}
+    match = TG_START_RE.fullmatch(str(msg.get("text") or "").strip())
+    if not match or not match.group(1) or user.get("id") is None:
+        return _tg_reply(chat["id"], "Это бот Vita — живые обои-календарь.\n"
+                         "Чтобы войти, открой vitadots.ru и нажми «Войти через Telegram».")
+    start, tg_id = match.group(1), str(user["id"])
+    username = str(user.get("username") or "")[:64]
+    name = " ".join(str(user.get(k) or "") for k in ("first_name", "last_name")).strip()[:80]
+    now = time.time()
+    with db() as conn:
+        row = conn.execute(
+            "SELECT created, tg_id, confirmed FROM tg_login WHERE start = ?", (start,)
+        ).fetchone()
+        fresh = row is not None and now - row[0] <= TG_LOGIN_TTL
+        if fresh and not row[2]:
+            conn.execute(
+                "UPDATE tg_login SET tg_id = ?, username = ?, name = ?, confirmed = ? "
+                "WHERE start = ?", (tg_id, username, name, now, start),
+            )
+        ok = fresh and (not row[2] or row[1] == tg_id)
+    if not ok:
+        return _tg_reply(chat["id"], "Эта ссылка для входа уже не действует.\n"
+                         "Вернись на сайт и нажми «Войти через Telegram» ещё раз.")
+    return _tg_reply(chat["id"], "Готово, вход подтверждён.\n"
+                     "Возвращайся в браузер — ты уже внутри Vita.")
 
 
 class AuthIn(BaseModel):
@@ -1391,24 +1575,80 @@ def auth_login(data: AuthIn):
         return _with_session(_auth_payload(conn, profile_code, token), token)
 
 
-def _tg_send(chat_id: str, text: str) -> bool:
-    """Короткое сообщение от бота. Ошибка телеграма не должна ронять запрос."""
+def _tg_api(method: str, payload: dict, timeout: int = 8) -> dict:
+    """Вызов Bot API. Ничего не бросает: сбой телеграма не должен ронять сайт."""
     if not TG_BOT_TOKEN:
-        return False
+        return {"ok": False, "description": "нет токена бота"}
+    import urllib.error
     import urllib.request
 
     try:
         req = urllib.request.Request(
-            f"https://api.telegram.org/bot{TG_BOT_TOKEN}/sendMessage",
-            data=json.dumps({"chat_id": chat_id, "text": text}).encode("utf-8"),
+            f"https://api.telegram.org/bot{TG_BOT_TOKEN}/{method}",
+            data=json.dumps(payload).encode("utf-8"),
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=8) as resp:
-            resp.read()
-        return True
-    except Exception:
-        return False
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return json.loads(resp.read() or b"{}")
+    except urllib.error.HTTPError as exc:
+        try:
+            return json.loads(exc.read() or b"{}")
+        except ValueError:
+            return {"ok": False, "description": f"HTTP {exc.code}"}
+    except Exception as exc:  # в текст ошибки не попадает адрес с токеном
+        return {"ok": False, "description": type(exc).__name__}
+
+
+def _tg_send(chat_id: str, text: str) -> bool:
+    """Короткое сообщение от бота. Ошибка телеграма не должна ронять запрос."""
+    return bool(_tg_api("sendMessage", {"chat_id": chat_id, "text": text}).get("ok"))
+
+
+def _in_background(fn, *args) -> None:
+    """Необязательное и медленное (сообщение в телеграм) — отдельным потоком."""
+    threading.Thread(target=fn, args=args, daemon=True).start()
+
+
+def _tg_hook_register() -> None:
+    """Вебхук бота ставится при каждом старте: так он не потеряется при переезде."""
+    if not TG_BOT_TOKEN or DEV_MODE or os.environ.get("TG_WEBHOOK", "1") == "0":
+        return
+
+    def run():
+        res = _tg_api("setWebhook", {
+            "url": PUBLIC_URL + "/tg/hook",
+            "secret_token": _tg_hook_secret(),
+            "allowed_updates": ["message", "my_chat_member"],
+        }, timeout=15)
+        print("[tg] webhook:", "ok" if res.get("ok") else res.get("description"), flush=True)
+
+    _in_background(run)
+
+
+def _plural(n: int, one: str, few: str, many: str) -> str:
+    if n % 10 == 1 and n % 100 != 11:
+        return one
+    if 2 <= n % 10 <= 4 and not 12 <= n % 100 <= 14:
+        return few
+    return many
+
+
+def _review_nick(conn: sqlite3.Connection, profile_code: str | None) -> str:
+    """Кто написал отзыв: телеграм, если привязан, иначе тег профиля."""
+    handle = _telegram_handle(conn, profile_code)
+    if handle and handle != "телеграм":
+        return handle
+    row = conn.execute(
+        "SELECT handle FROM profiles WHERE code = ?", (profile_code or "",)
+    ).fetchone()
+    return ("@" + row[0]) if row and row[0] else (handle or "без профиля")
+
+
+def _review_note(stars: int, nick: str, text: str) -> str:
+    """Строка для чата Vita: «5 звёзд · @ник пишет: текст»."""
+    score = f"{stars} {_plural(stars, 'звезда', 'звезды', 'звёзд')}" if stars else "без оценки"
+    return f"{score} · {nick} пишет: {text[:3500]}"
 
 
 def _mail_send(to: str, subject: str, text: str) -> bool:

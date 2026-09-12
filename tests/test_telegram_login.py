@@ -38,7 +38,8 @@ def call(payload: dict):
         "query_string": b"", "headers": [(b"content-type", b"application/json")],
         "server": ("vitadots.ru", 443), "client": ("1.2.3.4", 1), "root_path": "",
     }, receive)
-    return asyncio.run(main.auth_telegram(request))
+    # ручка отдаёт JSONResponse (ставит куку), тело разбираем сами
+    return json.loads(asyncio.run(main.auth_telegram(request)).body)
 
 
 def wallpaper_request():

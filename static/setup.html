@@ -7,8 +7,8 @@
   <link rel="icon" type="image/png" href="/static/img/favicon.png">
   <link rel="apple-touch-icon" href="/static/img/apple-touch.png">
 <title>Установка — Vita</title>
-<script src="/static/theme.js?v=6"></script>
-<link rel="stylesheet" href="/static/style.css?v=96">
+<script src="/static/theme.js?v=7"></script>
+<link rel="stylesheet" href="/static/style.css?v=97">
 </head>
 <body>
 <header class="head-shrink">
@@ -92,7 +92,7 @@
 
 <div class="modal-back center" id="rvModal" hidden>
   <div class="modal card rv-card">
-    <h2>Ещё 7 дней — за отзыв</h2>
+    <h2>7 дней — за отзыв</h2>
     <p class="sub">Поставь оценку и напиши пару фраз: что понравилось, чего не хватает.
       Неделя добавится сразу, ярлык откроется следом.</p>
     <div class="stars" id="rvStars">
@@ -103,17 +103,16 @@
       <button type="button" data-v="5" aria-label="5 из 5"><svg viewBox="0 0 24 24"><path d="m12 3.6 2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.6 9.7l5.8-.8z"/></svg></button>
     </div>
     <textarea id="rvText" rows="3"
-      placeholder="Например: наконец вижу, сколько недель уже прожито — отрезвляет и бодрит одновременно…"></textarea>
+      placeholder="Например: добавьте ещё шрифты или сделайте вот такой стиль"></textarea>
     <p class="hint err" id="rvStatus"></p>
     <button class="btn primary" id="rvSend" type="button">Отправить и забрать ярлык</button>
-    <button class="rv-skip" id="rvSkip" type="button">Просто забрать ярлык</button>
   </div>
 </div>
 
 <footer class="page-foot"><a href="/buy" style="color:inherit">Открыть навсегда</a> · <a href="/offer" style="color:inherit">Оферта</a> · <a href="/privacy" style="color:inherit">Конфиденциальность</a></footer>
 
-<script src="/static/vita-id.js?v=5"></script>
-<script src="/static/tg-login.js?v=3"></script>
+<script src="/static/vita-id.js?v=6"></script>
+<script src="/static/tg-login.js?v=4"></script>
 <script>
 const CODE = "{{CODE}}";
 
@@ -157,10 +156,6 @@ document.getElementById('rvStars').addEventListener('click', e => {
 
 function closeRv() { rvModal.hidden = true; }
 rvModal.addEventListener('click', e => { if (e.target === rvModal) closeRv(); });
-document.getElementById('rvSkip').addEventListener('click', () => {
-  closeRv();
-  if (rvHref) location.href = rvHref;
-});
 
 if (shortcutBtn) {
   shortcutBtn.addEventListener('click', e => {
@@ -187,6 +182,14 @@ document.getElementById('rvSend').addEventListener('click', async () => {
       body: JSON.stringify({ code: CODE, text, stars: rvStars }),
     });
     const d = await r.json();
+    // Ярлык теперь выдаётся только за отзыв. Если неделю уже подарили (скажем,
+    // с другого телефона), сервер ответит 409 — у двери человека не держим.
+    if (r.status === 409) {
+      rvDone = true;
+      closeRv();
+      if (rvHref) location.href = rvHref;
+      return;
+    }
     if (!r.ok) {
       status.textContent = d.detail || 'Что-то пошло не так, попробуй ещё раз';
       btn.disabled = false;

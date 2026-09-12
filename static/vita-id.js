@@ -119,13 +119,26 @@
     return responseData(response, 'Не удалось начать оплату');
   }
 
-  async function loginTelegram(user) {
-    const response = await fetch('/api/auth/telegram', {
+  // Вход через бота: сервер даёт пару «старт + секрет», человек жмёт «Старт»
+  // в телеграме, а страница секретом забирает вход — ключ устройства и куку.
+  async function tgStart() {
+    const response = await fetch('/api/auth/tg/start', { method: 'POST' });
+    return responseData(response, 'Телеграм сейчас не отвечает');
+  }
+
+  async function tgCheck(start, secret) {
+    await ensureSession();
+    const response = await fetch('/api/auth/tg/check', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...user, ownerToken: token() })
+      body: JSON.stringify({ start, secret, ownerToken: token() })
     });
-    const data = await responseData(response, 'Телеграм не подтвердил вход');
+    if (response.status === 410) {
+      const error = new Error('Ссылка устарела');
+      error.gone = true;
+      throw error;
+    }
+    const data = await responseData(response, 'Не получилось войти');
     if (data.token) {
       localStorage.setItem(TOKEN_KEY, data.token);
       localStorage.setItem('vitaSignedIn', '1');
@@ -173,5 +186,5 @@
   }
 
   window.VitaID = { token, ensure, library, connect, updateProfile, uploadAvatar, member, access, buy,
-    loginTelegram, register, login, forgot, resetPass, logout };
+    tgStart, tgCheck, register, login, forgot, resetPass, logout };
 })();

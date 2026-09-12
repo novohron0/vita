@@ -762,8 +762,6 @@ function animateJump() {
 // перетащить в любой угол (позиция запоминается) и рассмотреть двумя пальцами.
 const phoneEl = document.querySelector('.phone');
 const miniWrap = $('miniWrap'), miniBox = $('mini');
-const headPill = document.getElementById('headPill');
-let headTarget = 0, headNow = 0, headRaf = 0;
 const MINI_EDGE = 14;
 const CORNER_KEY = 'vitaMiniCorner';
 const ORIGIN = { br: 'bottom right', bl: 'bottom left', tr: 'top right', tl: 'top left' };
@@ -823,7 +821,6 @@ function updateMini() {
   const show = r.height > 0 && visible / r.height < 0.5;
   // свет за телефоном горит, пока сам телефон в кадре: на прокрутке он не нужен
   document.body.classList.toggle('dim', show);
-  aimHead();
   if (show === miniWrap.classList.contains('show')) return;
   if (show) miniPlace(false);  // панель браузера могла сдвинуть видимую область
   miniWrap.classList.toggle('show', show);
@@ -856,25 +853,7 @@ addEventListener('resize', queueMini, { passive: true });
 window.visualViewport?.addEventListener('resize', () => { miniPlace(false); queueMini(); });
 window.visualViewport?.addEventListener('scroll', queueMini);
 updateMini();
-
-// Шапка садится в островок: трогается с первых пикселей прокрутки и успевает
-// собраться задолго до того, как выедет экранчик. Цель считает скролл, а
-// доводит до неё кадровый цикл — иначе на редких событиях айфона видны ступеньки.
-function headTick() {
-  headNow += (headTarget - headNow) * 0.16;
-  if (Math.abs(headTarget - headNow) < 0.0015) headNow = headTarget;
-  headPill.style.setProperty('--k', headNow.toFixed(4));
-  headRaf = headNow === headTarget ? 0 : requestAnimationFrame(headTick);
-}
-function aimHead() {
-  if (!headPill) return;
-  headTarget = Math.min(1, Math.max(0, (scrollY || 0) / 380));
-  if (headTarget !== headNow && !headRaf) headRaf = requestAnimationFrame(headTick);
-}
-// скролл слушаем без придержки: поставить одно число дёшево, а цель должна
-// быть свежей к каждому кадру
-addEventListener('scroll', aimHead, { passive: true });
-addEventListener('touchmove', aimHead, { passive: true });
+// Шапку в островок сажает theme.js — одинаково на всех страницах.
 
 // Появление на прокрутке. Считаем в том же месте, что уже слушает скролл:
 // наблюдатель пересечений в некоторых обёртках молчит, а пустая страница —
@@ -1061,9 +1040,6 @@ $('proModal').addEventListener('click', e => {
 });
 
 
-// Свой заголовок сильнее фона: перебирая фоны, человек не должен терять текст,
-// который написал руками. Заголовок фона подставляется только вторым нажатием
-// на ту же кнопку — это осознанная просьба «возьми и текст тоже».
 let bgTipTimer = 0;
 function showBgTip(text) {
   const tip = $('bgTip');
@@ -1073,28 +1049,80 @@ function showBgTip(text) {
   if (text) bgTipTimer = setTimeout(() => { tip.hidden = true; }, 5000);
 }
 
+// Свой заголовок сильнее фона. Фон с готовым названием (Дембель, Рамадан, Мёд)
+// текст, написанный руками, молча не трогает: над нажатой кнопкой всплывает
+// маленький вопрос «Изменить заголовок под фон?». Раньше название брал второй
+// тап по той же кнопке — и случайный двойной тап стирал текст человека.
+const bgAsk = $('bgAsk');
+let bgAskFor = '', bgAskGen = 0;
+
+function askBgTitle(v) {
+  const btn = $('bg').querySelector(`button[data-v="${v}"]`);
+  if (!btn) return;
+  bgAskFor = v;
+  bgAskGen++;
+  bgAsk.hidden = false;
+  bgAsk.classList.remove('show');
+  const f = bgAsk.parentElement.getBoundingClientRect();
+  const b = btn.getBoundingClientRect();
+  const w = bgAsk.offsetWidth, h = bgAsk.offsetHeight;
+  const cx = b.left + b.width / 2 - f.left;
+  const left = Math.max(0, Math.min(f.width - w, cx - w / 2));
+  // над кнопкой, чтобы палец не закрывал вопрос; под шапкой места нет — под кнопкой
+  const head = document.querySelector('header').getBoundingClientRect().bottom;
+  const below = b.top - h - 10 < head + 6;
+  bgAsk.classList.toggle('below', below);
+  bgAsk.style.left = left + 'px';
+  bgAsk.style.top = (below ? b.bottom - f.top + 10 : b.top - f.top - h - 10) + 'px';
+  bgAsk.style.setProperty('--ox', (cx - left) + 'px');   // растёт из нажатой кнопки
+  void bgAsk.offsetWidth;
+  bgAsk.classList.add('show');
+}
+
+function hideBgAsk() {
+  if (bgAsk.hidden) return;
+  bgAskFor = '';
+  const gen = ++bgAskGen;
+  bgAsk.classList.remove('show');
+  setTimeout(() => { if (gen === bgAskGen) bgAsk.hidden = true; }, 200);
+}
+
+$('bgAskYes').addEventListener('click', () => {
+  const v = bgAskFor;
+  hideBgAsk();
+  if (!BG_TITLES[v] || state.bg !== v) return;
+  state.title = BG_TITLES[v];
+  $('title').value = state.title;
+  bgAutoTitle = true;
+  customTitle = false;
+  draw();
+});
+$('bgAskNo').addEventListener('click', hideBgAsk);
+// тап мимо окошка — тоже «нет»; тап по другому фону решает обработчик ниже
+addEventListener('pointerdown', e => {
+  if (!bgAsk.hidden && !e.target.closest('#bgAsk, #bg')) hideBgAsk();
+}, { passive: true });
+
 bindSeg('bg', v => {
-  const again = state.bg === v && !$('bgOwn').classList.contains('on');
   $('bgOwn').classList.remove('on');
   state.bg = v;
   customBgImg = null;
   state.bgImageId = null;
-  if (BG_TITLES[v] && (!customTitle || again)) {
-    state.title = BG_TITLES[v];
-    $('title').value = state.title;
-    bgAutoTitle = true;
-    customTitle = false;
-    showBgTip('');
-  } else if (BG_TITLES[v]) {
-    showBgTip('твой заголовок остался. нажми ещё раз, чтобы взять «' + BG_TITLES[v] + '»');
-  } else if (bgAutoTitle) {
-    state.title = TITLES[state.mode];
-    $('title').value = state.title;
-    bgAutoTitle = false;
-    customTitle = false;
-    showBgTip('');
+  showBgTip('');
+  if (BG_TITLES[v] && customTitle) {
+    // текст написан руками — не трогаем, только спрашиваем
+    if (state.title !== BG_TITLES[v]) askBgTitle(v); else hideBgAsk();
   } else {
-    showBgTip('');
+    hideBgAsk();
+    if (BG_TITLES[v]) {
+      state.title = BG_TITLES[v];
+      $('title').value = state.title;
+      bgAutoTitle = true;
+    } else if (bgAutoTitle) {
+      state.title = TITLES[state.mode];
+      $('title').value = state.title;
+      bgAutoTitle = false;
+    }
   }
   refreshSwatches();
   animateReveal();
@@ -1182,6 +1210,7 @@ $('colorPick').addEventListener('input', e => {
 $('title').addEventListener('input', e => {
   customTitle = true;
   showBgTip('');
+  hideBgAsk();
   bgAutoTitle = false;
   state.title = e.target.value;
   draw();
@@ -1537,23 +1566,115 @@ async function loadProfile() {
     paintPrime(access);
     $('profLogout').hidden = !(access.telegram || access.email);
     $('profMail').hidden = !!(access.telegram || access.email);
-    if (!access.telegram && access.tgBotId) VitaTG.mount($('tgBoxProfile'), access);
+    if (!access.telegram && access.tgBot) VitaTG.mount($('tgBoxProfile'), access);
     profileLoaded = true;
   } catch (error) {
     $('profStatus').textContent = error.message || 'Не удалось загрузить профиль';
   }
 }
 
-$('avatarBtn').addEventListener('click', () => {
-  profModal.hidden = false;
+// Карточка вырастает из кружка в шапке и уходит обратно в него. Сама карточка
+// едет из точки кружка и растёт, а круглая обрезка раскрывается в её
+// прямоугольник. Всё на Web Animations: передумал на полпути — движение
+// просто разворачивается назад, без рывка.
+const avatarBtn = $('avatarBtn');
+const profCard = profModal.querySelector('.profile-modal');
+const calmMotion = matchMedia('(prefers-reduced-motion: reduce)');
+let profOpen = false, profAnims = [], profGen = 0;
+
+// Кадр «карточка сжата в кружок»: квадрат из её середины, уменьшенный до
+// размера кружка и поставленный ровно на него.
+function profFromAvatar() {
+  const a = avatarBtn.getBoundingClientRect();
+  const c = profCard.getBoundingClientRect();
+  const side = Math.min(c.width, c.height);
+  const dx = a.left + a.width / 2 - (c.left + c.width / 2);
+  const dy = a.top + a.height / 2 - (c.top + c.height / 2);
+  const round = parseFloat(getComputedStyle(profCard).borderTopLeftRadius) || 26;
+  return [
+    {
+      transform: `translate(${dx}px, ${dy}px) scale(${a.width / side})`,
+      clipPath: `inset(${(c.height - side) / 2}px ${(c.width - side) / 2}px round ${side / 2}px)`,
+    },
+    { transform: 'translate(0px, 0px) scale(1)', clipPath: `inset(0px 0px round ${round}px)` },
+  ];
+}
+
+function profSettle(anims) {
+  const gen = ++profGen;
+  profAnims = anims;
+  Promise.all(anims.map(a => a.finished)).then(() => {
+    if (gen !== profGen) return;          // за это время движение развернули
+    profAnims = [];
+    profCard.classList.remove('morph');
+    if (!profOpen) profModal.hidden = true;
+    anims.forEach(a => a.cancel());       // снимаем удержание последнего кадра
+  }).catch(() => {});
+}
+
+function openProfile() {
+  if (profOpen) return;
+  profOpen = true;
+  avatarBtn.setAttribute('aria-expanded', 'true');
   if (!profileLoaded) loadProfile();
-});
-$('profileClose').addEventListener('click', () => { profModal.hidden = true; });
-profModal.addEventListener('click', e => { if (e.target === profModal) profModal.hidden = true; });
+  if (profAnims.length) {                 // карточка ещё уходила — возвращаем её
+    profAnims.forEach(a => a.reverse());
+    profSettle(profAnims);
+    return;
+  }
+  // карточка встаёт прямо под шапкой, под своим кружком, и на шапку не наезжает
+  const head = document.querySelector('header').getBoundingClientRect().bottom;
+  profModal.style.setProperty('--prof-top', Math.round(head + 10) + 'px');
+  profModal.hidden = false;
+  const fade = [{ opacity: 0 }, { opacity: 1 }];
+  if (calmMotion.matches) {
+    profSettle([profModal.animate(fade, { duration: 200, easing: 'ease-out', fill: 'both' })]);
+    return;
+  }
+  profCard.classList.add('morph');
+  profSettle([
+    profCard.animate(profFromAvatar(), { duration: 560, easing: 'cubic-bezier(.32, .72, 0, 1)', fill: 'both' }),
+    profCard.animate(fade, { duration: 140, fill: 'both' }),
+    profModal.animate(fade, { duration: 380, easing: 'ease-out', fill: 'both' }),
+    ...[...profCard.children].map(el =>
+      el.animate(fade, { duration: 300, delay: 150, easing: 'ease-out', fill: 'both' })),
+  ]);
+}
+
+function closeProfile() {
+  if (!profOpen) return;
+  profOpen = false;
+  avatarBtn.setAttribute('aria-expanded', 'false');
+  if (profCard.contains(document.activeElement)) avatarBtn.focus({ preventScroll: true });
+  if (profAnims.length) {                 // ещё вырастала — уходит тем же путём назад
+    profAnims.forEach(a => a.reverse());
+    profSettle(profAnims);
+    return;
+  }
+  const fade = [{ opacity: 1 }, { opacity: 0 }];
+  if (calmMotion.matches) {
+    profSettle([profModal.animate(fade, { duration: 160, easing: 'ease-in', fill: 'both' })]);
+    return;
+  }
+  profCard.classList.add('morph');
+  profSettle([
+    profCard.animate(profFromAvatar().reverse(), { duration: 400, easing: 'cubic-bezier(.4, 0, .1, 1)', fill: 'both' }),
+    // в самом конце гаснет, чтобы нырнуть под кружок, а не исчезнуть щелчком
+    profCard.animate([{ opacity: 1 }, { opacity: 1, offset: 0.72 }, { opacity: 0 }], { duration: 400, fill: 'both' }),
+    profModal.animate(fade, { duration: 400, easing: 'ease-in', fill: 'both' }),
+    ...[...profCard.children].map(el =>
+      el.animate(fade, { duration: 150, easing: 'ease-in', fill: 'both' })),
+  ]);
+}
+
+avatarBtn.addEventListener('click', () => (profOpen ? closeProfile() : openProfile()));
+$('profileClose').addEventListener('click', closeProfile);
+profModal.addEventListener('click', e => { if (e.target === profModal) closeProfile(); });
 addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
   if (!cropModal.hidden) { $('cropCancel').click(); return; }
-  profModal.hidden = true;
+  if (!bgAsk.hidden) { hideBgAsk(); return; }
+  closeProfile();
 });
 
 // --- выбор области фото ---
@@ -1803,7 +1924,7 @@ $('profSave').addEventListener('click', async () => {
 });
 
 $('profMail').addEventListener('click', () => {
-  profModal.hidden = true;
+  closeProfile();
   toLogin();
 });
 

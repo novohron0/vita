@@ -28,7 +28,13 @@ html { touch-action: manipulation; }
   --body-grad-a: rgba(0, 0, 0, 0.55);
   --body-grad-b: rgba(0, 0, 0, 0.72);
   --body-base: #000;
-  --header-bg: rgba(10, 10, 12, 0.52);
+  /* Шапка — прозрачное стекло: тонировки самая малость, предметом её делают
+     свет по кромке и блик. Плотность прибавляется, только когда шапка сжимается. */
+  --header-bg: rgba(22, 22, 26, 0.18);
+  --header-dense: rgba(10, 10, 12, 0.34);
+  --header-rim: inset 0 1px 0 rgba(255, 255, 255, 0.38), inset 0 -1px 0 rgba(255, 255, 255, 0.07), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --header-glint: radial-gradient(120% 160% at 16% -40%, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0) 52%), radial-gradient(70% 120% at 88% 140%, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0) 62%);
+  --header-ink-glow: 0 1px 12px rgba(0, 0, 0, 0.45);
   --input-text: #f2f2f2;
   --input-focus: #4a4a50;
   --input-inset: inset 0 1px 0 rgba(255, 255, 255, 0.08);
@@ -76,7 +82,11 @@ html { touch-action: manipulation; }
   --body-grad-a: rgba(253, 249, 242, 0.8);
   --body-grad-b: rgba(240, 233, 222, 0.95);
   --body-base: #f1ece3;
-  --header-bg: rgba(255, 252, 246, 0.8);
+  --header-bg: rgba(255, 252, 246, 0.34);
+  --header-dense: rgba(255, 252, 246, 0.5);
+  --header-rim: inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 -1px 0 rgba(74, 58, 38, 0.06), inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+  --header-glint: radial-gradient(120% 160% at 16% -40%, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0) 52%), radial-gradient(70% 120% at 88% 140%, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0) 62%);
+  --header-ink-glow: 0 1px 12px rgba(255, 250, 242, 0.7);
   --input-text: #221f1a;
   --input-focus: rgba(74, 58, 38, 0.26);
   --input-inset: inset 0 1px 0 rgba(255, 255, 255, 0.95);
@@ -181,28 +191,33 @@ header {
   gap: calc(10px - 5px * var(--k));
   padding: calc(9px - 3px * var(--k)) calc(16px - 9px * var(--k));
   border-radius: 999px;
+  /* Прозрачное стекло: сквозь шапку видно, что под неё уехало. Размытие
+     лёгкое — при сильном всё сливается в тонировку, — а цвет подкручен,
+     чтобы уехавшее светилось, а не серело. */
   background: var(--header-bg);
-  background-image: var(--glass-shine);
-  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(18px) saturate(1.9);
+  -webkit-backdrop-filter: blur(18px) saturate(1.9);
   border: 1px solid var(--glass-border);
-  box-shadow: var(--glass-inset), var(--glass-shadow);
+  box-shadow: var(--header-rim), var(--glass-shadow);
   position: relative;
   transition: box-shadow .45s ease;
 }
-body.scrolled .head-pill { box-shadow: var(--glass-inset), var(--glass-shadow), 0 10px 30px rgba(0, 0, 0, 0.22); }
+body.scrolled .head-pill { box-shadow: var(--header-rim), var(--glass-shadow), 0 10px 30px rgba(0, 0, 0, 0.22); }
 /* чем меньше островок, тем плотнее его стекло: сквозь узкую пилюлю не должны
    просвечивать кнопки, иначе она перестаёт читаться как предмет */
-.head-pill::before {
+.head-pill::before,
+.head-pill::after {
   content: "";
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: var(--header-bg);
-  opacity: var(--k);
   pointer-events: none;
 }
-.head-pill > * { position: relative; }
+.head-pill::before { background: var(--header-dense); opacity: var(--k); }
+/* блик лежит поверх плотности: и сжатый островок остаётся стеклом, а не пластиком */
+.head-pill::after { background: var(--header-glint); }
+.head-pill > * { position: relative; z-index: 1; }
+.head-pill .logo { text-shadow: var(--header-ink-glow); }
 /* на главной кружок профиля стоит ровно посередине, а логотип и переключатель
    сходятся к нему с боков */
 .head-pill.solo { display: grid; grid-template-columns: 1fr auto 1fr; justify-items: center; }
@@ -1950,6 +1965,81 @@ header { transition: box-shadow .45s ease; }
 .pick-own:active { transform: scale(0.99); }
 .pick-tip { color: var(--text-muted); font-size: 12.5px; line-height: 1.45; margin-top: 9px; }
 
+/* «Изменить заголовок под фон?» — маленькое прозрачное окошко над нажатой
+   кнопкой фона. Стекло тёмное в обеих темах: на нём честно читаются белые
+   таблетки. Растёт из кнопки (точку --ox ставит app.js), уходит быстрее. */
+.bg-field { position: relative; }
+.bg-ask {
+  position: absolute;
+  z-index: 6;
+  top: 0;
+  left: 0;
+  width: max-content;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 13px 12px 12px;
+  border-radius: 24px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.03) 60%),
+    rgba(16, 16, 20, 0.4);
+  backdrop-filter: blur(22px) saturate(1.8);
+  -webkit-backdrop-filter: blur(22px) saturate(1.8);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.34),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.09),
+    0 14px 36px rgba(0, 0, 0, 0.42);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-transform: none;
+  text-align: center;
+  opacity: 0;
+  transform: scale(.8);
+  transform-origin: var(--ox, 50%) calc(100% + 10px);
+  transition: opacity .12s ease-in, transform .14s ease-in;
+}
+.bg-ask.below { transform-origin: var(--ox, 50%) -10px; }
+.bg-ask.show {
+  opacity: 1;
+  transform: none;
+  transition: opacity .16s ease-out, transform .38s cubic-bezier(.16, 1, .3, 1);
+}
+.bg-ask p { padding: 0 8px; line-height: 1.3; }
+.bg-ask-row { display: flex; gap: 8px; }
+.bg-ask-row button {
+  flex: 1;
+  min-width: 84px;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  color: #0b0b0d;
+  font: inherit;
+  font-size: 14.5px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.08), 0 6px 16px rgba(0, 0, 0, 0.22);
+  transition: transform .16s cubic-bezier(.22, 1, .36, 1), background .2s;
+}
+.bg-ask-row button:active { transform: scale(.94); background: #e8e8ed; }
+.bg-ask-row button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+[data-theme="light"] .bg-ask {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.02) 60%),
+    rgba(38, 33, 26, 0.7);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.07),
+    0 14px 36px rgba(88, 66, 40, 0.3);
+}
+@media (prefers-reduced-motion: reduce) {
+  .bg-ask, .bg-ask.show { transform: none; }
+}
+
 /* платная опция: замок вместо обещаний, объяснение — в окне по нажатию */
 .seg button.locked { position: relative; padding-right: 30px; }
 .seg button.locked .lock {
@@ -2071,6 +2161,19 @@ header { transition: box-shadow .45s ease; }
 }
 @keyframes popIn { from { opacity: 0; transform: scale(.92) translateY(10px); } }
 
+/* Карточка профиля вырастает из кружка в шапке (app.js) и встаёт прямо под
+   шапкой — больше на неё не наезжает. Своих CSS-анимаций у неё нет, они
+   спорили бы с ростом. Тень загорается, когда карточка уже выросла: пока её
+   режет круглая обрезка, тени всё равно не видно. */
+#profileModal { align-items: flex-start; padding-top: var(--prof-top, 92px); animation: none; }
+#profileModal .modal.card {
+  animation: none;
+  max-height: calc(100vh - var(--prof-top, 92px) - 16px);
+  max-height: calc(100dvh - var(--prof-top, 92px) - 16px);
+  transition: box-shadow .3s ease;
+}
+#profileModal .modal.card.morph { box-shadow: var(--glass-inset); }
+
 .profile-modal { align-items: center; text-align: center; gap: 14px; }
 .ava-pick { display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer; }
 .ava {
@@ -2182,9 +2285,9 @@ header { transition: box-shadow .45s ease; }
 }
 .prof-exit:active { color: var(--text-2); }
 
-/* Своя кнопка входа: виджет телеграма приходит синим айфреймом и в тёмной
-   карточке смотрится заплаткой. Кнопку рисуем сами, а вход открываем тем же
-   родным SDK телеграма. */
+/* Своя кнопка входа — ссылка на бота: жмёшь «Старт» в телеграме и
+   возвращаешься уже внутри. Синий виджет телеграма в тёмной карточке
+   смотрелся заплаткой, поэтому кнопку рисуем сами. */
 .tg-btn {
   width: 100%;
   min-height: 46px;
@@ -2200,6 +2303,7 @@ header { transition: box-shadow .45s ease; }
   font: inherit;
   font-size: 15px;
   font-weight: 600;
+  text-decoration: none;
   cursor: pointer;
   transition: background .2s, border-color .2s, transform .15s;
 }
@@ -2304,22 +2408,13 @@ header { transition: box-shadow .45s ease; }
   stroke-width: 1.5;
   stroke-linejoin: round;
 }
-.stars button.on { color: #f0b840; }
-.stars button.on svg { fill: currentColor; }
+/* выбранные звёзды белые, как всё в Vita; в светлой теме белое не видно —
+   там они цвета текста */
+.stars button.on { color: #fff; }
+.stars button.on svg { fill: currentColor; filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.35)); }
+[data-theme="light"] .stars button.on { color: var(--text); }
+[data-theme="light"] .stars button.on svg { filter: none; }
 .stars button:active { transform: scale(.88); }
-.rv-skip {
-  margin: 0;
-  padding: 6px;
-  border: 0;
-  background: none;
-  color: var(--text-faint);
-  font: inherit;
-  font-size: 13px;
-  text-decoration: underline;
-  text-decoration-color: var(--glass-edge);
-  text-underline-offset: 3px;
-  cursor: pointer;
-}
 
 .crop-actions { display: flex; gap: 10px; width: 100%; }
 .crop-actions button { flex: 1; margin: 0; border-radius: 999px; padding: 12px 18px; font-size: 15px; }

@@ -73,7 +73,10 @@ document.addEventListener('DOMContentLoaded', () => {
    только на главной. Цель ставит скролл, ведёт к ней кадровый цикл —
    на айфоне события прокрутки во время инерции приходят рывками. */
 (function () {
-  const pill = document.querySelector('.head-pill');
+  // Скрипт подключён в <head>, пилюли в разметке ещё нет: ищем её, когда
+  // страница собрана. Иначе шапка не сжималась нигде, кроме главной, где
+  // сжатие по старой памяти вёл app.js.
+  let pill = null;
   const RISE = '.step, .stats, .controls > .field, .controls > .primary,'
     + ' .controls > .hint, .buy-price, .buy-list, .buy-form, .setup-foot';
   let target = 0, now = 0, raf = 0;
@@ -111,6 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   document.addEventListener('DOMContentLoaded', () => {
+    pill = document.querySelector('.head-pill');
     // на главной своим появлением заведует app.js — он знает про скрытые поля
     if (!document.getElementById('headPill')) {
       rising = [...document.querySelectorAll(RISE)];

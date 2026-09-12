@@ -182,7 +182,7 @@ let tgReady = false;
   // Уже вошёл — держать его перед формой незачем
   if (access.email || access.telegram) { done(); return; }
 
-  if (access.tgBotId && window.VitaTG) {
+  if (access.tgBot && window.VitaTG) {
     tgReady = VitaTG.mount($('tgBox'), access, done) !== false;
   }
   paint();
