@@ -1539,7 +1539,7 @@ $('profSave').addEventListener('click', async () => {
 
 $('profMail').addEventListener('click', () => {
   profModal.hidden = true;
-  openAuth('login');
+  toLogin();
 });
 
 $('profLogout').addEventListener('click', () => {
@@ -1548,168 +1548,12 @@ $('profLogout').addEventListener('click', () => {
   location.reload();
 });
 
-// --- окно входа ---
-// Без аккаунта обои живут в одном localStorage и исчезают вместе с ним: сменил
-// браузер — и покупка потеряна. Почта с паролем и телеграм ведут в один и тот
-// же профиль, человек выбирает, что ему привычнее.
-const authModal = $('authModal');
-const AUTH_SEEN = 'vitaAuthSeen';
-let authMode = 'login';
-
-// Забытый пароль идёт тремя шагами: почта → код из четырёх цифр → новый пароль.
-// Каждый шаг показывает ровно одно поле, чтобы не гадать, что заполнять.
-function paintAuth() {
-  const reg = authMode === 'register';
-  const forgot = authMode === 'forgot';
-  const reset = authMode === 'reset';
-  const entry = !forgot && !reset;
-  $('authTabs').querySelectorAll('button')
-    .forEach(b => b.classList.toggle('on', b.dataset.v === authMode));
-  $('authTabs').hidden = !entry;
-  $('authLead').hidden = !entry;
-  $('tgBoxAuth').hidden = !entry;
-  $('authOr').hidden = !entry;
-  $('authBody').hidden = !entry;
-  $('authForgotBody').hidden = !forgot;
-  $('authResetBody').hidden = !reset;
-  $('authPass2Row').hidden = !reg;
-  $('authForgot').hidden = !(authMode === 'login');
-  $('authBack').hidden = entry;
-  $('authGo').textContent = forgot ? 'Отправить код'
-    : (reset ? 'Сменить пароль' : (reg ? 'Создать аккаунт' : 'Войти'));
-  $('authSub').textContent = forgot
-    ? 'Пришлём код письмом на эту почту.'
-    : (reset
-      ? 'Впиши код и придумай новый пароль.'
-      : (reg
-        ? 'Чтобы обои и покупка остались твоими, а не этого браузера.'
-        : 'С возвращением — обои и покупка на месте.'));
-  $('authPass').autocomplete = reg ? 'new-password' : 'current-password';
-  $('authErr').hidden = true;
-}
-
-// Четыре клетки ведут себя как одно поле: цифра перебрасывает вперёд, стирание
-// возвращает назад, вставленный целиком код раскладывается сам.
-const codeCells = [...$('codeRow').querySelectorAll('.code-cell')];
-function codeValue() { return codeCells.map(c => c.value).join(''); }
-function codeClear() { codeCells.forEach(c => { c.value = ''; }); }
-codeCells.forEach((cell, i) => {
-  cell.addEventListener('input', () => {
-    cell.value = cell.value.replace(/\D/g, '').slice(-1);
-    if (cell.value && i < codeCells.length - 1) codeCells[i + 1].focus();
-  });
-  cell.addEventListener('keydown', e => {
-    if (e.key === 'Backspace' && !cell.value && i > 0) codeCells[i - 1].focus();
-  });
-  cell.addEventListener('paste', e => {
-    const digits = (e.clipboardData?.getData('text') || '').replace(/\D/g, '');
-    if (!digits) return;
-    e.preventDefault();
-    codeCells.forEach((c, n) => { c.value = digits[n] || ''; });
-    codeCells[Math.min(digits.length, codeCells.length) - 1].focus();
-  });
-});
-
-function authFail(message) {
-  const err = $('authErr');
-  err.textContent = message;
-  err.hidden = false;
-}
-
-async function openAuth(mode = 'login') {
-  authMode = mode;
-  paintAuth();
-  $('authNote').hidden = true;
-  authModal.hidden = false;
-  try {
-    const access = await VitaID.access();
-    if (!access.telegram && access.tgBotId) VitaTG.mount($('tgBoxAuth'), access);
-    else $('tgBoxAuth').hidden = true;
-  } catch { $('tgBoxAuth').hidden = true; }
-}
-
-function closeAuth() {
-  if (document.documentElement.classList.contains('gate')) return;
-  authModal.hidden = true;
-  localStorage.setItem(AUTH_SEEN, '1');
-}
-
-$('authClose').addEventListener('click', closeAuth);
-authModal.addEventListener('click', e => {
-  // мимо запертой двери не пройти: фон закрывает окно только тем, кто уже вошёл
-  if (e.target === authModal && !document.documentElement.classList.contains('gate')) closeAuth();
-});
-
-$('authTabs').addEventListener('click', e => {
-  const btn = e.target.closest('button');
-  if (!btn) return;
-  $('authTabs').querySelectorAll('button').forEach(b => b.classList.toggle('on', b === btn));
-  authMode = btn.dataset.v;
-  paintAuth();
-});
-
-$('authGo').addEventListener('click', async () => {
-  const btn = $('authGo');
-  $('authErr').hidden = true;
-  const email = $('authEmail').value.trim();
-  btn.disabled = true;
-  btn.textContent = 'Минутку…';
-  try {
-    if (authMode === 'register') {
-      if ($('authPass').value !== $('authPass2').value) throw new Error('Пароли не совпали');
-      await VitaID.register(email, $('authPass').value);
-    } else if (authMode === 'login') {
-      await VitaID.login(email, $('authPass').value);
-    } else if (authMode === 'forgot') {
-      const box = $('authForgotEmail');
-      if (!box.value.trim()) throw new Error('Впиши почту, на которую регистрировался');
-      const data = await VitaID.forgot(box.value.trim());
-      $('authNote').textContent = data.hint;
-      $('authNote').hidden = false;
-      if (!data.sent) { paintAuth(); $('authNote').hidden = false; btn.disabled = false; return; }
-      authMode = 'reset';
-      codeClear();
-      paintAuth();
-      $('authNote').hidden = false;
-      codeCells[0].focus();
-      btn.disabled = false;
-      return;
-    } else {
-      if (codeValue().length < codeCells.length) throw new Error('Впиши все четыре цифры');
-      await VitaID.resetPass($('authForgotEmail').value.trim(), codeValue(), $('authNewPass').value);
-    }
-    localStorage.setItem(AUTH_SEEN, '1');
-    localStorage.setItem('vitaSignedIn', '1');
-    location.reload();   // страница перечитает профиль, обои и доступ под новым ключом
-    return;
-  } catch (error) {
-    paintAuth();
-    authFail(error.message || 'Не получилось');
-  }
-  btn.disabled = false;
-});
-
-$('authForgot').addEventListener('click', () => {
-  $('authForgotEmail').value = $('authEmail').value.trim();
-  authMode = 'forgot';
-  paintAuth();
-  $('authNote').hidden = true;
-  $('authForgotEmail').focus();
-});
-
-$('authBack').addEventListener('click', () => {
-  authMode = 'login';
-  paintAuth();
-  $('authNote').hidden = true;
-});
-
-// Главная открывается только своим: пока человек не завёл аккаунт или не вошёл,
-// под окном ничего нет. Решение о двери принято владельцем осознанно.
-function unlock() {
-  document.documentElement.classList.remove('gate');
-  localStorage.setItem('vitaSignedIn', '1');
-  authModal.hidden = true;
-  $('authClose').hidden = true;
+// --- дверь ---
+// Вход и регистрация живут отдельной страницей /login. Здесь остаётся только
+// сторож: не свой — отправляем к двери и запоминаем, куда он шёл.
+function toLogin() {
+  const back = location.pathname + location.search;
+  location.replace('/login?next=' + encodeURIComponent(back));
 }
 
 async function guard() {
@@ -1719,13 +1563,17 @@ async function guard() {
     signed = !!(access.email || access.telegram);
   } catch {
     // сервер молчит — держать человека перед запертой дверью нечестно
-    unlock();
+    document.documentElement.classList.remove('gate');
     return;
   }
-  if (signed) { unlock(); return; }
-  document.documentElement.classList.add('gate');
+  if (signed) {
+    document.documentElement.classList.remove('gate');
+    localStorage.setItem('vitaSignedIn', '1');
+    return;
+  }
   localStorage.removeItem('vitaSignedIn');
-  openAuth('register');
+  document.documentElement.classList.add('gate');
+  toLogin();
 }
 guard();
 

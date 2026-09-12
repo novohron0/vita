@@ -2212,3 +2212,154 @@ header { transition: box-shadow .45s ease; }
 }
 .crop-actions { display: flex; gap: 10px; width: 100%; }
 .crop-actions button { flex: 1; margin: 0; border-radius: 999px; padding: 12px 18px; font-size: 15px; }
+
+/* ==================== дверь: /login ====================
+   Отдельная страница вместо окна поверх обоев. Фон — ровная чернота, как на
+   логотипе: ничего, кроме имени, капсулы и двух полей. Светлую тему человек
+   включает сам, по умолчанию дверь всегда тёмная. */
+body.login-page {
+  background: var(--body-base);
+  padding: 0;
+  justify-content: space-between;
+  min-height: 100svh;
+}
+@supports not (min-height: 100svh) {
+  body.login-page { min-height: 100vh; }
+}
+
+.login-theme {
+  position: fixed;
+  top: max(14px, env(safe-area-inset-top));
+  right: max(14px, env(safe-area-inset-right));
+  z-index: 3;
+}
+
+.login {
+  width: min(360px, 100%);
+  margin: auto;
+  padding: 72px 20px 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 18px;
+}
+
+.login-logo {
+  align-self: center;
+  display: block;
+  margin-bottom: 6px;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.login-logo img {
+  display: block;
+  height: 52px;
+  width: auto;
+  max-width: 100%;
+}
+.login-logo-word {
+  display: block;
+  color: var(--text);
+  font-size: 34px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.login-seg { margin: 0; }
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.login-step {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* пароль спрашиваем один раз, поэтому рядом живёт глаз */
+.pass-wrap { position: relative; display: block; }
+.pass-wrap input { width: 100%; padding-right: 48px; }
+.pass-eye {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.pass-eye svg {
+  width: 21px;
+  height: 21px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+}
+.pass-eye .eye-slash { opacity: 1; transition: opacity .18s ease; }
+.pass-eye.on { color: var(--text); }
+.pass-eye.on .eye-slash { opacity: 0; }
+
+.login-go { width: 100%; margin: 4px 0 0; }
+
+.login-err, .login-note {
+  margin: 0;
+  text-align: center;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.login-note { color: var(--text-2); }
+
+.login-tg { display: flex; flex-direction: column; gap: 8px; }
+.login-tg .tg-status:empty { display: none; }
+
+.login-link {
+  align-self: center;
+  border: 0;
+  background: none;
+  padding: 10px 8px;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.login-link:active { color: var(--text); }
+
+.login-foot {
+  width: min(420px, 100%);
+  margin: 0 auto;
+  padding: 0 20px max(20px, env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+}
+.login-legal {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+  max-width: 34ch;
+}
+.login-legal a { color: var(--text-2); text-decoration: none; border-bottom: 1px solid var(--glass-border); }
+.login-help {
+  color: var(--text-2);
+  font-size: 14px;
+  text-decoration: none;
+  padding: 6px 10px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .login-legal a:hover, .login-help:hover, .login-link:hover { color: var(--text); }
+  .pass-eye:hover { color: var(--text); }
+}

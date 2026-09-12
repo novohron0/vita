@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" type="image/png" href="/static/img/favicon.png">
+<link rel="apple-touch-icon" href="/static/img/apple-touch.png">
+<title>Вход в Vita</title>
+<meta name="description" content="Вход и регистрация в Vita — живые обои-календарь для айфона.">
+<meta name="robots" content="noindex, follow">
+<script>
+  /* Дверь всегда встречает тёмной: светлую включаем, только если человек
+     сам её выбрал раньше. Системную тему тут намеренно не слушаем. */
+  (function () {
+    try {
+      if (localStorage.getItem('vita-theme') === 'light') {
+        document.documentElement.dataset.theme = 'light';
+      }
+    } catch (e) {}
+    var meta = document.createElement('meta');
+    meta.name = 'theme-color';
+    meta.content = document.documentElement.dataset.theme === 'light' ? '#f1ece3' : '#000000';
+    document.head.appendChild(meta);
+  })();
+</script>
+<link rel="stylesheet" href="/static/style.css?v=67">
+</head>
+<body class="login-page">
+
+<button class="theme-toggle login-theme" id="themeBtn" type="button" aria-label="Светлая тема">
+  <span class="theme-track" aria-hidden="true">
+    <span class="theme-ico theme-sun"></span>
+    <span class="theme-ico theme-moon"></span>
+    <span class="theme-knob"></span>
+  </span>
+</button>
+
+<main class="login">
+  <a class="login-logo" href="/" aria-label="Vita, на главную">
+    <img src="/static/img/logo-vita.png" alt="Vita" id="logoImg"
+      onerror="this.hidden=true;document.getElementById('logoWord').hidden=false">
+    <span class="login-logo-word" id="logoWord" hidden>vita</span>
+  </a>
+
+  <div class="seg wide login-seg" id="authTabs">
+    <button data-v="login" class="on" type="button">Вход</button>
+    <button data-v="register" type="button">Регистрация</button>
+  </div>
+
+  <form class="login-form" id="authForm" novalidate>
+    <div class="login-step" id="stepEntry">
+      <label class="field">Почта
+        <input id="authEmail" type="email" inputmode="email" autocomplete="email"
+          spellcheck="false" placeholder="you@mail.ru">
+      </label>
+      <label class="field">Пароль
+        <span class="pass-wrap">
+          <input id="authPass" type="password" autocomplete="current-password"
+            placeholder="От шести знаков">
+          <button class="pass-eye" id="passEye" type="button" aria-label="Показать пароль">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M2.5 12S6 5.8 12 5.8 21.5 12 21.5 12 18 18.2 12 18.2 2.5 12 2.5 12Z"/>
+              <circle cx="12" cy="12" r="3.1"/>
+              <path d="M4 20 20 4" class="eye-slash"/>
+            </svg>
+          </button>
+        </span>
+      </label>
+    </div>
+
+    <div class="login-step" id="stepForgot" hidden>
+      <label class="field">Почта, на которую регистрировался
+        <input id="authForgotEmail" type="email" inputmode="email" autocomplete="email"
+          spellcheck="false" placeholder="you@mail.ru">
+      </label>
+    </div>
+
+    <div class="login-step" id="stepReset" hidden>
+      <div class="field">Код из письма
+        <div class="code-row" id="codeRow">
+          <input class="code-cell" inputmode="numeric" maxlength="1" autocomplete="one-time-code" aria-label="Первая цифра кода">
+          <input class="code-cell" inputmode="numeric" maxlength="1" aria-label="Вторая цифра кода">
+          <input class="code-cell" inputmode="numeric" maxlength="1" aria-label="Третья цифра кода">
+          <input class="code-cell" inputmode="numeric" maxlength="1" aria-label="Четвёртая цифра кода">
+        </div>
+      </div>
+      <label class="field">Новый пароль
+        <input id="authNewPass" type="password" autocomplete="new-password"
+          placeholder="От шести знаков">
+      </label>
+    </div>
+
+    <p class="err login-err" id="authErr" hidden role="alert"></p>
+    <p class="login-note" id="authNote" hidden role="status" aria-live="polite"></p>
+
+    <button class="primary login-go" id="authGo" type="submit">Войти</button>
+  </form>
+
+  <div class="login-tg" id="tgBox" hidden>
+    <div class="tg-widget"></div>
+    <p class="tg-status"></p>
+  </div>
+
+  <button class="login-link" id="authForgotLink" type="button">Забыли пароль?</button>
+  <button class="login-link" id="authBack" type="button" hidden>Вернуться ко входу</button>
+</main>
+
+<footer class="login-foot">
+  <p class="login-legal">Нажимая «<span id="legalAction">Войти</span>», вы принимаете
+    <a href="/offer">оферту</a> и <a href="/privacy">политику конфиденциальности</a></p>
+  <a class="login-help" href="mailto:{{SUPPORT}}">Помощь</a>
+</footer>
+
+<script src="/static/vita-id.js?v=5"></script>
+<script src="/static/tg-login.js?v=2"></script>
+<script src="/static/login.js?v=1"></script>
+</body>
+</html>

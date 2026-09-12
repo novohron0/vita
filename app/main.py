@@ -1855,6 +1855,13 @@ def privacy_page():
     return _page("privacy.html")
 
 
+@app.get("/login")
+def login_page():
+    # Вход и регистрация живут отдельной страницей, а не окном поверх обоев:
+    # человек должен видеть, куда он вошёл, и мочь дать ссылку на эту дверь.
+    return _page("login.html")
+
+
 @app.get("/me")
 def cabinet_page():
     return FileResponse(ROOT / "static" / "me.html", headers={"Cache-Control": "no-cache"})
