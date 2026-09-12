@@ -510,6 +510,50 @@ function effectiveBgHex() {
   return BGS[state.bg] || '#000000';
 }
 
+// Заголовок бывает длинным — хоть целой цитатой. Он переносится по словам и
+// растёт вверх: последняя строка стоит на своём месте над точками, а
+// написанное раньше уезжает к верхнему краю. Если строк набралось слишком
+// много, шрифт сам мельчает, пока текст не влезет в свободное поле.
+const TITLE_W = W * 0.84;
+const TITLE_TOP = H * 0.085;   // ниже «таблетки» айфона
+
+function wrapTitle(text, maxW) {
+  const out = [];
+  for (const part of String(text).split('\n')) {
+    let cur = '';
+    for (const word of part.split(/\s+/).filter(Boolean)) {
+      const probe = cur ? cur + ' ' + word : word;
+      if (ctx.measureText(probe).width <= maxW) { cur = probe; continue; }
+      if (cur) { out.push(cur); cur = ''; }
+      if (ctx.measureText(word).width <= maxW) { cur = word; continue; }
+      // одно слово шире строки (склеенный текст) — режем по буквам
+      let chunk = '';
+      for (const ch of word) {
+        if (!chunk || ctx.measureText(chunk + ch).width <= maxW) chunk += ch;
+        else { out.push(chunk); chunk = ch; }
+      }
+      cur = chunk;
+    }
+    if (cur) out.push(cur);
+  }
+  return out;
+}
+
+function drawTitle(text, baseY) {
+  let px = 64, lines = [], lineH = 0;
+  for (;;) {
+    ctx.font = titleFont(px);
+    lines = wrapTitle(text, TITLE_W);
+    lineH = Math.round(px * 1.2);
+    const top = baseY - (lines.length - 1) * lineH - lineH * 0.7;
+    if (top >= TITLE_TOP || px <= 30) break;
+    px -= 3;
+  }
+  lines.forEach((line, i) => {
+    ctx.fillText(line, W / 2, baseY - (lines.length - 1 - i) * lineH);
+  });
+}
+
 function drawWatermark(cx, cy, fill) {
   const r = 5, dx = 17, dy = 15;
   ctx.font = wallFont(32, 400);
@@ -584,8 +628,7 @@ function draw(reveal = 1, pulse = 0, fx = null) {
   ctx.textBaseline = 'middle';
   if (state.title.trim()) {
     ctx.fillStyle = state.color;
-    ctx.font = titleFont();
-    ctx.fillText(state.title.trim(), W / 2, y0 - 190);
+    drawTitle(state.title.trim(), y0 - 190);
   }
   if (state.brand) drawWatermark(W / 2, y0 - 110, text);
   if (state.footer) {

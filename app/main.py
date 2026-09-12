@@ -1011,6 +1011,7 @@ def create_link(cfg: LinkIn, request: Request):
             raise HTTPException(422, "Фото не найдено — выбери снова")
     code = "".join(secrets.choice(CODE_ALPHABET) for _ in range(6))
     trial_until = (date.today() + timedelta(days=TRIAL_DAYS)).isoformat()
+    cfg.title = cfg.title[:200]  # поле в браузере можно обойти, длину режем тут
     config = json.dumps(cfg.model_dump(exclude={"idea", "contact", "ownerToken"}), ensure_ascii=False)
     with db() as conn:
         owner_code = _profile_for_token(conn, cfg.ownerToken, create=bool(cfg.ownerToken.strip()))

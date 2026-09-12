@@ -206,6 +206,72 @@ def draw_text(img: Image.Image, draw: ImageDraw.ImageDraw, xy, text: str,
         x += width
 
 
+def text_width(draw: ImageDraw.ImageDraw, text: str, font) -> float:
+    """Ширина строки с учётом эмодзи — их рисуют картинками, а не шрифтом."""
+    size = getattr(font, "size", 40)
+    eh = round(size * 1.08)
+    total = 0.0
+    for is_emoji, part in _split_emoji(text):
+        if is_emoji:
+            im = _emoji_image(part, eh)
+            total += im.width if im is not None else 0
+        else:
+            total += draw.textlength(part, font=font)
+    return total
+
+
+# Заголовок бывает длинным — хоть целой цитатой. Он переносится по словам и
+# растёт вверх: последняя строка стоит на своём месте над точками, а написанное
+# раньше уезжает к верхнему краю. Логика дословно та же, что в static/app.js
+# (wrapTitle/drawTitle) — иначе превью разойдётся с обоями.
+TITLE_W = W * 0.84
+TITLE_TOP = H * 0.085
+
+
+def _wrap_title(draw: ImageDraw.ImageDraw, text: str, font, max_w: float) -> list[str]:
+    out: list[str] = []
+    for part in str(text).split("\n"):
+        cur = ""
+        for word in part.split():
+            probe = f"{cur} {word}" if cur else word
+            if text_width(draw, probe, font) <= max_w:
+                cur = probe
+                continue
+            if cur:
+                out.append(cur)
+                cur = ""
+            if text_width(draw, word, font) <= max_w:
+                cur = word
+                continue
+            chunk = ""
+            for ch in word:
+                if not chunk or text_width(draw, chunk + ch, font) <= max_w:
+                    chunk += ch
+                else:
+                    out.append(chunk)
+                    chunk = ch
+            cur = chunk
+        if cur:
+            out.append(cur)
+    return out
+
+
+def _draw_title(img: Image.Image, draw: ImageDraw.ImageDraw, text: str,
+                base_y: float, font_key: str, fill) -> None:
+    px = 64
+    while True:
+        font = _title_font(px, font_key)
+        lines = _wrap_title(draw, text, font, TITLE_W)
+        line_h = round(px * 1.2)
+        top = base_y - (len(lines) - 1) * line_h - line_h * 0.7
+        if top >= TITLE_TOP or px <= 30:
+            break
+        px -= 3
+    for i, line in enumerate(lines):
+        y = base_y - (len(lines) - 1 - i) * line_h
+        draw_text(img, draw, (W / 2, y), line, font, fill)
+
+
 def _rgb(hx: str) -> tuple[int, int, int]:
     return tuple(int(hx[i:i + 2], 16) for i in (1, 3, 5))
 
@@ -641,8 +707,7 @@ def render_goal(goal: dict, done: set[str], today: date | None = None) -> Image.
             _dot(img, box, color, shape, "empty", False, bg)
 
     if title:
-        draw_text(img, draw, (W / 2, y0 - 190), title,
-                  _title_font(64, goal.get("font", "")), color)
+        _draw_title(img, draw, title, y0 - 190, goal.get("font", ""), color)
     _watermark(draw, W / 2, y0 - 110, text, goal.get("font", ""))
     footer = f"{done_count} из {days} · стрик {streak}"
     if done_count >= days:
@@ -695,8 +760,7 @@ def render_wallpaper(cfg: dict, today: date | None = None, expired: bool = False
             _dot(img, box, color, shape, "empty", glass, bg)
 
     if title:
-        draw_text(img, draw, (W / 2, y0 - 190), title,
-                  _title_font(64, cfg.get("font", "")), color)
+        _draw_title(img, draw, title, y0 - 190, cfg.get("font", ""), color)
     font_key = cfg.get("font", "")
     if cfg.get("brand", True):
         _watermark(draw, W / 2, y0 - 110, text, font_key)
