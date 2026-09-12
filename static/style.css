@@ -727,7 +727,13 @@ main { width: 100%; max-width: 430px; display: flex; flex-direction: column; gap
 }
 .hero-act .primary { width: auto; min-width: 220px; margin: 0; padding: 15px 30px; font-size: 16px; }
 .hero-note { color: var(--text-muted); font-size: 13px; line-height: 1.5; text-align: center; max-width: 320px; }
-.hero-note a { color: var(--text-2); }
+/* «безлимит — 590 ₽» это ссылка на оплату, и она должна выглядеть нажимаемой */
+.hero-note a {
+  color: var(--text);
+  text-decoration: underline;
+  text-decoration-color: var(--glass-edge);
+  text-underline-offset: 3px;
+}
 .hero-tune {
   color: var(--text-nav);
   font-size: 13px;
@@ -2416,16 +2422,6 @@ body.login-page::before { display: none; }
   .pass-eye:hover { color: var(--text); }
 }
 
-/* Настройки ждут нажатия: сверху человек видит экранчик и одну кнопку, а
-   конструктор раскрывается плавно и сам подъезжает под палец. Отступ сверху —
-   чтобы прокрутка не загнала первую строку под шапку-островок. */
-.folded { display: none; }
-.stats, .controls { scroll-margin-top: 92px; }
-.unfolding { animation: tune-in .52s cubic-bezier(.22, 1, .36, 1) both; }
-@keyframes tune-in {
-  from { opacity: 0; transform: translateY(16px); }
-  to { opacity: 1; transform: none; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .unfolding { animation: none; }
-}
+/* Кнопка сверху подвозит человека к настройкам: отступ — чтобы первая строка
+   не уехала под шапку-островок. */
+.stats, .controls { scroll-margin-top: 78px; }

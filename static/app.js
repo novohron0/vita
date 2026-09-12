@@ -1036,28 +1036,12 @@ async function makeWallpaper(btn, err) {
 }
 
 $('getBtn').addEventListener('click', () => makeWallpaper($('getBtn'), $('getErr')));
-// Кнопка сверху больше не делает обои сразу: она раскрывает конструктор и
-// подвозит его под палец. Обои человек делает ниже, уже выбрав вид.
-function unfoldTune(scroll = true) {
-  const parts = [$('stats'), $('tune')].filter(Boolean);
-  const wasFolded = parts.some(el => el.classList.contains('folded'));
-  parts.forEach(el => {
-    if (!el.classList.contains('folded')) return;
-    el.classList.remove('folded');
-    el.classList.add('unfolding');
-    el.addEventListener('animationend', () => el.classList.remove('unfolding'), { once: true });
-  });
-  if (scroll) {
-    const target = $('stats') || $('tune');
-    requestAnimationFrame(() => target.scrollIntoView({ behavior: 'smooth', block: 'start' }));
-  }
-  return wasFolded;
-}
-
-if ($('heroBtn')) $('heroBtn').addEventListener('click', () => unfoldTune());
-
-// пришёл по ссылке с якорем — конструктор уже нужен раскрытым
-if (location.hash === '#tune') unfoldTune(false);
+// Кнопка сверху не делает обои и ничего не прячет: она плавно подвозит
+// человека к настройкам — там он выбирает вид и уже сам мотает дальше.
+if ($('heroBtn')) $('heroBtn').addEventListener('click', () => {
+  const target = $('tune');
+  if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
 
 // ——— рилс-сценарий: сон на rAF (не троттлится в видимой вкладке, тайминг стабильный для съёмки)
 const rafSleep = ms => new Promise(r => {

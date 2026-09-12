@@ -20,7 +20,7 @@
   try { if (!localStorage.getItem('vitaSignedIn')) document.documentElement.classList.add('gate'); } catch (e) {}
 </script>
 <script src="/static/theme.js?v=6"></script>
-<link rel="stylesheet" href="/static/style.css?v=84">
+<link rel="stylesheet" href="/static/style.css?v=86">
 <style>
   .home-hero { animation: fadeUp .7s cubic-bezier(.22,1,.36,1) both; }
   .phone { animation: phoneReveal .85s cubic-bezier(.22,1,.36,1) both, phoneFloat 7s ease-in-out 1.1s infinite; }
@@ -94,8 +94,8 @@
 
 <main>
   <div class="home-hero">
-    <h1>Живые обои, календарь твоей&nbsp;жизни</h1>
-    <p>Каждый день закрашивается сам.</p>
+    <h1>Твоя жизнь — в&nbsp;точках</h1>
+    <p>Живые обои-календарь твоей&nbsp;жизни.</p>
   </div>
   <div class="seg wide" id="mode">
     <button data-v="month" class="on">Месяц</button>
@@ -107,18 +107,19 @@
   <div class="phone"><canvas id="cv" width="1179" height="2556"></canvas></div>
 
   <div class="hero-act">
-    <button class="primary" id="heroBtn" type="button">Поставить обои</button>
+    <button class="primary" id="heroBtn" type="button">Поставить себе обои</button>
     <p class="err" id="heroErr" hidden></p>
+    <p class="hero-note">7 дней бесплатно, <a href="/buy">безлимит — {{PRICE}} ₽</a></p>
   </div>
 
 
 
-  <div class="stats folded" id="stats">
+  <div class="stats" id="stats">
     <div><b id="stat1">0</b><span id="stat1l">дней позади</span></div>
     <div><b id="stat2">0</b><span id="stat2l">впереди</span></div>
   </div>
 
-  <section class="controls folded" id="tune">
+  <section class="controls" id="tune">
     <label class="field" id="birthRow" hidden>Дата рождения
       <input type="date" id="birth" value="2000-01-01">
     </label>
@@ -283,6 +284,6 @@
 
 <script src="/static/vita-id.js?v=5"></script>
 <script src="/static/tg-login.js?v=3"></script>
-<script src="/static/app.js?v=46"></script>
+<script src="/static/app.js?v=47"></script>
 </body>
 </html>
