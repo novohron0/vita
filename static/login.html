@@ -24,7 +24,7 @@
     document.head.appendChild(meta);
   })();
 </script>
-<link rel="stylesheet" href="/static/style.css?v=77">
+<link rel="stylesheet" href="/static/style.css?v=81">
 </head>
 <body class="login-page">
 
@@ -38,17 +38,10 @@
 
 <main class="login">
   <a class="login-logo" href="/" aria-label="Vita, на главную">
-    <picture class="art-dark">
-      <source srcset="/static/img/logo-vita.webp" type="image/webp">
-      <img src="/static/img/logo-vita.jpg" alt="Vita" width="1068" height="499"
-        onerror="this.closest('.login-logo').classList.add('no-art')">
-    </picture>
-    <picture class="art-light">
-      <source srcset="/static/img/logo-vita-light.webp" type="image/webp">
-      <img src="/static/img/logo-vita-light.jpg" alt="" width="1040" height="492"
-        loading="lazy" decoding="async">
-    </picture>
-    <span class="logo-shine" aria-hidden="true"></span>
+    <img class="art-dark" src="/static/img/logo-vita.png" alt="Vita" width="520" height="363"
+      onerror="this.closest('.login-logo').classList.add('no-art')">
+    <img class="art-light" src="/static/img/logo-vita-light.png" alt="" width="520" height="302"
+      loading="lazy" decoding="async">
     <span class="login-logo-word">vita</span>
   </a>
 
