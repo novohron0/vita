@@ -132,10 +132,24 @@ with tempfile.TemporaryDirectory(prefix="vita-tgbot-") as data_dir:
     back = json.loads(check(grab, "other-device-" + "2" * 24).body)
     assert back["profile"]["code"] == profile_code and back["linked"] is False
 
-    # 10. Просто /start без пары — подсказка, куда идти.
-    plain = hook({"update_id": 2, "message": {
-        "chat": {"id": 42, "type": "private"}, "from": {"id": 42}, "text": "/start"}}, secret)
-    assert "vitadots.ru" in plain["text"]
+    # 10. Просто /start без пары — меню: кнопка на сайт, «Продукты» и «О нас».
+    def private(text=None, chat_id=42):
+        msg = {"message_id": 7, "chat": {"id": chat_id, "type": "private"}, "from": {"id": chat_id}}
+        return {"update_id": 2, "message": {**msg, "text": text} if text else msg}
+
+    menu = hook(private("/start"), secret)
+    assert menu["method"] == "sendMessage" and menu["parse_mode"] == "HTML"
+    buttons = [b for row in menu["reply_markup"]["inline_keyboard"] for b in row]
+    assert buttons[0]["url"] == "https://vitadots.ru"
+    assert [b.get("callback_data") for b in buttons[1:]] == ["products", "about"]
+    # команды из меню и ссылка ?start=about ведут в разделы, любой текст — в меню
+    screen_text = lambda name: main._tg_screen(name)["text"]
+    assert hook(private("/products"), secret)["text"] == screen_text("products")
+    assert hook(private("/about@vitadots_bot"), secret)["text"] == screen_text("about")
+    assert hook(private("/start about"), secret)["text"] == screen_text("about")
+    assert hook(private("привет"), secret)["text"] == menu["text"]
+    # фото и стикеры — молча, чтобы на альбом не сыпались одинаковые ответы
+    assert hook(private(), secret) == {"ok": True}
 
     # 11. Бота добавили в чат Vita — чат запомнен, выгнали — забыт.
     added = {"update_id": 3, "my_chat_member": {
@@ -170,5 +184,45 @@ with tempfile.TemporaryDirectory(prefix="vita-tgbot-") as data_dir:
     assert main._review_note(1, "@a", "т") == "1 звезда · @a пишет: т"
     assert main._review_note(0, "@a", "т") == "без оценки · @a пишет: т"
     assert main._review_note(11, "@a", "т").startswith("11 звёзд")
+
+    # 13. Кнопки разделов перерисовывают то же сообщение и гасят часики на кнопке.
+    calls = []
+    main._tg_api = lambda method, payload, timeout=8: calls.append((method, payload)) or {"ok": True}
+
+    def press(data, kind="private"):
+        return hook({"update_id": 5, "callback_query": {
+            "id": "cb1", "data": data, "from": {"id": 42},
+            "message": {"message_id": 7, "chat": {"id": 42, "type": kind}}}}, secret)
+
+    edit = press("products")
+    assert (edit["method"], edit["chat_id"], edit["message_id"]) == ("editMessageText", 42, 7)
+    assert edit["text"] == screen_text("products")
+    assert calls == [("answerCallbackQuery", {"callback_query_id": "cb1"})], calls
+    assert press("menu")["reply_markup"] == menu["reply_markup"]
+    assert press("drop") == {"ok": True} and press("about", "supergroup") == {"ok": True}
+    # вебхук подписан на нажатия, иначе телеграм их не пришлёт
+    os.environ.pop("TG_WEBHOOK", None)
+    main._tg_hook_register()
+    assert "callback_query" in calls[-1][1]["allowed_updates"]
+
+    # 14. Разметка экранов — только теги телеграма и все закрыты, кнопки ведут куда надо.
+    from html.parser import HTMLParser
+
+    class Tags(HTMLParser):
+        def handle_starttag(self, tag, attrs):
+            assert tag in ("b", "i", "a", "blockquote"), tag
+            self.stack.append(tag)
+
+        def handle_endtag(self, tag):
+            assert self.stack.pop() == tag, tag
+
+    for name in main.TG_SCREENS:
+        screen = main._tg_screen(name)
+        tags = Tags()
+        tags.stack = []
+        tags.feed(screen["text"])
+        assert not tags.stack and len(screen["text"]) <= 4096, name
+        for button in (b for row in screen["reply_markup"]["inline_keyboard"] for b in row):
+            assert button.get("url", "").startswith("https://") or button["callback_data"] in main.TG_SCREENS
 
 print("Vita telegram bot: passed")

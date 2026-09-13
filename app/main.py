@@ -1323,6 +1323,8 @@ class TgCheckIn(BaseModel):
 
 
 TG_START_RE = re.compile(r"/start(?:@\w+)?(?:\s+([A-Za-z0-9_-]{8,64}))?\s*")
+TG_COMMAND_RE = re.compile(r"/(\w+)(?:@\w+)?(?:\s+(\w+))?\s*")
+TG_SCREENS = ("menu", "products", "about")
 TG_GONE = "Ссылка устарела — нажми кнопку ещё раз"
 
 
@@ -1395,7 +1397,82 @@ async def tg_hook(request: Request):
 
 
 def _tg_reply(chat_id, text: str) -> dict:
-    return {"method": "sendMessage", "chat_id": chat_id, "text": text}
+    return {"method": "sendMessage", "chat_id": chat_id, "text": text, "parse_mode": "HTML"}
+
+
+def _tg_screen(name: str) -> dict:
+    """Экран бота: меню, «Продукты» или «О нас» — текст и кнопки под ним.
+    Между экранами ходим правкой одного сообщения, чат не засоряется."""
+    site = PUBLIC_URL
+    price = esc(str(billing.PRICE))
+    make = {"text": "Сделать обои", "url": site}
+    back = {"text": "← Назад", "callback_data": "menu"}
+    if name == "products":
+        text = (
+            "<b>Продукты</b>\n\n"
+            "<b>Живые обои</b>\n"
+            "Ночью сервер закрашивает новую точку, а ярлык на айфоне сам ставит свежие обои.\n"
+            "<blockquote><b>Месяц</b> — дни этого месяца\n"
+            "<b>Год</b> — все дни года\n"
+            "<b>Жизнь</b> — 90 лет в неделях\n"
+            "<b>Цель</b> — дни до важной даты</blockquote>\n\n"
+            f"<b>prime · {price} ₽ навсегда</b>\n"
+            "Один платёж, без подписок. Точки не замирают после пробной недели, "
+            "логотип можно убрать, всё новое — без доплат."
+        )
+        rows = [[make], [{"text": f"prime — {price} ₽", "url": site + "/buy"}], [back]]
+    elif name == "about":
+        contact = f"Связь: {esc(SUPPORT_CONTACT)}\n" if SUPPORT_CONTACT else ""
+        text = (
+            "<b>О нас</b>\n\n"
+            "Vita делает время видимым. Не таймер и не напоминалка — просто точки "
+            "на экране, который ты видишь чаще всего.\n\n"
+            "Без подписок и автосписаний. Оплата картой или через СБП, платёж проводит "
+            "Робокасса — данные карты к нам не попадают.\n\n"
+            f"{contact}"
+            f'<a href="{esc(site)}/offer">Оферта</a> · '
+            f'<a href="{esc(site)}/privacy">Конфиденциальность</a>'
+        )
+        rows = [[{"text": site.split("//", 1)[-1], "url": site}], [back]]
+    else:
+        text = (
+            "<b>⠿ vita</b>\n\n"
+            "Живые обои-календарь для айфона. Каждую ночь на экране блокировки "
+            "закрашивается новая точка — время всегда перед глазами.\n\n"
+            "<i>Обои за 30 секунд · 7 дней бесплатно</i>"
+        )
+        rows = [[make], [{"text": "Продукты", "callback_data": "products"},
+                         {"text": "О нас", "callback_data": "about"}]]
+    return {
+        "text": text,
+        "parse_mode": "HTML",
+        "link_preview_options": {"is_disabled": True},
+        "reply_markup": {"inline_keyboard": rows},
+    }
+
+
+def _tg_screen_name(text: str) -> str | None:
+    """Команда из меню (/products) или ссылка t.me/vitadots_bot?start=about."""
+    m = TG_COMMAND_RE.fullmatch(text)
+    if not m:
+        return None
+    cmd, arg = m.group(1).lower(), (m.group(2) or "").lower()
+    name = arg if cmd == "start" else cmd
+    return name if name in TG_SCREENS else None
+
+
+def _tg_callback(callback: dict) -> dict | None:
+    """Нажатие «Продукты», «О нас» или «Назад» перерисовывает то же сообщение."""
+    if callback.get("id"):
+        # часики на кнопке гаснут, только когда на нажатие ответили
+        _in_background(_tg_api, "answerCallbackQuery", {"callback_query_id": str(callback["id"])})
+    msg = callback.get("message") or {}
+    chat = msg.get("chat") or {}
+    screen = str(callback.get("data") or "")
+    if screen not in TG_SCREENS or chat.get("type") != "private" or not msg.get("message_id"):
+        return None
+    return {"method": "editMessageText", "chat_id": chat["id"],
+            "message_id": msg["message_id"], **_tg_screen(screen)}
 
 
 def _tg_remember_chat(conn: sqlite3.Connection, chat: dict) -> None:
@@ -1420,6 +1497,9 @@ def _tg_update(update: dict) -> dict | None:
                 elif status in ("left", "kicked"):
                     conn.execute("DELETE FROM tg_chats WHERE chat_id = ?", (str(chat["id"]),))
         return None
+    callback = update.get("callback_query")
+    if isinstance(callback, dict):
+        return _tg_callback(callback)
     msg = update.get("message")
     if not isinstance(msg, dict):
         return None
@@ -1432,10 +1512,15 @@ def _tg_update(update: dict) -> dict | None:
             _tg_remember_chat(conn, chat)
         return None
     user = msg.get("from") or {}
-    match = TG_START_RE.fullmatch(str(msg.get("text") or "").strip())
-    if not match or not match.group(1) or user.get("id") is None:
-        return _tg_reply(chat["id"], "Это бот Vita — живые обои-календарь.\n"
-                         "Чтобы войти, открой vitadots.ru и нажми «Войти через Telegram».")
+    text = str(msg.get("text") or "").strip()
+    if not text:
+        # фото, стикеры, голосовые — молчим: иначе на альбом из десяти снимков
+        # пришло бы десять одинаковых ответов
+        return None
+    screen = _tg_screen_name(text)
+    match = TG_START_RE.fullmatch(text)
+    if screen or not match or not match.group(1) or user.get("id") is None:
+        return {"method": "sendMessage", "chat_id": chat["id"], **_tg_screen(screen or "menu")}
     start, tg_id = match.group(1), str(user["id"])
     username = str(user.get("username") or "")[:64]
     name = " ".join(str(user.get(k) or "") for k in ("first_name", "last_name")).strip()[:80]
@@ -1452,9 +1537,9 @@ def _tg_update(update: dict) -> dict | None:
             )
         ok = fresh and (not row[2] or row[1] == tg_id)
     if not ok:
-        return _tg_reply(chat["id"], "Эта ссылка для входа уже не действует.\n"
+        return _tg_reply(chat["id"], "<b>Эта ссылка для входа уже не действует</b>\n"
                          "Вернись на сайт и нажми «Войти через Telegram» ещё раз.")
-    return _tg_reply(chat["id"], "Готово, вход подтверждён.\n"
+    return _tg_reply(chat["id"], "<b>Готово, вход подтверждён</b>\n"
                      "Возвращайся в браузер — ты уже внутри Vita.")
 
 
@@ -1619,7 +1704,7 @@ def _tg_hook_register() -> None:
         res = _tg_api("setWebhook", {
             "url": PUBLIC_URL + "/tg/hook",
             "secret_token": _tg_hook_secret(),
-            "allowed_updates": ["message", "my_chat_member"],
+            "allowed_updates": ["message", "callback_query", "my_chat_member"],
         }, timeout=15)
         print("[tg] webhook:", "ok" if res.get("ok") else res.get("description"), flush=True)
 
