@@ -80,6 +80,18 @@ function showState(title, text, link) {
   $('stateBox').hidden = false;
 }
 
+// Робокасса ещё не включила магазин — сервер сам проверил их страницу оплаты.
+// Вместо чужой «ошибки 25» здесь честная строка, а форма ждёт своего часа.
+const PAY_OPEN = '{{PAY_OPEN}}' !== '0';
+function payWait(state) {
+  const why = 'Платёжный сервис ещё проверяет наш магазин. ';
+  showState('Оплата откроется на днях', state?.expired
+    ? why + 'Напиши нам {{SUPPORT}} — продлим бесплатные дни, пока оплата не откроется.'
+    : state?.until
+      ? why + 'Твои бесплатные дни идут как обычно — загляни сюда через пару дней.'
+      : why + 'А пока сделай обои: первая неделя бесплатно.', false);
+}
+
 (async () => {
   try {
     const state = await VitaID.access();
@@ -93,6 +105,7 @@ function showState(title, text, link) {
         'Кнопка появится здесь на днях. Напиши нам {{SUPPORT}} — откроем доступ вручную.', false);
       return;
     }
+    if (!PAY_OPEN) { payWait(state); return; }
     if (state.until && !state.expired) {
       const d = new Date(state.until);
       showState('Пробная неделя идёт',
@@ -106,6 +119,9 @@ function showState(title, text, link) {
       showState('Сначала — 7 дней бесплатно',
         'Карта не нужна: сделай обои, поставь на телефон и смотри неделю. Платить есть смысл, когда точки уже закрашиваются сами.', false);
     }
+    // зарегистрирован по почте — чек уйдёт на неё же, вписывать второй раз
+    // незачем; поле остаётся правимым, если чек нужен на другую
+    if (state.email && !$('email').value) $('email').value = state.email;
     form.hidden = false;
     // привязка телеграма — предложение рядом с оплатой, а не пропуск к ней
     if (state.tgBot && !state.telegram) {
@@ -113,7 +129,8 @@ function showState(title, text, link) {
       VitaTG.mount($('tgBox'), state);
     }
   } catch {
-    form.hidden = false;
+    if (PAY_OPEN) form.hidden = false;
+    else payWait(null);
   }
 })();
 

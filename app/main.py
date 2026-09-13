@@ -1936,6 +1936,43 @@ def access_state(owner: OwnerIn):
         return _profile_access_state(conn, profile_code)
 
 
+# Робокасса пускает к оплате только активированный магазин. Пока его проверяют,
+# их страница встречает покупателя «Код ошибки 25: оплата счетов недоступна» —
+# человек нажал «Оплатить» и упёрся в чужую ошибку. Поэтому сами открываем ту же
+# страницу оплаты (счёт №0, деньги это не трогает) и смотрим код в её данных.
+# Закрыт — переспрашиваем раз в пару минут; открылся — больше не спрашиваем,
+# и кнопка оживает сама, без команд на сервере.
+ROBOKASSA_CLOSED = 25
+PAY_WAIT_TTL = 120
+PAY_WAIT_TEXT = ("Оплата откроется на днях — платёжный сервис ещё проверяет наш магазин. "
+                 "Бесплатные дни от этого не сгорают.")
+_pay_probe = {"open": None, "at": 0.0}
+
+
+def _robokassa_open() -> bool:
+    if billing.IS_TEST or DEV_MODE or not billing.enabled() or _pay_probe["open"]:
+        return True
+    if _pay_probe["open"] is False and time.monotonic() - _pay_probe["at"] < PAY_WAIT_TTL:
+        return False
+    import urllib.request
+
+    try:
+        req = urllib.request.Request(
+            billing.payment_link(0, ""),
+            headers={"User-Agent": "Mozilla/5.0 (compatible; vitadots.ru)"},
+        )
+        with urllib.request.urlopen(req, timeout=4) as resp:
+            page = resp.read(200_000).decode("utf-8", "replace")
+    except Exception as exc:
+        # не дозвались — платить не мешаем, спросим снова при следующем счёте
+        print("[pay] robokassa check:", exc, flush=True)
+        return True
+    found = re.search(r'"error"\s*:\s*\{[^{}]*"code"\s*:\s*(\d+)', page)
+    is_open = not (found and int(found.group(1)) == ROBOKASSA_CLOSED)
+    _pay_probe.update(open=is_open, at=time.monotonic())
+    return is_open
+
+
 @app.post("/api/buy")
 def buy(order: BuyIn):
     """Создаёт счёт Робокассы на вечный доступ и отдаёт фронту поля формы."""
@@ -1944,6 +1981,8 @@ def buy(order: BuyIn):
     email = order.email.strip().lower()[:120]
     if not EMAIL_RE.fullmatch(email):
         raise HTTPException(422, "Проверь почту — на неё придёт чек и запасной ключ доступа")
+    if not _robokassa_open():
+        raise HTTPException(503, PAY_WAIT_TEXT)
     with db() as conn:
         profile_code = _profile_for_token(conn, order.ownerToken, create=True)
         state = _profile_access_state(conn, profile_code)
@@ -2036,7 +2075,8 @@ def _page(name: str, extra: dict | None = None) -> HTMLResponse:
 
 @app.get("/buy")
 def buy_page():
-    return _page("buy.html")
+    # страница заранее знает, открыта ли оплата, и не зовёт к форме впустую
+    return _page("buy.html", {"{{PAY_OPEN}}": "1" if _robokassa_open() else "0"})
 
 
 @app.get("/offer")
