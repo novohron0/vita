@@ -1484,6 +1484,88 @@ def _tg_remember_chat(conn: sqlite3.Connection, chat: dict) -> None:
     )
 
 
+# Образцы для тем обоев: владелец шлёт боту картинки (скрины с Пинтереста),
+# они ложатся в data/refs — наружу эта папка не отдаётся. Принимаем только от
+# админов чата Vita (TG_REVIEWS_CHAT), остальным бот на фото молчит, как раньше.
+REFS = DATA / "refs"
+TG_REF_OWNERS: dict[str, bool] = {}  # «админ ли чата Vita» — на время процесса
+TG_ALBUM_WAIT = 6  # снимки альбома приходят отдельными апдейтами — ждём остальные
+
+
+def _tg_ref_file(msg: dict) -> tuple[str, str] | None:
+    """Картинка из сообщения — (file_id, расширение): фото или файл-картинка."""
+    photos = msg.get("photo")
+    if isinstance(photos, list) and photos and isinstance(photos[-1], dict):
+        # размеры лежат по возрастанию — последний самый крупный
+        if photos[-1].get("file_id"):
+            return str(photos[-1]["file_id"]), "jpg"
+    doc = msg.get("document")
+    if isinstance(doc, dict) and doc.get("file_id"):
+        kind = str(doc.get("mime_type") or "")
+        if kind.startswith("image/"):
+            ext = {"image/png": "png", "image/webp": "webp", "image/heic": "heic"}.get(kind, "jpg")
+            return str(doc["file_id"]), ext
+    return None
+
+
+def _tg_ref_owner(user_id) -> bool:
+    key = str(user_id)
+    if key not in TG_REF_OWNERS:
+        if not TG_REVIEWS_CHAT:
+            return False
+        res = _tg_api("getChatMember", {"chat_id": TG_REVIEWS_CHAT, "user_id": user_id})
+        if not res.get("ok"):
+            return False  # сбой не запоминаем — спросим на следующей картинке
+        status = (res.get("result") or {}).get("status")
+        TG_REF_OWNERS[key] = status in ("creator", "administrator")
+    return TG_REF_OWNERS[key]
+
+
+def _tg_download(file_path: str, limit: int = 20 << 20) -> bytes | None:
+    """Файл с серверов телеграма по file_path из getFile. Сбой — None."""
+    import urllib.request
+
+    try:
+        url = f"https://api.telegram.org/file/bot{TG_BOT_TOKEN}/{file_path}"
+        with urllib.request.urlopen(url, timeout=30) as resp:
+            data = resp.read(limit + 1)
+    except Exception:
+        return None
+    return data if 0 < len(data) <= limit else None
+
+
+def _tg_keep_ref(msg: dict) -> None:
+    """Фоном: забрать картинку владельца в data/refs и коротко ответить.
+    На альбом отвечаем один раз: его снимки ловят два воркера, поэтому
+    отвечает тот, кто первым создал метку альбома (O_EXCL)."""
+    chat_id = (msg.get("chat") or {}).get("id")
+    user_id = (msg.get("from") or {}).get("id")
+    got = _tg_ref_file(msg)
+    if chat_id is None or user_id is None or not got or not _tg_ref_owner(user_id):
+        return
+    file_id, ext = got
+    info = _tg_api("getFile", {"file_id": file_id})
+    path = (info.get("result") or {}).get("file_path") if info.get("ok") else None
+    data = _tg_download(str(path)) if path else None
+    if not data:
+        _tg_send(str(chat_id), "Не смог забрать картинку, пришли её ещё раз")
+        return
+    REFS.mkdir(parents=True, exist_ok=True)
+    group = re.sub(r"\W", "", str(msg.get("media_group_id") or "")) or "solo"
+    name = f"{time.strftime('%Y%m%d-%H%M%S')}-{group}-{msg.get('message_id', 0)}.{ext}"
+    (REFS / name).write_bytes(data)
+    if group == "solo":
+        _tg_send(str(chat_id), "Принял фото для тем")
+        return
+    try:
+        os.close(os.open(REFS / f".album-{group}", os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+    except FileExistsError:
+        return
+    time.sleep(TG_ALBUM_WAIT)
+    count = sum(1 for p in REFS.iterdir() if f"-{group}-" in p.name)
+    _tg_send(str(chat_id), f"Принял {count} фото для тем")
+
+
 def _tg_update(update: dict) -> dict | None:
     """Разбирает апдейт. Возвращает ответ бота или None, если молчим."""
     member = update.get("my_chat_member")
@@ -1515,7 +1597,10 @@ def _tg_update(update: dict) -> dict | None:
     text = str(msg.get("text") or "").strip()
     if not text:
         # фото, стикеры, голосовые — молчим: иначе на альбом из десяти снимков
-        # пришло бы десять одинаковых ответов
+        # пришло бы десять одинаковых ответов. Картинки владельца — образцы
+        # для тем: их забираем фоном, ответ один на альбом.
+        if _tg_ref_file(msg):
+            _in_background(_tg_keep_ref, msg)
         return None
     screen = _tg_screen_name(text)
     match = TG_START_RE.fullmatch(text)

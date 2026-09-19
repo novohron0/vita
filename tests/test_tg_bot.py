@@ -225,4 +225,82 @@ with tempfile.TemporaryDirectory(prefix="vita-tgbot-") as data_dir:
         for button in (b for row in screen["reply_markup"]["inline_keyboard"] for b in row):
             assert button.get("url", "").startswith("https://") or button["callback_data"] in main.TG_SCREENS
 
+    # 15. Картинки владельца — образцы для тем: ложатся в data/refs, ответ один
+    #     на альбом. Чужие фото и стикеры бот по-прежнему молча пропускает.
+    calls.clear()
+    admins = {555: "creator", 556: "administrator", 777: "member"}
+
+    def fake_api(method, payload, timeout=8):
+        calls.append((method, payload))
+        if method == "getChatMember":
+            assert payload["chat_id"] == "-100500"
+            return {"ok": True, "result": {"status": admins.get(payload["user_id"], "left")}}
+        if method == "getFile":
+            return {"ok": True, "result": {"file_path": "photos/" + payload["file_id"] + ".jpg"}}
+        return {"ok": True}
+
+    main._tg_api = fake_api
+    main._tg_send = lambda chat, text: calls.append(("send", chat, text)) or True
+    main._tg_download = lambda path: b"\xff\xd8 fake " + path.encode()
+    main.TG_ALBUM_WAIT = 0
+
+    def picture(user_id, message_id, group=None, doc=None):
+        msg = {"message_id": message_id, "chat": {"id": user_id, "type": "private"},
+               "from": {"id": user_id}}
+        if doc:
+            msg["document"] = {"file_id": f"d{message_id}", "mime_type": doc}
+        else:
+            msg["photo"] = [{"file_id": f"small{message_id}"}, {"file_id": f"big{message_id}"}]
+        if group:
+            msg["media_group_id"] = group
+        return {"update_id": 6, "message": msg}
+
+    refs = Path(data_dir) / "refs"
+    sent_texts = lambda: [c[2] for c in calls if c[0] == "send"]
+
+    assert hook(picture(555, 101), secret) == {"ok": True}
+    kept = sorted(p.name for p in refs.iterdir())
+    assert len(kept) == 1 and kept[0].endswith("-solo-101.jpg"), kept
+    assert (refs / kept[0]).read_bytes().endswith(b"photos/big101.jpg"), "берём крупный размер"
+    assert sent_texts() == ["Принял фото для тем"], calls
+
+    # альбом — как в жизни: снимки приходят разом и разбираются параллельно
+    import threading
+    calls.clear()
+    threads = []
+
+    def in_thread(fn, *args):
+        threads.append(threading.Thread(target=fn, args=args))
+        threads[-1].start()
+
+    main._in_background, main.TG_ALBUM_WAIT = in_thread, 0.5
+    for i in (201, 202, 203):
+        hook(picture(556, i, group="9001"), secret)
+    for t in threads:
+        t.join()
+    main._in_background, main.TG_ALBUM_WAIT = (lambda fn, *args: fn(*args)), 0
+    assert len([p for p in refs.iterdir() if "-9001-" in p.name]) == 3
+    assert sent_texts() == ["Принял 3 фото для тем"], "на альбом — один ответ"
+
+    calls.clear()
+    hook(picture(555, 301, doc="image/png"), secret)
+    assert any(p.name.endswith("-solo-301.png") for p in refs.iterdir())
+    hook(picture(555, 302, doc="application/pdf"), secret)
+    assert not any("-302." in p.name for p in refs.iterdir()), "не картинка — не берём"
+
+    calls.clear()
+    before = set(refs.iterdir())
+    hook(picture(777, 401), secret)
+    assert set(refs.iterdir()) == before and sent_texts() == [], "чужие фото не сохраняем"
+    calls.clear()
+    sticker = {"update_id": 7, "message": {"message_id": 402, "chat": {"id": 555, "type": "private"},
+                                           "from": {"id": 555}, "sticker": {"file_id": "s"}}}
+    assert hook(sticker, secret) == {"ok": True} and calls == [], "стикер — молча и без запросов"
+
+    # не отдалось — просим прислать ещё раз, файла нет
+    main._tg_download = lambda path: None
+    hook(picture(555, 501), secret)
+    assert not any("-501." in p.name for p in refs.iterdir())
+    assert sent_texts()[-1] == "Не смог забрать картинку, пришли её ещё раз"
+
 print("Vita telegram bot: passed")
