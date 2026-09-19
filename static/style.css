@@ -3067,3 +3067,165 @@ body.login-page::before { display: none; }
 .seg.roll button[data-v="russo"] { font-family: RussoChip, sans-serif; font-weight: 400; }
 .seg.roll button[data-v="caveat"] { font-family: CaveatChip, cursive; font-weight: 700; font-size: 26px; }
 .seg.roll button[data-v="pacifico"] { font-family: PacificoChip, cursive; font-weight: 400; font-size: 22px; }
+@font-face {
+  font-family: 'PTNarrowChip';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url(/static/fonts/ptnarrow-chip.woff) format('woff');
+}
+@font-face {
+  font-family: 'PTSerifChip';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url(/static/fonts/ptserif-chip.woff) format('woff');
+}
+.seg.roll button[data-v="ptnarrow"] { font-family: PTNarrowChip, sans-serif; font-weight: 700; }
+.seg.roll button[data-v="ptserif"] { font-family: PTSerifChip, serif; font-style: italic; font-weight: 400; }
+
+/* Полные PT Sans Narrow и PT Serif Italic (ParaType, свободная лицензия):
+   латиница и кириллица одним файлом. Имена свои, чтобы браузер не взял
+   системный PT Serif с мака — на обоях должно быть ровно это начертание. */
+@font-face {
+  font-family: 'Vita PT Narrow';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url(/static/fonts/ptnarrow.woff) format('woff');
+}
+@font-face {
+  font-family: 'Vita PT Serif';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url(/static/fonts/ptserif.woff) format('woff');
+}
+
+/* ==================== темы ====================
+   Панель «Темы» стоит над «Своё фото» и того же размера, только стеклянная.
+   По нажатию над ней раскрываются плитки тем, а она сама плавно уезжает вниз
+   (высоту обёртки ведёт app.js). Плитки — маленькие картинки своих сцен. */
+/* у поля шаг 10 между строками; свёрнутая обёртка его съедает, чтобы
+   панель стояла от сетки фонов так же, как стояло «Своё фото» */
+.theme-wrap { height: 0; overflow: hidden; margin-top: -10px; }
+.theme-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding-top: 8px;
+}
+.theme-open {
+  position: relative;
+  width: 100%;
+  min-height: 44px;
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 1px solid var(--seg-track-border);
+  border-radius: 14px;
+  background: var(--glass-shine), var(--glass-bg-soft);
+  backdrop-filter: blur(14px) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(14px) saturate(var(--glass-saturate));
+  box-shadow: var(--seg-track-inset);
+  color: var(--text-2);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: transform .2s cubic-bezier(.34, 1.56, .64, 1), box-shadow .3s, background .25s;
+}
+.theme-open:active { transform: scale(0.99); box-shadow: 0 8px 26px var(--press-glow); }
+.theme-open-dots { display: inline-flex; gap: 3px; }
+.theme-open-dots i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+}
+.theme-open-dots i:nth-child(1) { background: #8fc0ec; }
+.theme-open-dots i:nth-child(2) { background: #f5f2ea; }
+.theme-open-dots i:nth-child(3) { background: #cf9f5c; }
+.theme-open-dots i:nth-child(4) { background: #2e2c28; }
+.theme-open-dots i:nth-child(5) { background: #9a9a9a; }
+.theme-open-dots i:nth-child(6) { background: #dfe7ea; }
+.theme-open-chev {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform .5s cubic-bezier(.22, 1, .36, 1);
+}
+.theme-open.open .theme-open-chev { transform: rotate(180deg); }
+
+.theme-tile {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  min-height: 58px;
+  padding: 8px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+  cursor: pointer;
+  transition: transform .2s cubic-bezier(.34, 1.56, .64, 1), box-shadow .3s;
+}
+.theme-tile::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0) 35%, rgba(0, 0, 0, 0.32));
+}
+.theme-tile:active { transform: scale(0.97); box-shadow: 0 8px 26px var(--press-glow); }
+.theme-tile.on {
+  border-color: transparent;
+  box-shadow: 0 0 0 2px var(--text), 0 8px 24px var(--press-glow);
+}
+.t-pole { background: linear-gradient(180deg, #7db4e6 0%, #cde5f6 50%, #8ab356 51%, #355f1d 100%); }
+.t-romashki {
+  background:
+    radial-gradient(circle at 16% 24%, #f6f3ea 0 2.5px, transparent 3.5px),
+    radial-gradient(circle at 76% 16%, #f6f3ea 0 2px, transparent 3px),
+    radial-gradient(circle at 88% 74%, #f6f3ea 0 2.5px, transparent 3.5px),
+    radial-gradient(circle at 28% 82%, #f0d3cc 0 2px, transparent 3px),
+    radial-gradient(circle at 60% 88%, #f6f3ea 0 1.5px, transparent 2.5px),
+    linear-gradient(180deg, #26351f, #121b10);
+}
+.t-taiga { background: linear-gradient(180deg, #cdbfa8 0%, #9a8a6c 20%, #8a7650 21%, #4c4632 46%, #223022 47%, #0e140e 100%); }
+.t-tush { background: radial-gradient(circle at 50% 50%, transparent 0 14px, #3d3a34 15px 18px, transparent 19px), #0b0b0a; }
+.t-manga {
+  background:
+    radial-gradient(circle, rgba(0, 0, 0, 0.5) 1px, transparent 1.6px) 0 0 / 6px 6px,
+    linear-gradient(180deg, #2a2a2a 0%, #8a8a8a 62%, #6a6a6a 63%, #161616 100%);
+}
+.t-tuman {
+  background:
+    linear-gradient(200deg, rgba(230, 238, 234, 0) 30%, rgba(230, 238, 234, 0.3) 45%, rgba(230, 238, 234, 0) 60%),
+    linear-gradient(180deg, #0f1a12 0%, #2a3234 48%, #8b9396 74%, #2a3032 100%);
+}
+
+/* подсказка под большим телефоном: гаснет после первого тапа */
+.phone-tip {
+  align-self: center;
+  margin-top: 12px;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  text-align: center;
+  transition: opacity .6s ease, transform .6s cubic-bezier(.22, 1, .36, 1);
+}
+.phone-tip.gone { opacity: 0; transform: translateY(-4px); }
+@media (prefers-reduced-motion: reduce) {
+  .theme-open-chev, .phone-tip { transition: none; }
+}

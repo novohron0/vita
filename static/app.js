@@ -9,6 +9,7 @@ const BGS = {
   sunset: '#2a1230', mountains: '#0e1520', ocean: '#0a1a2b',
   dembel: '#1a1f14', ramadan: '#0a1228', honeymoon: '#2a1520',
   owncolor: '#101014',   // фон, который человек выбрал сам
+  ...VitaScenes.SCENE_BASE,   // темы-сцены рисует static/scenes.js (пара — app/scenes.py)
 };
 const SCENE_GRADS = {
   sunset: [['#331539', 0], ['#4a1c40', .45], ['#1c0d24', 1]],
@@ -19,7 +20,8 @@ const SCENE_GRADS = {
   honeymoon: [['#4a2038', 0], ['#6b3050', .38], ['#1f1018', 1]],
 };
 const TITLES = { month: 'ТВОЙ МЕСЯЦ', year: 'ТВОЙ ГОД', life: 'ТВОЯ ЖИЗНЬ', goal: 'ДО ЦЕЛИ' };
-const SHAPES = ['circle', 'square', 'rounded', 'heart', 'star', 'diamond', 'hex'];
+const SHAPES = ['circle', 'square', 'rounded', 'heart', 'star', 'diamond', 'hex', ...VitaScenes.NEW_SHAPES];
+const NEW_SHAPES = new Set(VitaScenes.NEW_SHAPES);
 // Шрифты заголовка. k — поправка размера: у рукописных мелкая буква, и без неё
 // «Каveat» выглядит вдвое меньше соседей. Те же числа лежат в app/render.py,
 // иначе превью разойдётся с настоящими обоями.
@@ -32,6 +34,8 @@ const FONTS = {
   russo:      { css: '"Russo One", sans-serif', w: 400, k: 0.98 },
   caveat:     { css: 'Caveat, cursive', w: 700, k: 1.3 },
   pacifico:   { css: 'Pacifico, cursive', w: 400, k: 0.98 },
+  ptnarrow:   { css: '"Vita PT Narrow", sans-serif', w: 700, k: 1.1 },
+  ptserif:    { css: '"Vita PT Serif", serif', w: 400, k: 1.08, st: 'italic' },
 };
 // Выбранным шрифтом пишется всё на обоях: заголовок, счётчик и значок vita.
 // Насыщенность подменяем только у системного — у остальных в наборе одно
@@ -39,7 +43,7 @@ const FONTS = {
 const wallFont = (px, systemWeight) => {
   const f = FONTS[state.font] || FONTS.system;
   const w = state.font === 'system' ? systemWeight : f.w;
-  return `${w} ${Math.round(px * f.k)}px ${f.css}`;
+  return `${f.st ? f.st + ' ' : ''}${w} ${Math.round(px * f.k)}px ${f.css}`;
 };
 const titleFont = (px = 64) => wallFont(px, 600);
 // Строка для прогрева шрифта: в ней есть и латиница значка, и слова счётчика,
@@ -59,7 +63,9 @@ const plus30 = new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10);
 
 const state = {
   mode: 'month', color: '#f2f2f2', bg: 'black', bgColor: '#101014', bgImageId: null, shape: 'circle', font: 'system',
-  glass: false, title: TITLES.month, footer: true, brand: true, birth: '2000-01-01',
+  glass: false, glow: false, title: TITLES.month, footer: true, brand: true, birth: '2000-01-01',
+  // цвета текста задаёт тема; пусто — заголовок цветом точек, подписи серым
+  textColor: '', textMuted: '', textStroke: '',
   start: todayISO, end: plus30,
 };
 let customTitle = false;
@@ -85,6 +91,8 @@ if (DEMO) {
   if (/^#[0-9a-fA-F]{6}$/.test(c || '')) state.color = c;
   if (BGS[q.get('bg')]) state.bg = q.get('bg');
   if (SHAPES.includes(q.get('shape'))) state.shape = q.get('shape');
+  const th = VitaScenes.THEMES[q.get('theme')];
+  if (th) Object.assign(state, th);
 }
 
 const $ = id => document.getElementById(id);
@@ -188,6 +196,10 @@ function paintBG(c) {
     c.drawImage(customBgImg, sx, sy, sw, sh, 0, 0, W, H);
     c.fillStyle = 'rgba(0,0,0,0.12)';
     c.fillRect(0, 0, W, H);
+    return;
+  }
+  if (VitaScenes.SCENES.includes(state.bg)) {
+    c.drawImage(VitaScenes.scene(state.bg), 0, 0, W, H);
     return;
   }
   const key = state.bg, base = BGS[key], stops = SCENE_GRADS[key];
@@ -418,8 +430,10 @@ function footerText(total, done) {
   return `день ${Math.min(done + 1, total)} из ${total}`;
 }
 
-function dotPath(c, x, y, d) {
+function dotPath(c, x, y, d, i = 0) {
   const cx = x + d / 2, cy = y + d / 2;
+  const pts = NEW_SHAPES.has(state.shape) && VitaScenes.shapePts(state.shape, x, y, d, i);
+  if (pts) { VitaScenes.trace(c, pts); return; }
   c.beginPath();
   if (state.shape === 'square') {
     c.rect(x, y, d, d);
@@ -465,12 +479,25 @@ function dotPath(c, x, y, d) {
 }
 
 // Стандарт — как в оригинале; Стандарт 2.0 — жидкое стекло
-function classicDot(c, x, y, d, color, mode = 'filled', pulse = 0, isLead = false) {
-  const empty = blend(color, effectiveBgHex(), 0.18);
-  dotPath(c, x, y, d);
+function classicDot(c, x, y, d, color, mode = 'filled', pulse = 0, isLead = false, i = 0) {
+  const emptyA = VitaScenes.EMPTY_ALPHA[state.bg];
+  dotPath(c, x, y, d, i);
   if (mode === 'filled') {
     c.fillStyle = color;
     c.fill();
+  } else if (mode === 'ring' && NEW_SHAPES.has(state.shape)) {
+    // кольцо новой формы — полоса внутри силуэта, как на сервере
+    if (pulse > 0 || isLead) {
+      VitaScenes.blob(c, x + d / 2, y + d / 2, d * 0.8, color, 0,
+        [[0, 90 * (isLead ? 1 : pulse)], [0.5, 40 * (isLead ? 1 : pulse)], [1, 0]]);
+      dotPath(c, x, y, d, i);
+    }
+    c.save();
+    c.clip();
+    c.strokeStyle = color;
+    c.lineWidth = Math.max(2, Math.round(d * 0.09)) * 2;
+    c.stroke();
+    c.restore();
   } else if (mode === 'ring') {
     c.strokeStyle = color;
     c.lineWidth = Math.max(2, d * 0.09);
@@ -478,17 +505,26 @@ function classicDot(c, x, y, d, color, mode = 'filled', pulse = 0, isLead = fals
     else if (pulse > 0) { c.shadowColor = color; c.shadowBlur = d * 0.55 * pulse; }
     c.stroke();
     c.shadowBlur = 0;
+  } else if (emptyA != null) {
+    // на сценах пустые точки — цветом точки с прозрачностью поверх картинки
+    c.globalAlpha = emptyA;
+    c.fillStyle = color;
+    c.fill();
+    c.globalAlpha = 1;
   } else {
-    c.fillStyle = empty;
+    c.fillStyle = blend(color, effectiveBgHex(), 0.18);
     c.fill();
   }
 }
 
-function glassDot(c, x, y, d, color, mode = 'filled', pulse = 0) {
+function glassDot(c, x, y, d, color, mode = 'filled', pulse = 0, i = 0) {
   const cx = x + d / 2, cy = y + d / 2;
   const [cr, cg, cb] = rgb(color);
+  // ромашка и ёлка выходят за коробку точки — заливки тянем с запасом
+  const p = NEW_SHAPES.has(state.shape) ? d * 0.12 : 0;
+  const fx = x - p, fy = y - p, fd = d + 2 * p;
   c.save();
-  dotPath(c, x, y, d);
+  dotPath(c, x, y, d, i);
   c.clip();
   if (mode === 'empty') {
     const g = c.createRadialGradient(cx - d * 0.22, cy - d * 0.28, 0, cx, cy, d * 0.78);
@@ -496,19 +532,19 @@ function glassDot(c, x, y, d, color, mode = 'filled', pulse = 0) {
     g.addColorStop(0.55, 'rgba(255,255,255,0.12)');
     g.addColorStop(1, 'rgba(255,255,255,0.04)');
     c.fillStyle = g;
-    c.fillRect(x, y, d, d);
+    c.fillRect(fx, fy, fd, fd);
     const frost = c.createLinearGradient(x, y, x + d, y + d);
     frost.addColorStop(0, 'rgba(255,255,255,0.08)');
     frost.addColorStop(0.5, 'rgba(255,255,255,0)');
     frost.addColorStop(1, 'rgba(255,255,255,0.06)');
     c.fillStyle = frost;
-    c.fillRect(x, y, d, d);
+    c.fillRect(fx, fy, fd, fd);
   } else if (mode === 'ring') {
     const g = c.createRadialGradient(cx - d * 0.2, cy - d * 0.25, 0, cx, cy, d * 0.76);
     g.addColorStop(0, 'rgba(255,255,255,0.26)');
     g.addColorStop(1, `rgba(${cr},${cg},${cb},0.12)`);
     c.fillStyle = g;
-    c.fillRect(x, y, d, d);
+    c.fillRect(fx, fy, fd, fd);
   } else {
     const g = c.createRadialGradient(cx - d * 0.32, cy - d * 0.36, d * 0.04, cx, cy, d * 0.82);
     g.addColorStop(0, 'rgba(255,255,255,0.88)');
@@ -516,21 +552,21 @@ function glassDot(c, x, y, d, color, mode = 'filled', pulse = 0) {
     g.addColorStop(0.62, `rgba(${cr},${cg},${cb},0.78)`);
     g.addColorStop(1, `rgba(${Math.round(cr * 0.72)},${Math.round(cg * 0.72)},${Math.round(cb * 0.72)},0.62)`);
     c.fillStyle = g;
-    c.fillRect(x, y, d, d);
+    c.fillRect(fx, fy, fd, fd);
     const sh = c.createLinearGradient(x, y + d * 0.42, x, y + d);
     sh.addColorStop(0, 'rgba(0,0,0,0)');
     sh.addColorStop(1, 'rgba(0,0,0,0.22)');
     c.fillStyle = sh;
-    c.fillRect(x, y, d, d);
+    c.fillRect(fx, fy, fd, fd);
     const spec = c.createRadialGradient(cx - d * 0.15, cy - d * 0.22, 0, cx - d * 0.1, cy - d * 0.15, d * 0.28);
     spec.addColorStop(0, 'rgba(255,255,255,0.55)');
     spec.addColorStop(1, 'rgba(255,255,255,0)');
     c.fillStyle = spec;
-    c.fillRect(x, y, d, d);
+    c.fillRect(fx, fy, fd, fd);
   }
   c.restore();
   c.save();
-  dotPath(c, x, y, d);
+  dotPath(c, x, y, d, i);
   if (mode === 'ring') {
     c.strokeStyle = color;
     c.lineWidth = Math.max(2, d * 0.09);
@@ -544,9 +580,20 @@ function glassDot(c, x, y, d, color, mode = 'filled', pulse = 0) {
   c.restore();
 }
 
-const drawDot = (c, x, y, d, color, mode, pulse, isLead) =>
-  state.glass ? glassDot(c, x, y, d, color, mode, pulse)
-              : classicDot(c, x, y, d, color, mode, pulse, isLead);
+function drawDot(c, x, y, d, color, mode, pulse = 0, isLead = false, i = 0) {
+  const bgHex = effectiveBgHex();
+  if (state.shape === 'tone') {
+    VitaScenes.tone(c, x, y, d, color, VitaScenes.toneInk(bgHex, color), mode, isLead ? 1 : pulse);
+    return;
+  }
+  if (state.shape === 'ink' && mode === 'ring') {   // «сегодня» у туши — энсо
+    VitaScenes.ensoDot(c, x, y, d, color, i, isLead ? 1 : pulse);
+    return;
+  }
+  if (state.glass) glassDot(c, x, y, d, color, mode, pulse, i);
+  else classicDot(c, x, y, d, color, mode, pulse, isLead, i);
+  VitaScenes.flowerCenter(c, state.shape, x, y, d, color, mode, bgHex, VitaScenes.EMPTY_ALPHA[state.bg]);
+}
 
 function effectiveBgHex() {
   if (state.bg === 'custom') return '#1a1a1a';
@@ -598,6 +645,14 @@ function fillRich(text, cx, y, px) {
   ctx.textAlign = 'left';
   for (const [isEmoji, part] of splitEmoji(text)) {
     if (!isEmoji) {
+      if (state.textStroke) {
+        ctx.save();
+        ctx.strokeStyle = state.textStroke;
+        ctx.lineWidth = 8;
+        ctx.lineJoin = 'round';
+        ctx.strokeText(part, x, y);
+        ctx.restore();
+      }
       ctx.fillText(part, x, y);
       x += ctx.measureText(part).width;
       continue;
@@ -671,7 +726,7 @@ function drawWatermark(cx, cy, fill) {
 }
 
 function draw(reveal = 1, pulse = 0, fx = null) {
-  const text = state.bg === 'white' ? '#8a857a' : '#8e8e8e';
+  const text = state.textMuted || (state.bg === 'white' ? '#8a857a' : '#8e8e8e');
   const { total, done: realDone, current: realCurrent } = counts();
   // демо/рилс: заполняем всю сетку, последняя точка остаётся дышащим кольцом
   const fullDone = (DEMO || (REEL && reelFull)) ? total - 1 : realDone;
@@ -695,6 +750,9 @@ function draw(reveal = 1, pulse = 0, fx = null) {
   const gridW = cols * dot + (cols - 1) * gap, gridH = rows * dot + (rows - 1) * gap;
   const x0 = (W - gridW) / 2, y0 = H * 0.55 - gridH / 2;
 
+  // свечение — ореол под закрашенными точками; на крошечных точках «Жизни»
+  // его не видно, а превью бы на нём захлебнулось (так же в render.py)
+  const glowOn = state.glow && dot >= 14;
   for (let i = 0; i < total; i++) {
     const x = x0 + (i % cols) * (dot + gap), y = y0 + Math.floor(i / cols) * (dot + gap);
     let dd = dot;
@@ -704,11 +762,12 @@ function draw(reveal = 1, pulse = 0, fx = null) {
     }
     const dx = x + (dot - dd) / 2, dy = y + (dot - dd) / 2;
     if (i < done) {
-      drawDot(ctx, dx, dy, dd, state.color, 'filled', 0, false);
+      if (glowOn) VitaScenes.glow(ctx, dx, dy, dd, state.color);
+      drawDot(ctx, dx, dy, dd, state.color, 'filled', 0, false, i);
     } else if (current !== null && i === current) {
-      drawDot(ctx, x, y, dot, state.color, 'ring', pulse, i === lead);
+      drawDot(ctx, x, y, dot, state.color, 'ring', pulse, i === lead, i);
     } else {
-      drawDot(ctx, x, y, dot, state.color, 'empty', 0, false);
+      drawDot(ctx, x, y, dot, state.color, 'empty', 0, false, i);
     }
   }
 
@@ -720,13 +779,14 @@ function draw(reveal = 1, pulse = 0, fx = null) {
     const hop = Math.max(dot * 0.9, Math.hypot(cx(i1) - cx(i0), cy(i1) - cy(i0)) * 0.22);
     const lx = cx(i0) + (cx(i1) - cx(i0)) * frac;
     const ly = cy(i0) + (cy(i1) - cy(i0)) * frac - hop * Math.sin(Math.PI * frac);
-    drawDot(ctx, lx - dot / 2, ly - dot / 2, dot, state.color, 'filled', 0, false);
+    if (glowOn) VitaScenes.glow(ctx, lx - dot / 2, ly - dot / 2, dot, state.color);
+    drawDot(ctx, lx - dot / 2, ly - dot / 2, dot, state.color, 'filled', 0, false, i0);
   }
 
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   if (state.title.trim()) {
-    ctx.fillStyle = state.color;
+    ctx.fillStyle = state.textColor || state.color;
     drawTitle(state.title.trim(), y0 - 190);
   }
   if (state.brand) drawWatermark(W / 2, y0 - 110, text);
@@ -1009,7 +1069,7 @@ addEventListener('pointerup', endPointer);
 addEventListener('pointercancel', endPointer);
 
 // тап по телефону — точки прыгают друг за другом (в демо уже крутится свой цикл)
-if (!DEMO) phoneEl.addEventListener('click', () => animateJump());
+if (!DEMO) phoneEl.addEventListener('click', () => nextTheme());
 
 // Прокрутку к нужному месту ведём сами: встроенная «плавная» на айфоне
 // короткая и встаёт рывком. Здесь медленный ход с мягким разгоном и посадкой,
@@ -1165,13 +1225,13 @@ async function useFont(key) {
   const f = FONTS[key];
   if (key !== 'system' && document.fonts) {
     const family = f.css.split(',')[0].trim();
-    try { await document.fonts.load(`${f.w} 64px ${family}`, FONT_SAMPLE + (state.title || '')); } catch {}
+    try { await document.fonts.load(`${f.st || ''} ${f.w} 64px ${family}`.trim(), FONT_SAMPLE + (state.title || '')); } catch {}
   }
   draw();
 }
 bindSeg('font', v => { useFont(v); });
 
-bindSeg('glass', v => { state.glass = v === '1'; }, true);
+bindSeg('glass', v => { state.glass = v !== '0'; state.glow = v === '2'; }, true);
 bindSeg('footer', v => { state.footer = v === '1'; });
 // Логотип на обоях убирается только на полном доступе: клик по «Убрать» без
 // покупки ничего не переключает, а объясняет, что это даёт.
@@ -1260,10 +1320,13 @@ addEventListener('pointerdown', e => {
 
 bindSeg('bg', v => {
   $('bgOwn').classList.remove('on');
+  markOn('themes', '');
   state.bg = v;
   customBgImg = null;
   state.bgImageId = null;
   showBgTip('');
+  if (BG_LOOKS[v]) applyLook(BG_LOOKS[v]);
+  else dropThemeText();
   if (BG_TITLES[v] && customTitle) {
     // текст написан руками — не трогаем, только спрашиваем
     if (state.title !== BG_TITLES[v]) askBgTitle(v); else hideBgAsk();
@@ -1315,8 +1378,125 @@ async function uploadBgFile(file) {
 
 $('bgOwn').addEventListener('click', () => $('bgFile').click());
 
+// --- темы: фон, точки, шрифт и цвета текста разом ---
+function markOn(id, v) {
+  const box = $(id);
+  if (box) box.querySelectorAll('button[data-v]').forEach(b => b.classList.toggle('on', b.dataset.v === String(v)));
+}
+
+function dropThemeText() {
+  state.textColor = state.textMuted = state.textStroke = '';
+}
+
+// Старые сцены тоже стали темами: к фону — свой шрифт и свои точки.
+const BG_LOOKS = {
+  mountains: { shape: 'fir', font: 'ptnarrow', color: '#dfe9f2', glass: false, glow: false },
+  ocean: { shape: 'drop', font: 'montserrat', color: '#7cc4f0', glass: false, glow: false },
+  sunset: { shape: 'circle', font: 'pacifico', color: '#ffb37c', glass: true, glow: true },
+  dembel: { shape: 'star', font: 'russo', color: '#e8d890', glass: false, glow: false },
+  ramadan: { shape: 'moon', font: 'playfair', color: '#f5e6b8', glass: false, glow: false },
+  honeymoon: { shape: 'heart', font: 'caveat', color: '#ff8fab', glass: false, glow: false },
+};
+
+function applyLook(look) {
+  state.shape = look.shape;
+  markOn('shape', look.shape);
+  state.glass = !!look.glass;
+  state.glow = !!look.glow;
+  markOn('glass', look.glow ? '2' : look.glass ? '1' : '0');
+  state.color = look.color;
+  customColor = !COLORS.includes(look.color);
+  swatches.querySelectorAll('.swatch').forEach(b => b.classList.toggle('on', b.dataset.v === look.color));
+  $('colorPick').value = look.color;
+  state.textColor = look.textColor || '';
+  state.textMuted = look.textMuted || '';
+  state.textStroke = look.textStroke || '';
+  markOn('font', look.font);
+  if (look.font !== state.font) useFont(look.font);
+}
+
+const THEME_ORDER = Object.keys(VitaScenes.THEMES);
+
+function pickTheme(key) {
+  const t = VitaScenes.THEMES[key];
+  if (!t) return;
+  state.bg = t.bg;
+  customBgImg = null;
+  state.bgImageId = null;
+  $('bgOwn').classList.remove('on');
+  markOn('bg', '');
+  markOn('themes', key);
+  hideBgAsk();
+  showBgTip('');
+  if (bgAutoTitle) {                 // «ДО ДЕМБЕЛЯ» и прочие названия старых фонов уходят вместе с ними
+    state.title = TITLES[state.mode];
+    $('title').value = state.title;
+    bgAutoTitle = false;
+  }
+  applyLook(t);
+  refreshSwatches();
+  animateReveal();
+  // следующую сцену рисуем заранее, пока человек смотрит на эту
+  const next = THEME_ORDER[(THEME_ORDER.indexOf(key) + 1) % THEME_ORDER.length];
+  (window.requestIdleCallback || (f => setTimeout(f, 400)))(() => VitaScenes.scene(next));
+}
+
+$('themes').addEventListener('click', e => {
+  const btn = e.target.closest('button[data-v]');
+  if (btn) pickTheme(btn.dataset.v);
+});
+
+// Тап по большому телефону — следующая тема. Защита от частых тапов: точки
+// добегают, проходит секунда, и только потом телефон слушает снова.
+let themeLock = 0;
+function nextTheme() {
+  const now = performance.now();
+  if (now < themeLock) return;
+  themeLock = now + 2000;
+  const i = THEME_ORDER.indexOf(state.bg);
+  pickTheme(THEME_ORDER[(i + 1) % THEME_ORDER.length]);
+  const tip = $('phoneTip');
+  if (tip && !tip.hidden) {
+    tip.classList.add('gone');
+    try { localStorage.setItem('vitaThemeTap', '1'); } catch {}
+  }
+}
+try { if (localStorage.getItem('vitaThemeTap') && $('phoneTip')) $('phoneTip').hidden = true; } catch {}
+
+// Панель «Темы» над «Своё фото»: по нажатию плавно уезжает вниз, а на её
+// месте раскрываются плитки тем. Второе нажатие сворачивает обратно.
+const themeWrap = $('themeWrap'), themesOpen = $('themesOpen');
+let themesShown = false, themeAnim = null;
+themeWrap.inert = true;
+themesOpen.addEventListener('click', () => {
+  themesShown = !themesShown;
+  themesOpen.setAttribute('aria-expanded', String(themesShown));
+  themesOpen.classList.toggle('open', themesShown);
+  $('themesOpenLabel').textContent = themesShown ? 'Свернуть темы' : 'Темы';
+  themeWrap.inert = !themesShown;
+  const from = themeWrap.getBoundingClientRect().height;
+  const to = themesShown ? themeWrap.scrollHeight : 0;
+  themeAnim?.cancel();
+  if (reduceMotion) { themeWrap.style.height = themesShown ? 'auto' : '0px'; return; }
+  themeWrap.style.height = to + 'px';
+  themeAnim = themeWrap.animate([{ height: from + 'px' }, { height: to + 'px' }],
+    { duration: themesShown ? 620 : 440, easing: 'cubic-bezier(.22, 1, .36, 1)' });
+  themeAnim.onfinish = () => {
+    themeWrap.style.height = themesShown ? 'auto' : '0px';
+    themeAnim = null;
+  };
+  if (themesShown) {
+    themeWrap.querySelectorAll('.theme-tile').forEach((b, k) => b.animate(
+      [{ opacity: 0, transform: 'translateY(-12px) scale(.94)' }, { opacity: 1, transform: 'none' }],
+      { duration: 460, delay: 90 + k * 45, easing: 'cubic-bezier(.22, 1, .36, 1)', fill: 'backwards' }));
+    (window.requestIdleCallback || (f => setTimeout(f, 400)))(() => VitaScenes.scene(THEME_ORDER[0]));
+  }
+});
+
 // Свой цвет фона: выбор гасит и картинки-темы, и своё фото — фон один.
 $('bgColorPick').addEventListener('input', e => {
+  markOn('themes', '');
+  dropThemeText();
   state.bg = 'owncolor';
   state.bgColor = e.target.value;
   state.bgImageId = null;
@@ -1399,7 +1579,8 @@ async function makeWallpaper(btn, err) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         mode: state.mode, color: state.color, bg: state.bg, bgColor: state.bgColor,
-        bgImage: state.bgImageId || '', shape: state.shape, glass: state.glass,
+        bgImage: state.bgImageId || '', shape: state.shape, glass: state.glass, glow: state.glow,
+        textColor: state.textColor, textMuted: state.textMuted, textStroke: state.textStroke,
         title: state.title, font: state.font, footer: state.footer, brand: state.brand, birth: state.birth,
         start: state.start, end: state.end,
         ownerToken: window.VitaID?.token() || '',
@@ -2079,6 +2260,8 @@ $('cropDone').addEventListener('click', async () => {
     // кадр уже ровно под экран, поэтому превью и обои совпадут точка в точку
     customBgImg = out;
     state.bg = 'custom';
+    markOn('themes', '');
+    dropThemeText();
     $('bg').querySelectorAll('button').forEach(b => b.classList.remove('on'));
     $('bgOwn').classList.add('on');
     showBgTip('');

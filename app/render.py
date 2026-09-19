@@ -11,6 +11,8 @@ from pathlib import Path
 
 from PIL import Image, ImageChops, ImageDraw, ImageFont, ImageOps
 
+from . import scenes
+
 ROOT = Path(__file__).resolve().parent.parent
 DATA = Path(os.environ.get("VITA_DATA") or (ROOT / "data"))
 
@@ -27,6 +29,7 @@ BGS = {
     "dembel": "#1a1f14", "ramadan": "#0a1228", "honeymoon": "#2a1520",
     "custom": "#1a1a1a",
     "owncolor": "#101014",   # фон, который человек выбрал сам
+    **scenes.SCENE_BASE,     # темы-сцены: поле, ромашки, тайга, тушь, манга, туман
 }
 SCENE_GRADS = {
     "sunset": (("#331539", 0.0), ("#4a1c40", 0.45), ("#1c0d24", 1.0)),
@@ -37,7 +40,7 @@ SCENE_GRADS = {
     "honeymoon": (("#4a2038", 0.0), ("#6b3050", 0.38), ("#1f1018", 1.0)),
 }
 MODES = ("month", "year", "life", "goal")
-SHAPES = frozenset({"circle", "square", "rounded", "heart", "star", "diamond", "hex"})
+SHAPES = frozenset({"circle", "square", "rounded", "heart", "star", "diamond", "hex", *scenes.NEW_SHAPES})
 
 # первый существующий шрифт с кириллицей: сначала macOS, затем Linux (сервер)
 FONT_PATHS = [
@@ -60,6 +63,8 @@ TITLE_FONTS = {
     "russo": ("russo.ttf", 0.98),
     "caveat": ("caveat.ttf", 1.3),
     "pacifico": ("pacifico.ttf", 0.98),
+    "ptnarrow": ("ptnarrow.ttf", 1.1),
+    "ptserif": ("ptserif.ttf", 1.08),
 }
 FONT_DIR = Path(__file__).resolve().parent.parent / "static" / "fonts"
 
@@ -167,14 +172,16 @@ def _emoji_image(chunk: str, height: int) -> Image.Image | None:
 
 
 def draw_text(img: Image.Image, draw: ImageDraw.ImageDraw, xy, text: str,
-              font, fill, anchor: str = "mm") -> None:
+              font, fill, anchor: str = "mm", stroke: str | None = None) -> None:
     """Текст, в котором эмодзи рисуются картинками, а остальное — шрифтом.
-    Держит те же якоря, что и draw.text, чтобы вызовы не переписывать."""
+    Держит те же якоря, что и draw.text, чтобы вызовы не переписывать.
+    stroke — цвет обводки букв (тема «Манга»), толщина 4."""
     if not text:
         return
+    kw = {"stroke_width": 4, "stroke_fill": stroke} if stroke else {}
     parts = _split_emoji(text)
     if not any(is_emoji for is_emoji, _ in parts):
-        draw.text(xy, text, font=font, fill=fill, anchor=anchor)
+        draw.text(xy, text, font=font, fill=fill, anchor=anchor, **kw)
         return
 
     size = getattr(font, "size", 40)
@@ -201,7 +208,7 @@ def draw_text(img: Image.Image, draw: ImageDraw.ImageDraw, xy, text: str,
         x -= total
     for kind, body, width in pieces:
         if kind == "txt":
-            draw.text((x, y), body, font=font, fill=fill, anchor="l" + anchor[1])
+            draw.text((x, y), body, font=font, fill=fill, anchor="l" + anchor[1], **kw)
         else:
             top = y - body.height // 2 if anchor[1] == "m" else y
             img.paste(body, (round(x + (width - body.width) / 2), round(top)), body)
@@ -263,7 +270,7 @@ def _wrap_title(draw: ImageDraw.ImageDraw, text: str, font, max_w: float) -> lis
 
 
 def _draw_title(img: Image.Image, draw: ImageDraw.ImageDraw, text: str,
-                base_y: float, font_key: str, fill) -> None:
+                base_y: float, font_key: str, fill, stroke: str | None = None) -> None:
     px = 64
     while True:
         font = _title_font(px, font_key)
@@ -275,7 +282,7 @@ def _draw_title(img: Image.Image, draw: ImageDraw.ImageDraw, text: str,
         px -= 3
     for i, line in enumerate(lines):
         y = base_y - (len(lines) - 1 - i) * line_h
-        draw_text(img, draw, (W / 2, y), line, font, fill)
+        draw_text(img, draw, (W / 2, y), line, font, fill, stroke=stroke)
 
 
 def _rgb(hx: str) -> tuple[int, int, int]:
@@ -331,15 +338,19 @@ def _paint_wallpaper_bg(cfg: dict, bg_key: str) -> Image.Image:
             veil = Image.new("RGB", custom.size, (0, 0, 0))
             return Image.blend(custom, veil, 0.12)
         return Image.new("RGB", (W, H), BGS["custom"])
+    if bg_key in scenes.SCENES:
+        return scenes.scene_image(bg_key).copy()
     bg = BGS[bg_key]
     img = Image.new("RGB", (W, H), bg)
     _paint_bg(img, bg_key, bg)
     return img
 
 
-def _shape_points(shape: str, w: int, h: int) -> list[tuple[float, float]] | None:
+def _shape_points(shape: str, w: int, h: int, seed: int = 0) -> list[tuple[float, float]] | None:
     cx, cy = w / 2, h / 2
     d = min(w, h)
+    if shape in scenes.NEW_SHAPES:
+        return scenes.shape_pts(shape, 0, 0, d, seed)
     if shape == "diamond":
         r = d * 0.48
         return [(cx, cy - r), (cx + r, cy), (cx, cy + r), (cx - r, cy)]
@@ -394,7 +405,7 @@ def _tint(w: int, h: int, rgb: tuple[int, int, int], alpha: Image.Image) -> Imag
     return layer
 
 
-def _glass_dot(img: Image.Image, box, color: str, shape: str, mode: str = "filled") -> None:
+def _glass_dot(img: Image.Image, box, color: str, shape: str, mode: str = "filled", seed: int = 0) -> None:
     """Точка «жидкое стекло»: блик, глубина, светлая кромка.
 
     Блики обязательно режутся по силуэту точки. Раньше они рисовались
@@ -403,15 +414,22 @@ def _glass_dot(img: Image.Image, box, color: str, shape: str, mode: str = "fille
     обрезает по clip(), и превью расходилось с обоями.
     """
     x0, y0, x1, y1 = int(box[0]), int(box[1]), int(box[2]), int(box[3])
-    w, h = x1 - x0, y1 - y0
-    if w < 2:
+    bw, bh = x1 - x0, y1 - y0
+    if bw < 2:
         return
+    # новые формы (ромашка, ёлка) выходят за коробку точки — слою нужен запас
+    pad = int(bw * 0.12) if shape in scenes.NEW_SHAPES else 0
+    x0, y0 = x0 - pad, y0 - pad
+    w, h = bw + 2 * pad, bh + 2 * pad
     r, g, b = _rgb(color)
     rad = int(min(w, h) * 0.3) if shape == "rounded" else 0
     ib = (0, 0, w - 1, h - 1)
+    shifted = None
+    if pad:
+        shifted = [(px + pad, py + pad) for px, py in _shape_points(shape, bw, bh, seed)]
 
     def paint(dr, fill=None, outline=None, width=0):
-        poly = _shape_points(shape, w, h)
+        poly = shifted if shifted is not None else _shape_points(shape, w, h)
         if poly is not None:
             if fill:
                 dr.polygon(poly, fill=fill)
@@ -428,37 +446,101 @@ def _glass_dot(img: Image.Image, box, color: str, shape: str, mode: str = "fille
     paint(ImageDraw.Draw(silhouette), fill=255)
 
     layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    p = pad
     if mode == "empty":
         layer.alpha_composite(_tint(w, h, (255, 255, 255),
-                                    _radial(w, h, w * 0.28, h * 0.22, w * 0.78, 87, 12)))
+                                    _radial(w, h, p + bw * 0.28, p + bh * 0.22, bw * 0.78, 87, 12)))
     elif mode == "ring":
         layer.alpha_composite(_tint(w, h, (255, 255, 255),
-                                    _radial(w, h, w * 0.3, h * 0.25, w * 0.76, 66, 20)))
+                                    _radial(w, h, p + bw * 0.3, p + bh * 0.25, bw * 0.76, 66, 20)))
     else:
         layer.alpha_composite(_tint(w, h, (r, g, b), Image.new("L", (w, h), 198)))
         layer.alpha_composite(_tint(w, h, (255, 255, 255),
-                                    _radial(w, h, w * 0.18, h * 0.14, w * 0.82, 205, 0)))
+                                    _radial(w, h, p + bw * 0.18, p + bh * 0.14, bw * 0.82, 205, 0)))
         layer.alpha_composite(_tint(w, h, (0, 0, 0), _vertical(w, h, 0.42, 0, 56)))
         layer.alpha_composite(_tint(w, h, (255, 255, 255),
-                                    _radial(w, h, w * 0.35, h * 0.28, w * 0.28, 130, 0)))
+                                    _radial(w, h, p + bw * 0.35, p + bh * 0.28, bw * 0.28, 130, 0)))
 
     layer.putalpha(ImageChops.multiply(layer.getchannel("A"), silhouette))
     # кромка идёт по самому силуэту, её обрезать не нужно
     edge = ImageDraw.Draw(layer)
     if mode == "ring":
-        paint(edge, outline=(r, g, b, 230), width=max(2, round(w * 0.09)))
+        paint(edge, outline=(r, g, b, 230), width=max(2, round(bw * 0.09)))
     elif mode == "empty":
-        paint(edge, outline=(255, 255, 255, 82), width=max(1, round(w * 0.06)))
+        paint(edge, outline=(255, 255, 255, 82), width=max(1, round(bw * 0.06)))
     else:
-        paint(edge, outline=(255, 255, 255, 118), width=max(1, round(w * 0.065)))
+        paint(edge, outline=(255, 255, 255, 118), width=max(1, round(bw * 0.065)))
     img.paste(layer, (x0, y0), layer)
 
 
-def _classic_dot(img: Image.Image, box, color: str, shape: str, mode: str, bg_hex: str) -> None:
-    """Оригинальные точки: заливка цветом, пустые — blend(color, bg, 0.18), кольцо — обводка."""
+def _new_shape_dot(img: Image.Image, box, color: str, shape: str, mode: str, bg_hex: str,
+                   seed: int, empty_alpha: float | None) -> None:
+    """Новые формы: многоугольник со сглаженным краем (canvas сглаживает сам)."""
+    x0, y0, x1, _ = box
+    d = x1 - x0
+    pts = scenes.shape_pts(shape, x0, y0, d, seed)
+    ss = 4
+    xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+    bx, by = math.floor(min(xs)) - 2, math.floor(min(ys)) - 2
+    bw, bh = math.ceil(max(xs)) - bx + 3, math.ceil(max(ys)) - by + 3
+    local = [((px - bx) * ss, (py - by) * ss) for px, py in pts]
+    m = Image.new("L", (bw * ss, bh * ss), 0)
+    md = ImageDraw.Draw(m)
+    if mode == "ring":
+        # полоса внутри силуэта — как clip + stroke в canvas
+        md.polygon(local, outline=255, width=max(2, round(d * 0.09)) * ss)
+    else:
+        md.polygon(local, fill=255)
+    m = m.resize((bw, bh), Image.BOX)
+    if mode == "empty":
+        if empty_alpha is None:
+            fill = _blend(color, bg_hex, 0.18)
+        else:
+            fill = _rgb(color)
+            m = m.point(lambda v: int(v * empty_alpha + 0.5))
+    else:
+        fill = _rgb(color)
+    img.paste(Image.new("RGB", (bw, bh), fill), (bx, by), m)
+
+
+def _flower_center(img: Image.Image, box, color: str, shape: str, mode: str, bg_hex: str,
+                   empty_alpha: float | None) -> None:
+    x0, y0, x1, _ = box
+    c = scenes.shape_center(shape, x0, y0, x1 - x0)
+    if c is None:
+        return
+    accent = scenes.DAISY_CENTER if shape == "daisy" else scenes.sakura_center_color(color)
+    if mode == "empty":
+        if empty_alpha is None:
+            scenes.stamp_circle(img, c[0], c[1], c[2], "#%02x%02x%02x" % _blend(accent, bg_hex, 0.18))
+        else:
+            scenes.stamp_circle(img, c[0], c[1], c[2], accent, min(1.0, empty_alpha + 0.1))
+    else:
+        scenes.stamp_circle(img, c[0], c[1], c[2], accent)
+
+
+def _classic_dot(img: Image.Image, box, color: str, shape: str, mode: str, bg_hex: str,
+                 empty_alpha: float | None = None) -> None:
+    """Оригинальные точки: заливка цветом, пустые — blend(color, bg, 0.18), кольцо — обводка.
+    На сценах-темах пустые — цвет точки с прозрачностью empty_alpha поверх картинки."""
     x0, y0, x1, y1 = int(box[0]), int(box[1]), int(box[2]), int(box[3])
     w, h = x1 - x0, y1 - y0
     if w < 2:
+        return
+    if mode == "empty" and empty_alpha is not None:
+        m = Image.new("L", (w * 4, h * 4), 0)
+        md = ImageDraw.Draw(m)
+        poly = _shape_points(shape, w * 4, h * 4)
+        if poly is not None:
+            md.polygon(poly, fill=255)
+        elif shape == "circle":
+            md.ellipse((0, 0, w * 4 - 1, h * 4 - 1), fill=255)
+        elif shape == "square":
+            md.rectangle((0, 0, w * 4 - 1, h * 4 - 1), fill=255)
+        else:
+            md.rounded_rectangle((0, 0, w * 4 - 1, h * 4 - 1), radius=int(min(w, h) * 1.2), fill=255)
+        m = m.resize((w, h), Image.BOX).point(lambda v: int(v * empty_alpha + 0.5))
+        img.paste(Image.new("RGB", (w, h), _rgb(color)), (x0, y0), m)
         return
     d = ImageDraw.Draw(img)
     empty = _blend(color, bg_hex, 0.18)
@@ -490,11 +572,25 @@ def _classic_dot(img: Image.Image, box, color: str, shape: str, mode: str, bg_he
         shape_draw(col)
 
 
-def _dot(img: Image.Image, box, color: str, shape: str, mode: str, glass: bool, bg_hex: str) -> None:
+def _dot(img: Image.Image, box, color: str, shape: str, mode: str, glass: bool, bg_hex: str,
+         i: int = 0, empty_alpha: float | None = None) -> None:
+    """Одна точка сетки. i — номер точки: у кляксы свой неровный край."""
+    if shape == "tone":
+        scenes.tone_dot(img, box[0], box[1], box[2] - box[0], color, scenes.tone_ink(bg_hex, color), mode)
+        return
+    if shape == "ink" and mode == "ring":
+        # «сегодня» у туши — энсо, круг одним мазком
+        d = box[2] - box[0]
+        scenes.enso(img, (box[0] - d * 0.08, box[1] - d * 0.08, box[2] + d * 0.08, box[3] + d * 0.08),
+                    color, seed=i + 3)
+        return
     if glass:
-        _glass_dot(img, box, color, shape, mode)
+        _glass_dot(img, box, color, shape, mode, seed=i)
+    elif shape in scenes.NEW_SHAPES:
+        _new_shape_dot(img, box, color, shape, mode, bg_hex, i, empty_alpha)
     else:
-        _classic_dot(img, box, color, shape, mode, bg_hex)
+        _classic_dot(img, box, color, shape, mode, bg_hex, empty_alpha)
+    _flower_center(img, box, color, shape, mode, bg_hex, empty_alpha)
 
 
 def _star(draw: ImageDraw.ImageDraw, cx: float, cy: float, r: float, fill) -> None:
@@ -538,6 +634,9 @@ def _pine(draw: ImageDraw.ImageDraw, x: int, base_h: int, h: int, fill: str) -> 
 
 def _paint_bg(img: Image.Image, key: str, base: str) -> None:
     """Сцена-фон: вертикальный градиент + силуэты (горы/океан/закат). Для сплошных — no-op."""
+    if key in scenes.SCENES:
+        img.paste(scenes.scene_image(key))
+        return
     draw = ImageDraw.Draw(img)
     stops = SCENE_GRADS.get(key)
     if not stops:
@@ -746,16 +845,17 @@ def render_goal(goal: dict, done: set[str], today: date | None = None) -> Image.
     x0 = (W - grid_w) / 2
     y0 = H * 0.55 - grid_h / 2
 
+    empty_alpha = scenes.EMPTY_ALPHA.get(bg_key)
     for i in range(days):
         r, c = divmod(i, cols)
         x, y = x0 + c * (dot + gap), y0 + r * (dot + gap)
         box = (x, y, x + dot, y + dot)
         if i in done_idx:
-            _dot(img, box, color, shape, "filled", False, bg)
+            _dot(img, box, color, shape, "filled", False, bg, i, empty_alpha)
         elif i == today_idx:
-            _dot(img, box, color, shape, "ring", False, bg)
+            _dot(img, box, color, shape, "ring", False, bg, i, empty_alpha)
         else:
-            _dot(img, box, color, shape, "empty", False, bg)
+            _dot(img, box, color, shape, "empty", False, bg, i, empty_alpha)
 
     if title:
         _draw_title(img, draw, title, y0 - 190, goal.get("font", ""), color)
@@ -768,6 +868,11 @@ def render_goal(goal: dict, done: set[str], today: date | None = None) -> Image.
     return img
 
 
+def _hex(value, fallback: str | None = None) -> str | None:
+    value = str(value or "")
+    return value if re.fullmatch(r"#[0-9a-fA-F]{6}", value) else fallback
+
+
 def render_wallpaper(cfg: dict, today: date | None = None, expired: bool = False) -> Image.Image:
     today = today or date.today()
     mode = cfg.get("mode") if cfg.get("mode") in MODES else "month"
@@ -778,9 +883,14 @@ def render_wallpaper(cfg: dict, today: date | None = None, expired: bool = False
         color = "#f2f2f2"
     shape = cfg.get("shape", "circle")
     glass = cfg.get("glass", False)
+    glow = bool(cfg.get("glow", False))
     title = (cfg.get("title") or "").strip()
+    empty_alpha = scenes.EMPTY_ALPHA.get(bg_key)
 
-    text = "#8a857a" if bg_key == "white" else "#8e8e8e"
+    # цвета текста задаёт тема; без темы заголовок — цветом точек, остальное серым
+    text = _hex(cfg.get("textMuted")) or ("#8a857a" if bg_key == "white" else "#8e8e8e")
+    title_fill = _hex(cfg.get("textColor")) or color
+    stroke = _hex(cfg.get("textStroke"))
 
     total, done, current = _counts(cfg, mode, today)
     cols = _cols(mode, total)
@@ -799,26 +909,32 @@ def render_wallpaper(cfg: dict, today: date | None = None, expired: bool = False
     x0 = (W - grid_w) / 2
     y0 = H * 0.55 - grid_h / 2
 
+    # свечение — мягкий ореол под закрашенными точками; на крошечных точках
+    # «Жизни» его не видно, и превью бы на нём захлебнулось
+    glow_on = glow and dot >= 14
     for i in range(total):
         r, c = divmod(i, cols)
         x, y = x0 + c * (dot + gap), y0 + r * (dot + gap)
         box = (x, y, x + dot, y + dot)
         if i < done:
-            _dot(img, box, color, shape, "filled", glass, bg)
+            if glow_on:
+                scenes.glow(img, x, y, dot, color)
+            _dot(img, box, color, shape, "filled", glass, bg, i, empty_alpha)
         elif current is not None and i == current:
-            _dot(img, box, color, shape, "ring", glass, bg)
+            _dot(img, box, color, shape, "ring", glass, bg, i, empty_alpha)
         else:
-            _dot(img, box, color, shape, "empty", glass, bg)
+            _dot(img, box, color, shape, "empty", glass, bg, i, empty_alpha)
 
+    draw = ImageDraw.Draw(img)
     if title:
-        _draw_title(img, draw, title, y0 - 190, cfg.get("font", ""), color)
+        _draw_title(img, draw, title, y0 - 190, cfg.get("font", ""), title_fill, stroke)
     font_key = cfg.get("font", "")
     if cfg.get("brand", True):
         _watermark(draw, W / 2, y0 - 110, text, font_key)
     if expired:
         # доступ кончился: прогресс заморожен (today = дата окончания), обои сами напоминают
         draw.text((W / 2, y0 + grid_h + 130), "точки замерли · vitadots.ru",
-                  font=_title_font(40, font_key), fill=color, anchor="mm")
+                  font=_title_font(40, font_key), fill=title_fill, anchor="mm")
     elif cfg.get("footer", True):
         draw.text(
             (W / 2, y0 + grid_h + 130),

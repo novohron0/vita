@@ -431,8 +431,13 @@ class LinkIn(BaseModel):
     bgColor: str = "#101014"
     shape: str = "circle"
     glass: bool = False
+    glow: bool = False     # свечение точек (стиль «Светятся», тема «Туман»)
     title: str = ""
     font: str = "system"
+    # цвета текста задаёт тема; пусто — заголовок цветом точек, подписи серым
+    textColor: str = ""
+    textMuted: str = ""
+    textStroke: str = ""
     footer: bool = True
     brand: bool = True  # лого vita на обоях; в render.py уже есть cfg.get("brand", True)
     birth: str = "2000-01-01"
@@ -1042,6 +1047,9 @@ def create_link(cfg: LinkIn, request: Request):
     code = "".join(secrets.choice(CODE_ALPHABET) for _ in range(6))
     trial_until = (date.today() + timedelta(days=TRIAL_DAYS)).isoformat()
     cfg.title = cfg.title[:200]  # поле в браузере можно обойти, длину режем тут
+    for field in ("textColor", "textMuted", "textStroke"):
+        if not re.fullmatch(r"#[0-9a-fA-F]{6}", getattr(cfg, field) or ""):
+            setattr(cfg, field, "")
     config = json.dumps(cfg.model_dump(exclude={"idea", "contact", "ownerToken"}), ensure_ascii=False)
     with db() as conn:
         owner_code = _profile_for_token(conn, cfg.ownerToken, create=bool(cfg.ownerToken.strip()))
