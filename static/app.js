@@ -2164,7 +2164,10 @@ $('profLogout').addEventListener('click', () => {
 // сторож: не свой — отправляем к двери и запоминаем, куда он шёл.
 function toLogin() {
   const back = location.pathname + location.search;
-  location.replace('/register?next=' + encodeURIComponent(back));
+  // С главной — голый /register: дверь и так вернёт на «/». Адрес с хвостом
+  // ?next=%2F Safari держал в списке мошеннических (19.09 ещё ловился на маке
+  // со старой базой), а /register без хвоста там не значился.
+  location.replace(back === '/' ? '/register' : '/register?next=' + encodeURIComponent(back));
 }
 
 async function guard() {
