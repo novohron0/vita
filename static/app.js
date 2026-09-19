@@ -91,6 +91,49 @@ const $ = id => document.getElementById(id);
 const cv = $('cv'), ctx = cv.getContext('2d');
 const cv2 = $('cv2'), ctx2 = cv2.getContext('2d');
 
+// Экранчик шириной в сотню точек, а канва у него была в полный размер обоев:
+// браузер ужимал 1179 точек вчетверо простым фильтром, и точки рябили и рвались,
+// сколько разрешения ни добавляй. Теперь у экранчика своя канва ровно под его
+// пиксели — ретина × приближение, — а картинку в неё мы спускаем сами,
+// ступенями вдвое: каждая честно усредняет четыре точки в одну.
+const miniSteps = [];
+let miniShown = false;
+
+function copyToMini() {
+  if (!miniShown) return;
+  let src = cv, sw = cv.width, sh = cv.height, level = 0;
+  while (sw / 2 >= cv2.width) {
+    const step = miniSteps[level] || (miniSteps[level] = document.createElement('canvas'));
+    level++;
+    const w = Math.round(sw / 2), h = Math.round(sh / 2);
+    if (step.width !== w || step.height !== h) { step.width = w; step.height = h; }
+    const c = step.getContext('2d');
+    c.imageSmoothingQuality = 'high';
+    c.clearRect(0, 0, w, h);
+    c.drawImage(src, 0, 0, sw, sh, 0, 0, w, h);
+    src = step; sw = w; sh = h;
+  }
+  ctx2.imageSmoothingQuality = 'high';
+  ctx2.clearRect(0, 0, cv2.width, cv2.height);
+  ctx2.drawImage(src, 0, 0, sw, sh, 0, 0, cv2.width, cv2.height);
+}
+
+// Сколько точек нужно канве экранчика: её ширина на экране × ретина ×
+// приближение. Больше, чем в обоях, брать неоткуда.
+function miniTarget(zoom) {
+  const css = cv2.clientWidth || 92;
+  const page = (window.visualViewport && visualViewport.scale) || 1;
+  return Math.max(1, Math.min(cv.width, Math.round(css * (window.devicePixelRatio || 1) * zoom * page)));
+}
+
+function setMiniRes(w) {
+  if (w === cv2.width) return false;
+  cv2.width = w;
+  cv2.height = Math.round(w * H / W);
+  copyToMini();
+  return true;
+}
+
 // Превью — растр размером настоящих обоев (1179 точек). Пока телефон на
 // странице шириной 250 точек, этого с запасом, но щипковый зум растягивает
 // уже готовую картинку, и точки становятся ступенчатыми. Поэтому на зуме
@@ -98,7 +141,8 @@ const cv2 = $('cv2'), ctx2 = cv2.getContext('2d');
 // в transform, так что весь код рисования об этом не знает.
 let cvScale = 1;
 function setCanvasScale(k) {
-  k = Math.min(2.5, Math.max(1, Math.round(k * 10) / 10));
+  // не больше 2.3: айфон не даёт канве больше 16.7 млн точек, на 2.4× она молча пустеет
+  k = Math.min(2.3, Math.max(1, Math.round(k * 10) / 10));
   if (k === cvScale) return false;
   cvScale = k;
   cv.width = Math.round(W * k);
@@ -699,7 +743,7 @@ function draw(reveal = 1, pulse = 0, fx = null) {
   $('stat2').textContent = fmt(total - done);
   $('stat2l').textContent = l2;
 
-  ctx2.drawImage(cv, 0, 0);
+  copyToMini();
 }
 
 // точки закрашиваются по одной при загрузке и смене режима — «оживает» на глазах
@@ -768,7 +812,7 @@ const ORIGIN = { br: 'bottom right', bl: 'bottom left', tr: 'top right', tl: 'to
 
 let miniCorner = ['br', 'bl', 'tr', 'tl'].includes(localStorage.getItem(CORNER_KEY))
   ? localStorage.getItem(CORNER_KEY) : 'tr';
-let miniZoom = 1;
+let miniZoom = 1, miniShrink = 0;
 
 // Видимая часть экрана: на айфоне снизу висит панель Safari, и обычный
 // innerHeight про неё не знает — экранчик уезжал прямо под неё.
@@ -804,6 +848,17 @@ function miniSetZoom(k, smooth = true) {
   miniWrap.classList.toggle('pinching', !smooth);
   miniWrap.classList.toggle('zoomed', miniZoom > 1.05);
   miniBox.style.transform = `scale(${miniZoom})`;
+  miniSharpen(smooth);
+}
+
+// Разрешение канвы идёт за приближением: крупнее — сразу, иначе мыло видно по
+// дороге; мельче — когда экранчик доедет, иначе он мылится в начале обратного
+// хода. Во время щипка растём ступенями, а не на каждое движение пальцев.
+function miniSharpen(settled = true) {
+  clearTimeout(miniShrink);
+  const want = miniTarget(miniZoom);
+  if (want > cv2.width * (settled ? 1 : 1.1)) setMiniRes(want);
+  else if (want < cv2.width) miniShrink = setTimeout(() => setMiniRes(miniTarget(miniZoom)), 340);
 }
 
 miniPlace(false);
@@ -825,6 +880,9 @@ function updateMini() {
   if (show) miniPlace(false);  // панель браузера могла сдвинуть видимую область
   miniWrap.classList.toggle('show', show);
   miniWrap.setAttribute('aria-hidden', show ? 'false' : 'true');
+  // спрятанному экранчику кадры не копируем — на выезде он получает свежий
+  miniShown = show;
+  if (show && !setMiniRes(miniTarget(miniZoom))) copyToMini();
   // подсказку показываем при каждом выезде: с первого раза её легко не заметить.
   // Но если по экранчику уже тыкали — человек всё понял, больше не мозолим
   clearTimeout(miniTipTimer);
@@ -850,7 +908,7 @@ addEventListener('scroll', queueMini, { passive: true });
 addEventListener('touchmove', queueMini, { passive: true });
 addEventListener('wheel', queueMini, { passive: true });
 addEventListener('resize', queueMini, { passive: true });
-window.visualViewport?.addEventListener('resize', () => { miniPlace(false); queueMini(); });
+window.visualViewport?.addEventListener('resize', () => { miniPlace(false); miniSharpen(); queueMini(); });
 window.visualViewport?.addEventListener('scroll', queueMini);
 updateMini();
 // Шапку в островок сажает theme.js — одинаково на всех страницах.
@@ -953,6 +1011,39 @@ addEventListener('pointercancel', endPointer);
 // тап по телефону — точки прыгают друг за другом (в демо уже крутится свой цикл)
 if (!DEMO) phoneEl.addEventListener('click', () => animateJump());
 
+// Прокрутку к нужному месту ведём сами: встроенная «плавная» на айфоне
+// короткая и встаёт рывком. Здесь медленный ход с мягким разгоном и посадкой,
+// а палец или колесо сразу забирают управление.
+let slowStop = null;
+function slowScroll(top) {
+  slowStop?.();
+  const root = document.documentElement;
+  const from = scrollY;
+  const dist = Math.max(0, Math.min(root.scrollHeight - innerHeight, top)) - from;
+  if (Math.abs(dist) < 2) return;
+  const duration = reduceMotion ? 0 : Math.min(1600, 750 + Math.abs(dist) * 0.45);
+  const grab = ['touchstart', 'wheel', 'keydown'];
+  const t0 = performance.now();
+  let raf = 0;
+  const stop = () => {
+    cancelAnimationFrame(raf);
+    root.style.scrollBehavior = '';
+    grab.forEach(type => removeEventListener(type, stop));
+    if (slowStop === stop) slowStop = null;
+  };
+  slowStop = stop;
+  grab.forEach(type => addEventListener(type, stop, { passive: true }));
+  root.style.scrollBehavior = 'auto';   // иначе каждый шаг сам запустит встроенную плавность
+  const step = now => {
+    const p = duration ? Math.min(1, (now - t0) / duration) : 1;
+    const e = p < 0.5 ? 4 * p ** 3 : 1 - (2 - 2 * p) ** 3 / 2;
+    scrollTo(0, from + dist * e);
+    if (p < 1) raf = requestAnimationFrame(step);
+    else stop();
+  };
+  raf = requestAnimationFrame(step);
+}
+
 // Логотип в шапке на главной никуда не уводит — просто мотает к началу:
 // перезагружать ту же страницу ради этого незачем.
 const headLogo = document.querySelector('header .logo');
@@ -960,7 +1051,7 @@ if (headLogo) {
   headLogo.addEventListener('click', e => {
     if (location.pathname !== '/') return;
     e.preventDefault();
-    scrollTo({ top: 0, behavior: 'smooth' });
+    slowScroll(0);
   });
 }
 
@@ -992,6 +1083,70 @@ function bindSeg(id, apply, anim) {
     (anim ? animateReveal : draw)();
   });
 }
+
+// Подсветка в таблетках переезжает к выбранной, а не телепортируется. Это
+// отдельный слой под кнопками. По дороге передний край убегает вперёд, задний
+// догоняет — подсветка вытягивается каплей и мягко садится на место. Следим за
+// классом .on, а не за кликами: кнопку включает и восстановление настроек, и
+// замок логотипа.
+function glideSeg(seg) {
+  const pill = document.createElement('span');
+  pill.className = 'seg-pill';
+  pill.setAttribute('aria-hidden', 'true');
+  seg.prepend(pill);
+  seg.classList.add('glide');
+  let current = null, edges = null, moves = [];
+
+  function sync(animate) {
+    const btn = seg.querySelector('button.on');
+    pill.hidden = !btn;
+    if (!btn || !btn.offsetWidth) return;       // спрятанный ряд померим, когда покажут
+    const to = { l: btn.offsetLeft, r: seg.clientWidth - btn.offsetLeft - btn.offsetWidth };
+    const jump = animate && current && btn !== current && !reduceMotion;
+    current = btn;
+    pill.style.top = btn.offsetTop + 'px';
+    pill.style.height = btn.offsetHeight + 'px';
+    if (edges && Math.abs(edges.l - to.l) < 0.5 && Math.abs(edges.r - to.r) < 0.5) return;
+    // подсветка ещё в пути — едем с того места, где она сейчас
+    const now = getComputedStyle(pill);
+    const from = moves.length ? { l: parseFloat(now.left), r: parseFloat(now.right) } : edges;
+    moves.forEach(a => a.cancel());
+    moves = [];
+    edges = to;
+    pill.style.left = to.l + 'px';
+    pill.style.right = to.r + 'px';
+    if (!jump || !from) return;
+    if (seg.scrollWidth > seg.clientWidth + 1) reveal(btn);
+    const T = Math.round(Math.min(640, Math.max(380, 320 + Math.abs(to.l - from.l) * 0.5)));
+    const lead = { duration: T * 0.7, easing: 'cubic-bezier(.3, .7, .2, 1)' };
+    const tail = { duration: T, easing: 'cubic-bezier(.6, 0, .2, 1)' };
+    const right = to.l > from.l;
+    const run = [
+      pill.animate([{ left: from.l + 'px' }, { left: to.l + 'px' }], right ? tail : lead),
+      pill.animate([{ right: from.r + 'px' }, { right: to.r + 'px' }], right ? lead : tail),
+    ];
+    moves = run;
+    Promise.all(run.map(a => a.finished)).then(() => { if (moves === run) moves = []; }, () => {});
+  }
+
+  // в ряду, который едет вбок, выбранную таблетку подвозим в кадр
+  function reveal(btn) {
+    const edge = 24, l = btn.offsetLeft, r = l + btn.offsetWidth;
+    if (l >= seg.scrollLeft + edge && r <= seg.scrollLeft + seg.clientWidth - edge) return;
+    seg.scrollTo({ left: l + btn.offsetWidth / 2 - seg.clientWidth / 2, behavior: 'smooth' });
+  }
+
+  new MutationObserver(() => sync(true))
+    .observe(seg, { subtree: true, attributes: true, attributeFilter: ['class'] });
+  if (window.ResizeObserver) {
+    const ro = new ResizeObserver(() => sync(false));
+    ro.observe(seg);
+    seg.querySelectorAll('button').forEach(b => ro.observe(b));
+  }
+  document.fonts?.ready.then(() => sync(false));
+  sync(false);
+}
+document.querySelectorAll('main .seg').forEach(glideSeg);
 
 bindSeg('mode', v => {
   state.mode = v;
@@ -1272,7 +1427,9 @@ $('getBtn').addEventListener('click', () => makeWallpaper($('getBtn'), $('getErr
 // человека к настройкам — там он выбирает вид и уже сам мотает дальше.
 if ($('heroBtn')) $('heroBtn').addEventListener('click', () => {
   const target = $('tune');
-  if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (!target) return;
+  const margin = parseFloat(getComputedStyle(target).scrollMarginTop) || 0;
+  slowScroll(target.getBoundingClientRect().top + scrollY - margin);
 });
 
 // ——— рилс-сценарий: сон на rAF (не троттлится в видимой вкладке, тайминг стабильный для съёмки)
@@ -1521,6 +1678,15 @@ async function reelLife() {
 const profModal = $('profileModal');
 let profileLoaded = false;
 
+// Строка под «Сохранить»: обычный текст, ошибка или зелёная пилюля «Сохранено».
+function setProfStatus(text, kind = '') {
+  const el = $('profStatus');
+  el.classList.remove('ok', 'err');
+  if (kind === 'ok') void el.offsetWidth;   // пилюля выскакивает заново и при повторном сохранении
+  el.textContent = text;
+  if (kind) el.classList.add(kind);
+}
+
 function paintAvatar(url) {
   const btn = $('avatarBtn'), btnImg = $('avatarBtnImg'), bigImg = $('avaImg');
   btn.classList.toggle('filled', !!url);
@@ -1569,7 +1735,7 @@ async function loadProfile() {
     if (!access.telegram && access.tgBot) VitaTG.mount($('tgBoxProfile'), access);
     profileLoaded = true;
   } catch (error) {
-    $('profStatus').textContent = error.message || 'Не удалось загрузить профиль';
+    setProfStatus(error.message || 'Не удалось загрузить профиль', 'err');
   }
 }
 
@@ -1581,6 +1747,39 @@ const avatarBtn = $('avatarBtn');
 const profCard = profModal.querySelector('.profile-modal');
 const calmMotion = matchMedia('(prefers-reduced-motion: reduce)');
 let profOpen = false, profAnims = [], profGen = 0;
+// после «Сохранено» карточка сама уходит через секунду; «Сохранить» ждёт загрузку фото
+let profCloseTimer = 0, avaUploading = null;
+
+// Фото из шапки не остаётся висеть наверху: оно само переезжает в карточку на
+// своё место и так же возвращается в шапку. Летит копия, а там, откуда фото
+// улетело, остаётся пустое место.
+const bigAva = profCard.querySelector('.ava-big');
+let avaFlyer = null;
+
+function avaFly(fromEl, toEl, timing) {
+  avaFlyer?.remove();
+  const size = bigAva.offsetWidth || 96;
+  const spot = el => {
+    const r = el.getBoundingClientRect();
+    return `translate(${r.left + r.width / 2 - size / 2}px, ${r.top + r.height / 2 - size / 2}px) scale(${r.width / size})`;
+  };
+  const from = spot(fromEl), to = spot(toEl);
+  avaFlyer = bigAva.cloneNode(true);
+  avaFlyer.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
+  avaFlyer.classList.add('ava-fly');
+  avaFlyer.setAttribute('aria-hidden', 'true');
+  document.body.append(avaFlyer);
+  bigAva.classList.add('ava-wait');
+  avatarBtn.classList.add('gone');
+  return avaFlyer.animate([{ transform: from }, { transform: to }], { ...timing, fill: 'both' });
+}
+
+function avaLand() {
+  avaFlyer?.remove();
+  avaFlyer = null;
+  bigAva.classList.remove('ava-wait');
+  avatarBtn.classList.toggle('gone', profOpen);
+}
 
 // Кадр «карточка сжата в кружок»: квадрат из её середины, уменьшенный до
 // размера кружка и поставленный ровно на него.
@@ -1608,6 +1807,7 @@ function profSettle(anims) {
     profAnims = [];
     profCard.classList.remove('morph');
     if (!profOpen) profModal.hidden = true;
+    avaLand();                            // фото село на место — копия больше не нужна
     anims.forEach(a => a.cancel());       // снимаем удержание последнего кадра
   }).catch(() => {});
 }
@@ -1615,6 +1815,8 @@ function profSettle(anims) {
 function openProfile() {
   if (profOpen) return;
   profOpen = true;
+  clearTimeout(profCloseTimer);
+  if ($('profStatus').classList.contains('ok')) setProfStatus('');
   avatarBtn.setAttribute('aria-expanded', 'true');
   if (!profileLoaded) loadProfile();
   if (profAnims.length) {                 // карточка ещё уходила — возвращаем её
@@ -1631,9 +1833,12 @@ function openProfile() {
     profSettle([profModal.animate(fade, { duration: 200, easing: 'ease-out', fill: 'both' })]);
     return;
   }
+  const grow = { duration: 560, easing: 'cubic-bezier(.32, .72, 0, 1)' };
+  const fly = avaFly(avatarBtn, bigAva, grow);   // место фото меряем, пока карточка ещё не растёт
   profCard.classList.add('morph');
   profSettle([
-    profCard.animate(profFromAvatar(), { duration: 560, easing: 'cubic-bezier(.32, .72, 0, 1)', fill: 'both' }),
+    fly,
+    profCard.animate(profFromAvatar(), { ...grow, fill: 'both' }),
     profCard.animate(fade, { duration: 140, fill: 'both' }),
     profModal.animate(fade, { duration: 380, easing: 'ease-out', fill: 'both' }),
     ...[...profCard.children].map(el =>
@@ -1644,6 +1849,7 @@ function openProfile() {
 function closeProfile() {
   if (!profOpen) return;
   profOpen = false;
+  clearTimeout(profCloseTimer);
   avatarBtn.setAttribute('aria-expanded', 'false');
   if (profCard.contains(document.activeElement)) avatarBtn.focus({ preventScroll: true });
   if (profAnims.length) {                 // ещё вырастала — уходит тем же путём назад
@@ -1656,9 +1862,12 @@ function closeProfile() {
     profSettle([profModal.animate(fade, { duration: 160, easing: 'ease-in', fill: 'both' })]);
     return;
   }
+  const shrink = { duration: 400, easing: 'cubic-bezier(.4, 0, .1, 1)' };
+  const fly = avaFly(bigAva, avatarBtn, shrink);
   profCard.classList.add('morph');
   profSettle([
-    profCard.animate(profFromAvatar().reverse(), { duration: 400, easing: 'cubic-bezier(.4, 0, .1, 1)', fill: 'both' }),
+    fly,
+    profCard.animate(profFromAvatar().reverse(), { ...shrink, fill: 'both' }),
     // в самом конце гаснет, чтобы нырнуть под кружок, а не исчезнуть щелчком
     profCard.animate([{ opacity: 1 }, { opacity: 1, offset: 0.72 }, { opacity: 0 }], { duration: 400, fill: 'both' }),
     profModal.animate(fade, { duration: 400, easing: 'ease-in', fill: 'both' }),
@@ -1669,6 +1878,9 @@ function closeProfile() {
 
 avatarBtn.addEventListener('click', () => (profOpen ? closeProfile() : openProfile()));
 $('profileClose').addEventListener('click', closeProfile);
+// тронул карточку после «Сохранено» — значит, ещё не всё: пусть остаётся
+profCard.addEventListener('pointerdown', () => clearTimeout(profCloseTimer));
+profCard.addEventListener('input', () => clearTimeout(profCloseTimer));
 profModal.addEventListener('click', e => { if (e.target === profModal) closeProfile(); });
 addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
@@ -1884,17 +2096,20 @@ $('cropDone').addEventListener('click', async () => {
     return;
   }
 
-  $('profStatus').textContent = 'Загружаю фото…';
-  out.toBlob(async blob => {
-    if (!blob) { $('profStatus').textContent = 'Не получилось обрезать фото'; return; }
+  setProfStatus('Загружаю фото…');
+  // «Сохранить» дожидается этой загрузки, иначе карточка уйдёт раньше фото
+  avaUploading = new Promise(resolve => out.toBlob(async blob => {
+    if (!blob) { setProfStatus('Не получилось обрезать фото', 'err'); resolve(false); return; }
     try {
       const data = await VitaID.uploadAvatar(new File([blob], 'avatar.jpg', { type: 'image/jpeg' }));
       paintAvatar(data.avatar);
-      $('profStatus').textContent = 'Фото обновлено';
+      if (!$('profSave').disabled) setProfStatus('Фото обновлено');   // идёт сохранение — строкой владеет оно
+      resolve(true);
     } catch (error) {
-      $('profStatus').textContent = error.message || 'Не получилось загрузить фото';
+      setProfStatus(error.message || 'Не получилось загрузить фото', 'err');
+      resolve(false);
     }
-  }, 'image/jpeg', 0.92);
+  }, 'image/jpeg', 0.92));
 });
 
 $('avaFile').addEventListener('change', e => {
@@ -1903,11 +2118,20 @@ $('avaFile').addEventListener('change', e => {
   if (file) cropOpen(file);
 });
 
+// «Сохранить» — последний шаг: пилюля «Сохранено», секунда, чтобы её прочитать,
+// и карточка сама уходит в кружок. Крестик — для тех, кто открыл случайно.
 $('profSave').addEventListener('click', async () => {
   const btn = $('profSave');
+  clearTimeout(profCloseTimer);
   btn.disabled = true;
-  $('profStatus').textContent = 'Сохраняю…';
+  setProfStatus('Сохраняю…');
   try {
+    const photo = avaUploading;
+    avaUploading = null;
+    if (photo && !(await photo)) {
+      setProfStatus('Фото не загрузилось — выбери его ещё раз', 'err');
+      return;
+    }
     const data = await VitaID.updateProfile({
       name: $('profName').value.trim(),
       handle: $('profTag').value.trim(),
@@ -1915,9 +2139,10 @@ $('profSave').addEventListener('click', async () => {
     $('profName').value = data.name || '';
     $('profTag').value = (data.handle || '').replace(/^@+/, '');
     paintTagNote(data);
-    $('profStatus').textContent = 'Сохранено';
+    setProfStatus('Сохранено', 'ok');
+    profCloseTimer = setTimeout(closeProfile, 1400);
   } catch (error) {
-    $('profStatus').textContent = error.message || 'Не удалось сохранить';
+    setProfStatus(error.message || 'Не удалось сохранить', 'err');
   } finally {
     btn.disabled = false;
   }

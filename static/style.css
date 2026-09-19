@@ -1,7 +1,9 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 /* Двойной тап по экрану на айфоне приближал страницу — раздражает и ломает
    ощущение приложения. Щипок для увеличения при этом остаётся. */
-html { touch-action: manipulation; }
+/* Щипком страница не приближается, двойной тап тоже не зумит: крупное и так
+   под палец. Айфону вдобавок нужен отказ от жеста в theme.js. */
+html, body { touch-action: pan-x pan-y; }
 
 :root {
   --glass-blur: 32px;
@@ -423,6 +425,31 @@ main { width: 100%; max-width: 430px; display: flex; flex-direction: column; gap
   font-weight: 600;
   box-shadow: var(--seg-on-shadow);
 }
+/* Подсветка — отдельный слой под кнопками (его ставит app.js): она переезжает
+   к выбранной таблетке, а не перескакивает. Кнопки поверх только красят текст,
+   и новая загорается, когда подсветка до неё доехала. */
+.seg-pill {
+  position: absolute;
+  z-index: 0;
+  border-radius: 999px;
+  background: var(--seg-on-bg);
+  box-shadow: var(--seg-on-shadow);
+  pointer-events: none;
+  transition: scale .2s cubic-bezier(.34, 1.56, .64, 1);
+}
+.seg.glide { position: relative; isolation: isolate; }
+.seg.glide button {
+  position: relative;
+  z-index: 1;
+  transition: transform .2s cubic-bezier(.34, 1.56, .64, 1), color .24s ease;
+}
+.seg.glide button.on {
+  background: none;
+  box-shadow: none;
+  transition: transform .2s cubic-bezier(.34, 1.56, .64, 1), color .26s ease .12s;
+}
+/* нажатие проминает и подсветку — как было, пока она жила в самой кнопке */
+.seg.glide:has(button.on:active) .seg-pill { scale: .96; }
 
 /* мокап iPhone 17 Pro: титановая грань, Dynamic Island, кнопка питания */
 .phone {
@@ -543,7 +570,8 @@ main { width: 100%; max-width: 430px; display: flex; flex-direction: column; gap
   border-radius: 2px;
   background: linear-gradient(90deg, #4a4a50, #2c2c30);
 }
-.mini canvas { display: block; width: 100%; height: auto; border-radius: 21px; }
+/* пропорции экрана задаём сами: размер канвы теперь меняется вместе с приближением */
+.mini canvas { display: block; width: 100%; height: auto; aspect-ratio: 1179 / 2556; border-radius: 21px; }
 
 /* подсказка показывается один раз, при первом появлении экранчика */
 .mini-hint {
@@ -573,7 +601,7 @@ main { width: 100%; max-width: 430px; display: flex; flex-direction: column; gap
 
 .controls { display: flex; flex-direction: column; gap: 22px; }
 
-.field.two { flex-direction: row; align-items: flex-end; gap: 13px; }
+.field.two { flex-direction: row; align-items: flex-end; gap: 12px; }
 .field.two label {
   flex: 1 1 0;
   min-width: 0;
@@ -581,20 +609,31 @@ main { width: 100%; max-width: 430px; display: flex; flex-direction: column; gap
   flex-direction: column;
   gap: 10px;
 }
-/* min-width: 0 обязателен: у поля с датой своя минимальная ширина, и без
-   этого вторая карточка уезжала за край экрана, а стрелку сплющивало в ноль */
-.field.two input {
+/* Поле даты на айфоне держит свою природную ширину и не слушается width:
+   вторая карточка уезжала за край экрана, а стрелка садилась криво между ними.
+   appearance: none возвращает полю обычные размеры, дату по центру ставит её
+   собственный слой. Высота задана явно — 50 точек, стрелка берёт столько же
+   и потому стоит ровно посередине. */
+.field input[type="date"] {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
   width: 100%;
   min-width: 0;
-  padding: 12px 8px;
+  height: 50px;
+  line-height: 22px;
+}
+.field input[type="date"]::-webkit-date-and-time-value { margin: 0; text-align: inherit; }
+.field.two input {
+  padding: 13px 8px;
   font-size: 15px;
   text-align: center;
 }
 /* на узких экранах дата по-русски длинная («12 сент. 2026 г.») — ужимаем всё,
    лишь бы обе карточки остались целыми */
 @media (max-width: 360px) {
-  .field.two { gap: 9px; }
-  .field.two input { font-size: 14px; padding: 12px 6px; }
+  .field.two { gap: 8px; }
+  .field.two input { font-size: 14px; padding: 13px 5px; }
 }
 /* стрелка показывает, что это дорога: от старта к финишу */
 .two-arrow {
@@ -602,7 +641,7 @@ main { width: 100%; max-width: 430px; display: flex; flex-direction: column; gap
   align-self: flex-end;
   display: grid;
   place-items: center;
-  height: 46px;
+  height: 50px;            /* ровно высота поля даты */
   color: var(--text-nav);
 }
 .two-arrow svg {
@@ -2149,6 +2188,19 @@ header { transition: box-shadow .45s ease; }
 .avatar-btn img { width: 100%; height: 100%; object-fit: cover; }
 .avatar-btn:active { transform: scale(0.94); }
 .avatar-btn.filled { color: var(--text); }
+/* пока карточка открыта, фото живёт в ней, а в шапке на его месте пусто */
+.avatar-btn.gone { opacity: 0; }
+/* фото переезжает между шапкой и карточкой — летит его копия, над шапкой */
+.ava-fly {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 35;
+  pointer-events: none;
+  transform-origin: 50% 50%;
+  will-change: transform;
+}
+.ava-wait { visibility: hidden; }
 
 /* карточка профиля стоит по центру экрана, а не выезжает снизу */
 .modal-back.center { align-items: center; padding: 20px 16px; overflow-y: auto; }
@@ -2228,7 +2280,8 @@ header { transition: box-shadow .45s ease; }
 /* статус prime — строка, а не ещё одна коробка внутри карточки */
 .prime { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 9px; }
 .prime-state { color: var(--text-nav); font-size: 13px; }
-.prime.on .prime-state {
+.prime.on .prime-state,
+.prof-status.ok {
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -2237,7 +2290,8 @@ header { transition: box-shadow .45s ease; }
   border: 1px solid rgba(52, 199, 89, 0.38);
   color: var(--accent-soft);
 }
-[data-theme="light"] .prime.on .prime-state { border-color: rgba(26, 127, 67, 0.34); }
+[data-theme="light"] .prime.on .prime-state,
+[data-theme="light"] .prof-status.ok { border-color: rgba(26, 127, 67, 0.34); }
 .prime.on .prime-state::before {
   content: "";
   width: 6px;
@@ -2273,7 +2327,22 @@ header { transition: box-shadow .45s ease; }
   font-size: 15px;
   margin-top: 2px;
 }
-.prof-status { min-height: 16px; }
+/* место под пилюлю держим заранее, чтобы карточка не вздрагивала */
+.prof-status { min-height: 30px; margin: 0; display: flex; align-items: center; justify-content: center; }
+/* «Сохранено» — та же зелёная пилюля, что у prime, только с галочкой. Она
+   выскакивает, а через секунду карточка сама уходит в кружок. */
+.prof-status.ok { animation: savedIn .42s cubic-bezier(.22, 1, .36, 1) both; }
+.prof-status.ok::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  flex: none;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.3 6.4l2.5 2.5 4.9-5.6' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.3 6.4l2.5 2.5 4.9-5.6' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+@keyframes savedIn { from { opacity: 0; transform: translateY(5px) scale(.94); } }
+@media (prefers-reduced-motion: reduce) { .prof-status.ok { animation: none; } }
 .prof-exit {
   border: 0;
   background: none;
@@ -2500,19 +2569,14 @@ body.login-page::before { display: none; }
 .login-logo.no-art img { display: none !important; }
 .login-logo.no-art .login-logo-word { display: block; }
 
-/* Пилюля переезжает, а не перескакивает: сама подсветка — отдельный слой,
-   кнопки поверх только красят текст. */
+/* Пилюля переезжает, а не перескакивает: подсветка — общий слой .seg-pill,
+   здесь задано только её место — половина капсулы. */
 .login-seg { margin: 0; position: relative; isolation: isolate; }
 .login-seg .seg-pill {
-  position: absolute;
-  z-index: 0;
   top: 4px;
   left: 4px;
   width: calc(50% - 4px);
   height: calc(100% - 8px);
-  border-radius: 999px;
-  background: var(--seg-on-bg);
-  box-shadow: var(--seg-on-shadow);
   transition: transform .42s cubic-bezier(.22, 1, .36, 1);
 }
 .login-seg.at-login .seg-pill { transform: translateX(100%); }

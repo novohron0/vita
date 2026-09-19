@@ -13,6 +13,13 @@
   meta.content = light ? '#f4f1ec' : '#000000';
 })();
 
+/* Щипком страница не приближается: крупное здесь и так под палец, а случайный
+   зум сбивает вёрстку. В Chrome это закрывает touch-action в style.css, айфон
+   слушает только отказ от своего жеста. Экранчик и окно обрезки ловят два
+   пальца через pointer-события — их это не касается. */
+['gesturestart', 'gesturechange'].forEach(type =>
+  document.addEventListener(type, e => e.preventDefault(), { passive: false }));
+
 function syncThemeToggle(btn) {
   const light = document.documentElement.dataset.theme === 'light';
   btn.classList.toggle('is-light', light);
