@@ -243,6 +243,12 @@ body.scrolled .head-pill { box-shadow: var(--header-rim), var(--glass-shadow), 0
 /* когда ссылок много, слово «vita» уступает им место первым */
 .head-pill:has(.nav) .logo-word { display: none; }
 .head-pill:has(.nav) { gap: 10px; }
+/* на узком экране логотип, ссылки и переключатель упирались в борт пилюли —
+   отдаём им поля обратно (островок главной сюда не попадает: там нет ссылок) */
+@media (max-width: 400px) {
+  .head-pill:has(.nav) { padding-left: 12px; padding-right: 12px; gap: 8px; }
+  .head-pill .nav { gap: 7px; }
+}
 
 /* название никуда не девается: шапка просто собирается вокруг кружка профиля */
 .head-shrink .logo { font-size: 20px; white-space: nowrap; }
@@ -299,7 +305,13 @@ header { transition: box-shadow .45s ease; }
 }
 .theme-track {
   position: relative;
-  display: block;
+  /* Кружок лежит внутри флексом и меряется от самого трека, а трек режет всё
+     лишнее по своему борту: раньше он был задан отдельными 22 px и на айфоне
+     владельца вылезал за края переключателя. */
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  padding: 3px;
   width: 52px;
   height: 28px;
   border-radius: 999px;
@@ -331,11 +343,11 @@ header { transition: box-shadow .45s ease; }
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cdefs%3E%3CradialGradient id='m' cx='35%25' cy='30%25' r='70%25'%3E%3Cstop offset='0%25' stop-color='%23fffdf5'/%3E%3Cstop offset='55%25' stop-color='%23f5e6b8'/%3E%3Cstop offset='100%25' stop-color='%23c9a84a'/%3E%3C/radialGradient%3E%3C/defs%3E%3Ccircle cx='11' cy='12' r='8.5' fill='url(%23m)'/%3E%3Ccircle cx='16.5' cy='10' r='7.5' fill='%23101420'/%3E%3C/svg%3E");
 }
 .theme-knob {
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 22px;
-  height: 22px;
+  /* размер — от внутренней высоты трека, поэтому он не может её перерасти */
+  flex: none;
+  height: 100%;
+  width: auto;
+  aspect-ratio: 1;
   border-radius: 50%;
   background: linear-gradient(145deg, #fff, #e8e8ed);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18), inset 0 1px 0 #fff;
