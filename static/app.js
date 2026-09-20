@@ -1221,7 +1221,7 @@ bindSeg('mode', v => {
     $('title').value = state.title;
   }
 }, true);
-bindSeg('shape', v => { state.shape = v; });
+bindSeg('shape', v => { state.shape = v; paintShapeChips(); });
 // Канва не умеет ждать шрифт сама: пока файл не подгружен, она молча рисует
 // системным. Поэтому сначала просим шрифт под нынешний текст, потом перерисовываем.
 async function useFont(key) {
@@ -1484,7 +1484,7 @@ function nextTheme() {
 try { if (localStorage.getItem('vitaThemeTap') && $('phoneTip')) $('phoneTip').classList.add('gone'); } catch {}
 
 // --- «Ещё»: в каждой сетке видно три ряда, остальное открывается кнопкой ---
-const ROWS_SHOWN = 3, GRID_GAP = 8, WRAP_PAD = 52;   // поля обёртки под свечение
+const ROWS_SHOWN = 2, GRID_GAP = 8, WRAP_PAD = 52;   // поля обёртки под свечение
 
 function setupMore(wrap) {
   const grid = wrap.firstElementChild;
@@ -1555,6 +1555,8 @@ function showSelected(id) {
 }
 
 document.querySelectorAll('.more-wrap').forEach(setupMore);
+new MutationObserver(() => paintShapeChips())
+  .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
 // Форма точек — лентой, как шрифты: на таблетке нарисована сама точка,
 // тем же кодом, что уйдёт на обои, и тем же цветом, что выбран.
@@ -1563,6 +1565,11 @@ function paintShapeChips() {
   const dpr = Math.min(2, devicePixelRatio || 1);
   const box = 34, d = 26;
   const keepShape = state.shape, keepGlass = state.glass, keepGlow = state.glow;
+  // точки на таблетках всегда одного цвета — белые в тёмной теме сайта; на
+  // выбранной таблетке фон белый, поэтому там точка тёмная
+  const css = getComputedStyle(document.documentElement);
+  const plain = css.getPropertyValue('--text').trim() || '#f2f2f2';
+  const onPill = css.getPropertyValue('--seg-on-text').trim() || '#000000';
   for (const btn of $('shape').querySelectorAll('button[data-v]')) {
     let cv = shapeChips.get(btn);
     if (!cv) {
@@ -1580,7 +1587,8 @@ function paintShapeChips() {
     state.shape = btn.dataset.v;
     state.glass = keepGlass;
     state.glow = false;
-    drawDot(c, (box - d) / 2, (box - d) / 2, d, state.color, 'filled', 0, false, 3);
+    drawDot(c, (box - d) / 2, (box - d) / 2, d,
+      btn.classList.contains('on') ? onPill : plain, 'filled', 0, false, 3);
   }
   state.shape = keepShape;
   state.glass = keepGlass;
@@ -1627,7 +1635,6 @@ swatches.addEventListener('click', e => {
   state.color = btn.dataset.v;
   customColor = false;
   $('colorPick').value = state.color;
-  paintShapeChips();
   draw();
 });
 
@@ -1635,7 +1642,6 @@ $('colorPick').addEventListener('input', e => {
   customColor = true;
   state.color = e.target.value;
   swatches.querySelectorAll('.swatch').forEach(s => s.classList.remove('on'));
-  paintShapeChips();
   draw();
 });
 
@@ -1958,6 +1964,15 @@ const profModal = $('profileModal');
 let profileLoaded = false;
 
 // Строка под «Сохранить»: обычный текст, ошибка или зелёная пилюля «Сохранено».
+// «Сохранить» → «Сохраняю…» → «Сохранено»: заливка уходит, остаётся белая
+// рамка, будто кнопку прожали. Отдельной строки под кнопкой для этого не нужно.
+function setSaveState(kind = '') {
+  const btn = $('profSave');
+  btn.classList.toggle('busy', kind === 'busy');
+  btn.classList.toggle('done', kind === 'done');
+  btn.textContent = kind === 'done' ? 'Сохранено' : kind === 'busy' ? 'Сохраняю…' : 'Сохранить';
+}
+
 function setProfStatus(text, kind = '') {
   const el = $('profStatus');
   el.classList.remove('ok', 'err');
@@ -2053,6 +2068,11 @@ function avaFly(fromEl, toEl, timing) {
     return `translate(${r.left + r.width / 2 - size / 2}px, ${r.top + r.height / 2 - size / 2}px) scale(${r.width / size})`;
   };
   const from = spot(fromEl), to = spot(toEl);
+  // к карточке фото высветляется, обратно — притухает: так видно, что оно
+  // переехало, а не телепортировалось
+  const dim = toEl === bigAva
+    ? ['brightness(.52)', 'brightness(1)']
+    : ['brightness(1)', 'brightness(.52)'];
   avaFlyer = bigAva.cloneNode(true);
   avaFlyer.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
   avaFlyer.classList.add('ava-fly');
@@ -2060,7 +2080,9 @@ function avaFly(fromEl, toEl, timing) {
   document.body.append(avaFlyer);
   bigAva.classList.add('ava-wait');
   avatarBtn.classList.add('gone');
-  return avaFlyer.animate([{ transform: from }, { transform: to }], { ...timing, fill: 'both' });
+  return avaFlyer.animate(
+    [{ transform: from, filter: dim[0] }, { transform: to, filter: dim[1] }],
+    { ...timing, fill: 'both' });
 }
 
 function avaLand() {
@@ -2106,6 +2128,7 @@ function openProfile() {
   profOpen = true;
   clearTimeout(profCloseTimer);
   if ($('profStatus').classList.contains('ok')) setProfStatus('');
+  setSaveState('');
   avatarBtn.setAttribute('aria-expanded', 'true');
   if (!profileLoaded) loadProfile();
   if (profAnims.length) {                 // карточка ещё уходила — возвращаем её
@@ -2415,12 +2438,14 @@ $('profSave').addEventListener('click', async () => {
   const btn = $('profSave');
   clearTimeout(profCloseTimer);
   btn.disabled = true;
-  setProfStatus('Сохраняю…');
+  setProfStatus('');
+  setSaveState('busy');
   try {
     const photo = avaUploading;
     avaUploading = null;
     if (photo && !(await photo)) {
       setProfStatus('Фото не загрузилось — выбери его ещё раз', 'err');
+      setSaveState('');
       return;
     }
     const data = await VitaID.updateProfile({
@@ -2430,10 +2455,11 @@ $('profSave').addEventListener('click', async () => {
     $('profName').value = data.name || '';
     $('profTag').value = (data.handle || '').replace(/^@+/, '');
     paintTagNote(data);
-    setProfStatus('Сохранено', 'ok');
+    setSaveState('done');
     profCloseTimer = setTimeout(closeProfile, 1400);
   } catch (error) {
     setProfStatus(error.message || 'Не удалось сохранить', 'err');
+    setSaveState('');
   } finally {
     btn.disabled = false;
   }

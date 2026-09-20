@@ -734,6 +734,19 @@ main { width: 100%; max-width: 430px; display: flex; flex-direction: column; gap
   box-shadow: var(--primary-inset), var(--primary-glow);
 }
 .primary:active { transform: scale(0.98); }
+/* сохранилось — говорит сама кнопка: заливка уходит, остаётся светлая рамка,
+   будто её прожали, и никакой строки под ней не нужно */
+.primary.done, .primary.done:disabled {
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  color: var(--text);
+  box-shadow: inset 0 0 0 2px var(--text);
+  opacity: 1;
+  transform: scale(.985);
+}
+.primary.busy { opacity: .7; }
+.primary { transition: background .3s cubic-bezier(.32, .72, 0, 1), color .3s cubic-bezier(.32, .72, 0, 1), box-shadow .3s cubic-bezier(.32, .72, 0, 1), transform .2s cubic-bezier(.32, .72, 0, 1); }
 .secondary {
   background: var(--glass-bg-soft);
   backdrop-filter: blur(14px) saturate(var(--glass-saturate));
@@ -2190,7 +2203,10 @@ header { transition: box-shadow .45s ease; }
   transition: border-color .2s, transform .15s;
 }
 .avatar-btn svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
-.avatar-btn:active { transform: scale(0.94); }
+.avatar-btn {
+  transition: border-color .2s, transform .15s, filter .2s ease;
+}
+.avatar-btn:active { transform: scale(0.94); filter: brightness(0.52); }
 .avatar-btn.filled { color: var(--text); }
 /* пока карточка открыта, фото живёт в ней, а в шапке на его месте пусто */
 .avatar-btn.gone { opacity: 0; }
