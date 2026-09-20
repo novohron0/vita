@@ -20,7 +20,7 @@
   try { if (!localStorage.getItem('vitaSignedIn')) document.documentElement.classList.add('gate'); } catch (e) {}
 </script>
 <script src="/static/theme.js?v=8"></script>
-<link rel="stylesheet" href="/static/style.css?v=110">
+<link rel="stylesheet" href="/static/style.css?v=111">
 <style>
   .home-hero { animation: fadeUp .7s cubic-bezier(.22,1,.36,1) both; }
   .phone { animation: phoneReveal .85s cubic-bezier(.22,1,.36,1) both, phoneFloat 7s ease-in-out 1.1s infinite; }
@@ -344,6 +344,29 @@
   </div>
 </div>
 
+<!-- Вид в режиме «Расположение»: панель снизу закрывает низ айфона, поэтому
+     телефон умеет уменьшаться и ездить под пальцем. Тут только зум; двигают
+     его щипком и пальцем прямо по обоям. -->
+<div class="place-view" id="placeView" hidden>
+  <button type="button" id="viewOut" title="мельче" aria-label="Уменьшить телефон">
+    <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 10h10"/></svg>
+  </button>
+  <button type="button" id="viewFit" title="по размеру" aria-label="Телефон целиком">
+    <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 7.6V4h3.6M16 12.4V16h-3.6M12.4 4H16v3.6M7.6 16H4v-3.6"/></svg>
+  </button>
+  <button type="button" id="viewIn" title="крупнее" aria-label="Увеличить телефон">
+    <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 10h10M10 5v10"/></svg>
+  </button>
+  <span class="place-view-sep" aria-hidden="true"></span>
+  <button type="button" id="viewChrome" class="on" title="как на айфоне" aria-pressed="true"
+          aria-label="Показать часы, значки и виджеты айфона">
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      <path d="M10 4.6c3.3 0 5.9 2.7 6.7 5.4-.8 2.7-3.4 5.4-6.7 5.4S4.1 12.7 3.3 10C4.1 7.3 6.7 4.6 10 4.6Z"/>
+      <circle cx="10" cy="10" r="2.2"/>
+    </svg>
+  </button>
+</div>
+
 <!-- Режим «Расположение»: телефон становится холстом, а эта панель — всем
      пультом. Страница на это время прячет остальное, чтобы под палец попадало
      только то, что сейчас настраивают. -->
@@ -353,9 +376,10 @@
     <button type="button" data-v="vita">vita</button>
     <button type="button" data-v="dots" class="on">Точки</button>
     <button type="button" data-v="foot">Счётчик</button>
+    <button type="button" data-v="clock">Часы</button>
   </div>
   <label class="place-size">
-    <span>Размер</span>
+    <span id="placeSizeLab">Размер</span>
     <input type="range" id="placeSize" min="40" max="130" step="1" value="100">
     <b id="placeSizeVal">100 %</b>
   </label>
@@ -389,6 +413,6 @@
 <script src="/static/vita-id.js?v=7"></script>
 <script src="/static/tg-login.js?v=4"></script>
 <script src="/static/scenes.js?v=3"></script>
-<script src="/static/app.js?v=72"></script>
+<script src="/static/app.js?v=73"></script>
 </body>
 </html>

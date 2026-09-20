@@ -3287,6 +3287,7 @@ body.login-page::before { display: none; }
 .phone-place:hover { background: var(--glass-bg-lift); color: var(--text); }
 .phone-place:active { scale: .97; }
 
+body.placing header,
 body.placing .home-hero,
 body.placing #mode,
 body.placing .hero-act,
@@ -3296,12 +3297,101 @@ body.placing .page-foot,
 body.placing .mini-wrap,
 body.placing .phone-tip,
 body.placing .phone-place { display: none; }
-/* панель стоит внизу и не должна закрывать телефон */
-body.placing main { padding-bottom: 330px; }
-body.placing .phone-zone { cursor: default; }
+
+/* Телефон живёт в своём окне: сверху край экрана, снизу панель, её высоту
+   кладёт JS в --place-bot. Сам телефон ужимается под это окно (--place-vk) и
+   ездит под пальцем (--place-vx / --place-vy) — раньше панель закрывала низ. */
+body.placing { overflow: hidden; }
+body.placing main { padding-bottom: 0; }
+body.placing .phone-zone {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: block;
+  /* сверху место под кнопки зума, снизу — под пульт: по этим полям JS и
+     считает, куда поставить телефон. Центровать его сеткой нельзя — когда он
+     больше окна, браузер прижимает его к верху вместо середины. */
+  padding: calc(max(12px, env(safe-area-inset-top)) + 52px) 12px var(--place-bot, 330px);
+  overflow: hidden;
+  cursor: default;
+  touch-action: none;
+  overscroll-behavior: contain;
+}
+/* дыхание корпуса сбивало прицел — в режиме телефон стоит смирно */
+body.placing .phone {
+  position: absolute;
+  left: 0;
+  top: 0;
+  margin: 0;
+  animation: none;
+  transform-origin: 0 0;
+  transform: translate(var(--place-px, 0px), var(--place-py, 0px)) scale(var(--place-vk, 1));
+  transition: transform .26s cubic-bezier(.22, 1, .36, 1);
+}
+body.placing .phone.viewing { transition: none; }  /* палец ведёт — без догоняния */
+/* вышли из режима — телефон просто возвращается к дыханию, без вступления */
+body.placed:not(.placing) .phone { animation: phoneFloat 7s ease-in-out infinite; }
 /* холст ловит палец сам: иначе айфон уедет страницей вместо точек */
 body.placing #cv { touch-action: none; cursor: grab; }
 body.placing #cv.dragging { cursor: grabbing; }
+
+/* Зум телефона: три кнопки в углу. Двигают его пальцем и щипком, поэтому
+   стрелок тут нет — только мельче, целиком, крупнее. */
+.place-view {
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top));
+  right: 12px;
+  z-index: 61;
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow), var(--glass-inset);
+}
+.place-view[hidden] { display: none; }
+.place-view button {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: background .18s ease, color .18s ease, scale .18s cubic-bezier(.22, 1, .36, 1);
+}
+.place-view button:hover { background: var(--glass-bg-lift); color: var(--text); }
+.place-view button:active { scale: .94; }
+.place-view button:disabled { opacity: .32; cursor: default; }
+.place-view button:disabled:hover { background: transparent; color: var(--text-2); }
+.place-view button.on { background: var(--seg-on-bg); color: var(--seg-on-text); }
+.place-view button.on:hover { background: var(--seg-on-bg); color: var(--seg-on-text); }
+.place-view button:focus-visible { outline: 2px solid var(--glass-edge); outline-offset: 2px; }
+.place-view-sep {
+  align-self: center;
+  width: 1px;
+  height: 22px;
+  margin: 0 3px;
+  background: var(--glass-border);
+}
+.place-view svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+@media (prefers-reduced-motion: reduce) {
+  body.placing .phone, .place-view button { transition: none; }
+}
 
 .place-bar {
   position: fixed;
@@ -3321,7 +3411,12 @@ body.placing #cv.dragging { cursor: grabbing; }
   box-shadow: var(--glass-shadow), var(--glass-inset);
 }
 .place-bar[hidden] { display: none; }
-.place-bar .seg.wide button { font-size: 14px; padding: 9px 6px; }
+.place-bar .seg.wide button {
+  font-size: clamp(11.5px, 3.1vw, 14px);
+  padding: 9px 4px;
+  min-width: 0;
+  white-space: nowrap;
+}
 .place-bar .seg.wide button:disabled { opacity: .38; cursor: default; }
 
 .place-size {
@@ -3399,6 +3494,8 @@ body.placing #cv.dragging { cursor: grabbing; }
   transition: background .18s ease, color .18s ease, scale .18s cubic-bezier(.22, 1, .36, 1);
 }
 .place-acts button:hover { background: var(--glass-bg-lift); color: var(--text); }
+.place-acts button:disabled { opacity: .38; cursor: default; }
+.place-acts button:disabled:hover { background: var(--glass-bg-soft); color: var(--text-2); }
 .place-acts button:active { scale: .97; }
 .place-acts button.primary {
   border-color: transparent;

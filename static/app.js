@@ -178,6 +178,12 @@ if (window.visualViewport) {
   const onZoom = () => {
     clearTimeout(zoomTimer);
     zoomTimer = setTimeout(() => {
+      // в режиме «Расположение» щипок ведём мы сами, а окно тут меняет высоту
+      // из-за адресной строки — телефон надо просто подогнать заново
+      if (placing) {
+        if (placeView.own) { placeFree(); placeApply(); } else placeFit();
+        return;
+      }
       const scale = window.visualViewport.scale || 1;
       if (setCanvasScale(scale > 1.15 ? scale : 1)) draw();
     }, 160);
@@ -2614,7 +2620,165 @@ const PLACE_COLS = {
   life: [0, 26, 52, 60],
   goal: [0, 5, 6, 10, 14],
 };
+// ——— Слой айфона поверх превью ————————————————————————————————
+// Статус-бар, дата с погодой, часы и виджеты снизу — ровно то, что айфон
+// рисует поверх обоев сам. Это ориентир, чтобы видеть, как точки уживаются с
+// часами и виджетами: на готовые обои ничего из этого не попадает и на сервер
+// не уезжает, поэтому и живёт отдельно от state.place.
+const CHROME_FACE = '-apple-system, "SF Pro Display", system-ui, sans-serif';
+const chromeFont = (px, w = 500) => `${w} ${Math.round(px)}px ${CHROME_FACE}`;
+const CLOCK_TOP = 352;      // верх цифр у обычных часов
+const CLOCK_PX = 300;       // их кегль
+const CLOCK_WIDE = 0.22;    // растянутые часы ещё и шире
+const CLOCK_TALL = 2.85;    // предел растяжки по высоте, как в iOS 26
+
+let chromeOn = true, clockH = 1;
+try {
+  chromeOn = localStorage.getItem('vitaChrome') !== '0';
+  const v = parseFloat(localStorage.getItem('vitaClockH'));
+  if (v >= 1 && v <= 1 + CLOCK_TALL) clockH = v;
+} catch {}
+function chromeSave() {
+  try {
+    localStorage.setItem('vitaChrome', chromeOn ? '1' : '0');
+    localStorage.setItem('vitaClockH', String(clockH));
+  } catch {}
+}
+
+// Айфон красит свои значки по обоям: на светлых — тёмным. Фоном бывает и фото,
+// и сцена, и градиент, поэтому смотрим на готовый кадр, а не на имя фона.
+let inkCache = { key: '', ink: '' };
+function chromeInk() {
+  const key = [state.bg, state.bgColor,
+    customBgImg ? customBgImg.width + 'x' + customBgImg.height : ''].join('|');
+  if (inkCache.key === key && inkCache.ink) return inkCache.ink;
+  let sum = 0, n = 0;
+  for (let i = 1; i <= 5; i++) for (const y of [120, 520, 900, 2070, 2480]) {
+    try {
+      const d = ctx.getImageData(Math.round(W * i / 6 * cvScale), Math.round(y * cvScale), 1, 1).data;
+      sum += (0.2126 * d[0] + 0.7152 * d[1] + 0.0722 * d[2]) / 255;
+      n++;
+    } catch {}
+  }
+  inkCache = { key, ink: n && sum / n > 0.62 ? '17, 17, 19' : '255, 255, 255' };
+  return inkCache.ink;
+}
+
+// Часы: ползунок тянет их вверх ровно так, как это делает айфон — цифры
+// становятся выше и немного шире, а верх остаётся на месте.
+function clockGeom() {
+  const t = Math.min(1, Math.max(0, (clockH - 1) / CLOCK_TALL));
+  const px = CLOCK_PX * (1 + CLOCK_WIDE * t);
+  const w8 = Math.round(500 + 260 * t);
+  ctx.save();
+  ctx.textBaseline = 'alphabetic';   // мерка ascent считается от текущей линии
+  ctx.font = chromeFont(CLOCK_PX, 500);
+  const asc0 = ctx.measureText('00:00').actualBoundingBoxAscent || CLOCK_PX * 0.72;
+  ctx.font = chromeFont(px, w8);
+  const m = ctx.measureText('00:00');
+  ctx.restore();
+  const asc = m.actualBoundingBoxAscent || px * 0.72;
+  const h = asc0 * clockH;
+  return { px, w8, asc, ky: h / asc, w: m.width, h, top: CLOCK_TOP };
+}
+
+function drawChrome() {
+  const rgb = chromeInk();
+  const ink = a => `rgba(${rgb}, ${a})`;
+  const box = (x, y, w, h, r) => { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); };
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+
+  // статус-бар: слева имя оператора, справа связь, вай-фай и батарея
+  box(110, 76, 160, 28, 14); ctx.fillStyle = ink(0.5); ctx.fill();
+  for (let i = 0; i < 4; i++) {
+    const h = 10 + i * 6;
+    box(860 + i * 14, 104 - h, 9, h, 3.5);
+    ctx.fillStyle = ink(i < 3 ? 0.9 : 0.35);
+    ctx.fill();
+  }
+  ctx.strokeStyle = ink(0.9);
+  ctx.lineWidth = 7;
+  for (const r of [15, 24]) {
+    ctx.beginPath();
+    ctx.arc(945, 104, r, -Math.PI * 0.78, -Math.PI * 0.22);
+    ctx.stroke();
+  }
+  ctx.beginPath(); ctx.arc(945, 100, 4.5, 0, 7); ctx.fillStyle = ink(0.9); ctx.fill();
+  ctx.lineWidth = 5;
+  ctx.strokeStyle = ink(0.42);
+  box(990, 73, 70, 34, 11); ctx.stroke();
+  box(996, 79, 40, 22, 7); ctx.fillStyle = ink(0.9); ctx.fill();
+  box(1064, 83, 6, 14, 3); ctx.fillStyle = ink(0.42); ctx.fill();
+
+  // дата с погодой одной строкой, как на экране блокировки
+  const day = new Date().toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric' });
+  const left = day.charAt(0).toUpperCase() + day.slice(1), right = '14°';
+  ctx.font = chromeFont(46, 500);
+  const wL = ctx.measureText(left).width, wR = ctx.measureText(right).width;
+  const gap = 18, cloudW = 54;
+  let x = (W - (wL + gap + cloudW + gap + wR)) / 2;
+  ctx.fillStyle = ink(0.88);
+  ctx.textBaseline = 'middle';
+  ctx.fillText(left, x, 282);
+  x += wL + gap;
+  ctx.beginPath();                       // облачко: три шапки на общем основании
+  ctx.arc(x + 20, 281, 13, 0, 7);
+  ctx.arc(x + 34, 285, 10, 0, 7);
+  ctx.arc(x + 12, 288, 9, 0, 7);
+  ctx.roundRect(x + 4, 283, 44, 14, 7);
+  ctx.fillStyle = ink(0.88);
+  ctx.fill();
+  ctx.fillText(right, x + cloudW + gap, 282);
+
+  // часы
+  const g = clockGeom();
+  ctx.save();
+  ctx.translate(W / 2, g.top);
+  ctx.scale(1, g.ky);
+  ctx.font = chromeFont(g.px, g.w8);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = ink(0.62);
+  ctx.fillText('00:00', 0, g.asc);
+  ctx.restore();
+
+  // виджеты снизу: список слева и две круглые кнопки справа
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  box(84, 1958, 500, 220, 46); ctx.fillStyle = ink(0.14); ctx.fill();
+  ctx.lineWidth = 5;
+  for (const [cy, barW] of [[2018, 260], [2118, 302]]) {
+    ctx.beginPath(); ctx.arc(146, cy, 24, 0, 7);
+    ctx.strokeStyle = ink(0.5); ctx.stroke();
+    box(190, cy - 14, barW, 28, 14); ctx.fillStyle = ink(0.5); ctx.fill();
+  }
+  for (const cx of [712, 960]) {
+    ctx.beginPath(); ctx.arc(cx, 2068, 104, 0, 7);
+    ctx.fillStyle = ink(0.14); ctx.fill();
+  }
+  ctx.strokeStyle = ink(0.72);          // будильник
+  ctx.lineWidth = 6;
+  ctx.beginPath(); ctx.arc(712, 2042, 32, 0, 7); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(712, 2024); ctx.lineTo(712, 2042); ctx.lineTo(726, 2042);
+  ctx.stroke();
+  box(672, 2094, 80, 20, 10); ctx.fillStyle = ink(0.5); ctx.fill();
+  ctx.beginPath();                      // воспроизведение
+  ctx.moveTo(942, 2042); ctx.lineTo(942, 2094); ctx.lineTo(986, 2068);
+  ctx.closePath();
+  ctx.fillStyle = ink(0.72); ctx.fill();
+
+  box(W / 2 - 140, 2478, 280, 10, 5);   // полоска «домой»
+  ctx.fillStyle = ink(0.55); ctx.fill();
+  ctx.restore();
+}
+
 function placeAlive(key) {
+  if (key === 'clock') return chromeOn;
   if (key === 'title') return !!state.title.trim();
   if (key === 'vita') return state.brand;
   if (key === 'foot') return state.footer;
@@ -2663,12 +2827,20 @@ function placeBoxes() {
       at: [g.foot.x, g.foot.y],
     };
   }
+  if (placeAlive('clock')) {
+    const c = clockGeom();
+    out.clock = {
+      box: [W / 2 - c.w / 2, c.top, W / 2 + c.w / 2, c.top + c.h],
+      at: [W / 2, c.top + c.h / 2],
+    };
+  }
   return out;
 }
 
 // Поверх обоев: пунктир периметра и уголки у выбранного элемента.
 // Рисуется только в режиме — на готовые обои с сервера это не попадает.
 function drawPlaceHints() {
+  if (chromeOn) drawChrome();
   const [bx0, by0, bx1, by1] = PLACE_BOX;
   ctx.save();
   ctx.setLineDash([20, 16]);
@@ -2719,25 +2891,121 @@ function placeSync() {
     b.classList.toggle('on', b.dataset.v === placeSel);
   }
   if (!placeAlive(placeSel)) placeSel = 'dots';
+  const clock = placeSel === 'clock';
   const size = $('placeSize');
-  size.value = Math.round(state.place[placeSel].s * 100);
+  size.min = clock ? 100 : 40;
+  size.max = clock ? Math.round((1 + CLOCK_TALL) * 100) : 130;
+  size.value = Math.round((clock ? clockH : state.place[placeSel].s) * 100);
   $('placeSizeVal').textContent = size.value + ' %';
+  $('placeSizeLab').textContent = clock ? 'Высота' : 'Размер';
   $('placeColsRow').hidden = placeSel !== 'dots';
+  $('placeCenter').disabled = clock;   // часы стоят там, где их ставит айфон
   placeColsFill();
+  placeFree();                         // строк в пульте стало больше или меньше
+  if (!placeView.own) placeFit();
+}
+
+// ——— Вид: телефон уменьшается и ездит под пальцем ————————————————
+// Панель снизу закрывала нижнюю треть айфона. Теперь при входе телефон сам
+// ужимается под свободное окно, а дальше его двигают пальцем по пустому месту
+// и щипком в два пальца; три кнопки в углу делают то же мышью.
+const VIEW_MIN = 0.3, VIEW_MAX = 2.4;
+const placeView = { k: 1, x: 0, y: 0, fit: 1, own: false };
+let freeBox = { w: 320, h: 520, l: 12, t: 64 };
+
+// свободное окно = экран минус панель; её высоту отдаём вёрстке
+function placeFree() {
+  const zone = $('phoneZone'), bar = $('placeBar');
+  if (!zone || !placing) return freeBox;
+  const h = bar && !bar.hidden ? bar.getBoundingClientRect().height + 22 : 0;
+  document.documentElement.style.setProperty('--place-bot', Math.round(h) + 'px');
+  const cs = getComputedStyle(zone);
+  const l = parseFloat(cs.paddingLeft), t = parseFloat(cs.paddingTop);
+  freeBox = {
+    l, t,
+    w: zone.clientWidth - l - parseFloat(cs.paddingRight),
+    h: zone.clientHeight - t - parseFloat(cs.paddingBottom),
+  };
+  return freeBox;
+}
+
+const placeMid = () => ({ x: freeBox.l + freeBox.w / 2, y: freeBox.t + freeBox.h / 2 });
+
+function placeApply(smooth = true) {
+  const phone = document.querySelector('.phone');
+  if (!phone) return;
+  const w = phone.offsetWidth * placeView.k, h = phone.offsetHeight * placeView.k;
+  const mx = Math.max(0, (w - freeBox.w) / 2) + 40;   // за край совсем не утащить
+  const my = Math.max(0, (h - freeBox.h) / 2) + 40;
+  placeView.x = Math.min(mx, Math.max(-mx, placeView.x));
+  placeView.y = Math.min(my, Math.max(-my, placeView.y));
+  const m = placeMid();
+  const st = document.documentElement.style;
+  st.setProperty('--place-vk', placeView.k.toFixed(4));
+  st.setProperty('--place-px', Math.round(m.x - w / 2 + placeView.x) + 'px');
+  st.setProperty('--place-py', Math.round(m.y - h / 2 + placeView.y) + 'px');
+  phone.classList.toggle('viewing', !smooth);
+  const home = Math.abs(placeView.k - placeView.fit) < 0.01
+    && Math.abs(placeView.x) < 1 && Math.abs(placeView.y) < 1;
+  $('viewOut').disabled = placeView.k <= VIEW_MIN + 0.001;
+  $('viewIn').disabled = placeView.k >= VIEW_MAX - 0.001;
+  $('viewFit').disabled = home;
+  // на зуме превью растягивало готовый растр — перерисовываем канву крупнее
+  if (setCanvasScale(placeView.k > 1.15 ? placeView.k : 1)) draw();
+}
+
+function placeFit() {
+  const phone = document.querySelector('.phone');
+  if (!phone || !placing) return;
+  const free = placeFree();
+  placeView.fit = Math.max(VIEW_MIN,
+    Math.min(free.w / phone.offsetWidth, free.h / phone.offsetHeight, 1));
+  placeView.k = placeView.fit;
+  placeView.x = placeView.y = 0;
+  placeView.own = false;
+  placeApply();
+}
+
+// зум вокруг точки: то, что под пальцем, под ним и остаётся
+function placeZoom(k1, sx, sy, smooth = false) {
+  const phone = document.querySelector('.phone');
+  if (!phone) return;
+  k1 = Math.min(VIEW_MAX, Math.max(VIEW_MIN, k1));
+  const m = placeMid();
+  const f = 1 - k1 / placeView.k;
+  placeView.x += (sx - m.x - placeView.x) * f;
+  placeView.y += (sy - m.y - placeView.y) * f;
+  placeView.k = k1;
+  placeView.own = true;
+  placeApply(smooth);
+}
+
+function chromeBtnSync() {
+  const b = $('viewChrome');
+  if (!b) return;
+  b.classList.toggle('on', chromeOn);
+  b.setAttribute('aria-pressed', chromeOn ? 'true' : 'false');
 }
 
 function placeOpen(on) {
   placing = on;
   document.body.classList.toggle('placing', on);
   $('placeBar').hidden = !on;
+  $('placeView').hidden = !on;
   if (on) {
+    // вступительная анимация страницы держит на main живой transform, а он
+    // делает main точкой отсчёта для fixed — телефон тогда сидит в его коробке
+    const m = document.querySelector('main');
+    if (m) m.style.animation = 'none';
     if (!placeAlive(placeSel)) placeSel = 'dots';
+    chromeBtnSync();
     placeSync();
-    const phone = document.querySelector('.phone');
-    const head = document.querySelector('header');
-    // шапка висит поверх страницы: без её высоты телефон уезжает под стекло
-    if (phone) slowScroll(phone.getBoundingClientRect().top + scrollY
-      - (head ? head.getBoundingClientRect().height : 0) - 26);
+    placeFit();
+  } else {
+    document.body.classList.add('placed');   // вступительное появление больше не нужно
+    setCanvasScale(1);
+    for (const v of ['--place-vk', '--place-px', '--place-py', '--place-bot'])
+      document.documentElement.style.removeProperty(v);
   }
   draw();
 }
@@ -2753,6 +3021,8 @@ if ($('placeBtn')) {
   $('placeDone').addEventListener('click', () => placeOpen(false));
   $('placeReset').addEventListener('click', () => {
     state.place = placeDefault();
+    clockH = 1;
+    chromeSave();
     placeSel = 'dots';
     placeSync();
     draw();
@@ -2762,7 +3032,9 @@ if ($('placeBtn')) {
     if (q.x !== null) { q.x = 0.5; draw(); }
   });
   $('placeSize').addEventListener('input', e => {
-    state.place[placeSel].s = Math.min(1.3, Math.max(0.4, +e.target.value / 100));
+    const v = +e.target.value / 100;
+    if (placeSel === 'clock') { clockH = Math.min(1 + CLOCK_TALL, Math.max(1, v)); chromeSave(); }
+    else state.place[placeSel].s = Math.min(1.3, Math.max(0.4, v));
     $('placeSizeVal').textContent = e.target.value + ' %';
     draw();
   });
@@ -2790,7 +3062,7 @@ if ($('placeBtn')) {
     let hit = null;
     for (const key of [placeSel, 'title', 'vita', 'foot', 'dots']) {
       const b = boxes[key];
-      if (!b) continue;
+      if (!b || key === 'clock') continue;   // часы держит айфон, их не двигают
       const [x0, y0, x1, y1] = b.box;
       if (p.x >= x0 - 26 && p.x <= x1 + 26 && p.y >= y0 - 26 && p.y <= y1 + 26) { hit = key; break; }
     }
@@ -2822,4 +3094,84 @@ if ($('placeBtn')) {
   };
   cvEl.addEventListener('pointerup', dragEnd);
   cvEl.addEventListener('pointercancel', dragEnd);
+
+  // ——— жесты вида: палец по пустому месту двигает телефон, два пальца — щипок
+  const zoneEl = $('phoneZone');
+  const pts = new Map();
+  let pinch = null, pan = null;
+  const midPt = () => {
+    const [a, b] = [...pts.values()];
+    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, d: Math.hypot(a.x - b.x, a.y - b.y) };
+  };
+
+  zoneEl.addEventListener('pointerdown', e => {
+    if (!placing) return;
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.size === 2) {
+      dragEnd();                   // второй палец — это щипок, а не перетаскивание
+      pan = null;
+      const m = midPt(), c = placeMid();
+      const cx = c.x, cy = c.y;
+      pinch = { d: m.d || 1, cx, cy,
+        lx: (m.x - cx - placeView.x) / placeView.k,
+        ly: (m.y - cy - placeView.y) / placeView.k, k: placeView.k };
+    } else if (pts.size === 1 && !placeDrag) {
+      pan = { x: e.clientX, y: e.clientY, vx: placeView.x, vy: placeView.y };
+      try { zoneEl.setPointerCapture(e.pointerId); } catch {}
+    }
+  });
+  zoneEl.addEventListener('pointermove', e => {
+    if (!pts.has(e.pointerId)) return;
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinch && pts.size >= 2) {
+      // считаем от начала щипка, иначе картинка уползает от пальцев
+      const m = midPt();
+      placeView.k = Math.min(VIEW_MAX, Math.max(VIEW_MIN, pinch.k * m.d / pinch.d));
+      placeView.x = m.x - pinch.cx - placeView.k * pinch.lx;
+      placeView.y = m.y - pinch.cy - placeView.k * pinch.ly;
+      placeView.own = true;
+      placeApply(false);
+    } else if (pan && !placeDrag) {
+      placeView.x = pan.vx + e.clientX - pan.x;
+      placeView.y = pan.vy + e.clientY - pan.y;
+      placeView.own = true;
+      placeApply(false);
+    }
+  });
+  const viewEnd = e => {
+    pts.delete(e.pointerId);
+    if (pts.size < 2) pinch = null;
+    if (pts.size === 1 && !placeDrag) {     // один палец остался — дальше он и везёт
+      const q = [...pts.values()][0];
+      pan = { x: q.x, y: q.y, vx: placeView.x, vy: placeView.y };
+    }
+    if (!pts.size) { pan = null; placeApply(true); }
+  };
+  zoneEl.addEventListener('pointerup', viewEnd);
+  zoneEl.addEventListener('pointercancel', viewEnd);
+  zoneEl.addEventListener('wheel', e => {
+    if (!placing) return;
+    e.preventDefault();
+    placeZoom(placeView.k * (e.deltaY > 0 ? 0.88 : 1.14), e.clientX, e.clientY);
+  }, { passive: false });
+
+  const zoomStep = f => {
+    const r = $('phoneZone').getBoundingClientRect();
+    placeZoom(placeView.k * f, r.left + r.width / 2, r.top + r.height / 2, true);
+  };
+  $('viewOut').addEventListener('click', () => zoomStep(1 / 1.25));
+  $('viewIn').addEventListener('click', () => zoomStep(1.25));
+  $('viewFit').addEventListener('click', () => placeFit());
+  $('viewChrome').addEventListener('click', () => {
+    chromeOn = !chromeOn;
+    chromeSave();
+    chromeBtnSync();
+    if (!chromeOn && placeSel === 'clock') placeSel = 'dots';
+    placeSync();
+    draw();
+  });
+  addEventListener('resize', () => {
+    if (!placing) return;
+    if (placeView.own) { placeFree(); placeApply(); } else placeFit();
+  });
 }
