@@ -20,7 +20,7 @@
   try { if (!localStorage.getItem('vitaSignedIn')) document.documentElement.classList.add('gate'); } catch (e) {}
 </script>
 <script src="/static/theme.js?v=8"></script>
-<link rel="stylesheet" href="/static/style.css?v=100">
+<link rel="stylesheet" href="/static/style.css?v=101">
 <style>
   .home-hero { animation: fadeUp .7s cubic-bezier(.22,1,.36,1) both; }
   .phone { animation: phoneReveal .85s cubic-bezier(.22,1,.36,1) both, phoneFloat 7s ease-in-out 1.1s infinite; }
@@ -105,8 +105,10 @@
     <button data-v="goal">Цель</button>
   </div>
 
-  <div class="phone"><span class="phone-glow" aria-hidden="true"></span><span class="phone-flash" aria-hidden="true"></span><canvas id="cv" width="1179" height="2556"></canvas></div>
-  <p class="phone-tip" id="phoneTip">тапни по телефону — сменится тема</p>
+  <div class="phone-zone" id="phoneZone">
+    <div class="phone"><span class="phone-glow" aria-hidden="true"></span><span class="phone-flash" aria-hidden="true"></span><canvas id="cv" width="1179" height="2556"></canvas></div>
+    <p class="phone-tip" id="phoneTip">тапни по телефону — сменится тема</p>
+  </div>
 
   <div class="hero-act">
     <button class="primary" id="heroBtn" type="button">Поставить себе обои</button>
@@ -138,6 +140,25 @@
       </label>
     </div>
 
+    <div class="field">Темы
+      <div class="more-wrap">
+        <div class="theme-grid" id="themes">
+          <button type="button" class="theme-tile t-pole" data-v="pole">Поле</button>
+          <button type="button" class="theme-tile t-romashki" data-v="romashki">Ромашки</button>
+          <button type="button" class="theme-tile t-taiga" data-v="taiga">Тайга</button>
+          <button type="button" class="theme-tile t-tush" data-v="tush">Тушь</button>
+          <button type="button" class="theme-tile t-manga" data-v="manga">Манга</button>
+          <button type="button" class="theme-tile t-tuman" data-v="tuman">Туман</button>
+          <button type="button" class="theme-tile t-mountains" data-v="mountains">Горы</button>
+          <button type="button" class="theme-tile t-ocean" data-v="ocean">Океан</button>
+          <button type="button" class="theme-tile t-sunset" data-v="sunset">Закат</button>
+          <button type="button" class="theme-tile t-dembel" data-v="dembel">Дембель</button>
+          <button type="button" class="theme-tile t-ramadan" data-v="ramadan">Рамадан</button>
+          <button type="button" class="theme-tile t-honeymoon" data-v="honeymoon">Мёд</button>
+        </div>
+      </div>
+    </div>
+
     <div class="field">Цвет точек
       <div class="swatches" id="colors"></div>
       <label class="color-own">
@@ -152,47 +173,42 @@
     </label>
 
     <div class="field">Шрифт заголовка
-      <div class="seg roll" id="font">
-        <button data-v="system" class="on">Vita</button>
-        <button data-v="montserrat">Vita</button>
-        <button data-v="playfair">Vita</button>
-        <button data-v="oswald">Vita</button>
-        <button data-v="unbounded">Vita</button>
-        <button data-v="russo">Vita</button>
-        <button data-v="caveat">Vita</button>
-        <button data-v="pacifico">Vita</button>
-        <button data-v="ptnarrow">Vita</button>
-        <button data-v="ptserif">Vita</button>
+      <div class="more-wrap">
+        <div class="pick-grid font-grid" id="font">
+          <button data-v="system" class="on">Vita</button>
+          <button data-v="montserrat">Vita</button>
+          <button data-v="playfair">Vita</button>
+          <button data-v="oswald">Vita</button>
+          <button data-v="unbounded">Vita</button>
+          <button data-v="russo">Vita</button>
+          <button data-v="caveat">Vita</button>
+          <button data-v="pacifico">Vita</button>
+          <button data-v="ptnarrow">Vita</button>
+          <button data-v="ptserif">Vita</button>
+        </div>
       </div>
     </div>
 
     <div class="field bg-field">Фон
-      <div class="pick-grid" id="bg">
-        <button data-v="black" class="on">Чёрный</button>
-        <button data-v="white">Белый</button>
-        <button data-v="navy">Синий</button>
-        <button data-v="mountains">Горы</button>
-        <button data-v="ocean">Океан</button>
-        <button data-v="sunset">Закат</button>
-        <button data-v="dembel">Дембель</button>
-        <button data-v="ramadan">Рамадан</button>
-        <button data-v="honeymoon">Мёд</button>
-      </div>
-      <div class="theme-wrap" id="themeWrap">
-        <div class="theme-grid" id="themes">
-          <button type="button" class="theme-tile t-pole" data-v="pole">Поле</button>
-          <button type="button" class="theme-tile t-romashki" data-v="romashki">Ромашки</button>
-          <button type="button" class="theme-tile t-taiga" data-v="taiga">Тайга</button>
-          <button type="button" class="theme-tile t-tush" data-v="tush">Тушь</button>
-          <button type="button" class="theme-tile t-manga" data-v="manga">Манга</button>
-          <button type="button" class="theme-tile t-tuman" data-v="tuman">Туман</button>
+      <div class="more-wrap">
+        <div class="pick-grid" id="bg">
+          <button data-v="black" class="on">Чёрный</button>
+          <button data-v="white">Белый</button>
+          <button data-v="navy">Синий</button>
+          <button data-v="pole">Поле</button>
+          <button data-v="romashki">Ромашки</button>
+          <button data-v="taiga">Тайга</button>
+          <button data-v="tush">Тушь</button>
+          <button data-v="manga">Манга</button>
+          <button data-v="tuman">Туман</button>
+          <button data-v="mountains">Горы</button>
+          <button data-v="ocean">Океан</button>
+          <button data-v="sunset">Закат</button>
+          <button data-v="dembel">Дембель</button>
+          <button data-v="ramadan">Рамадан</button>
+          <button data-v="honeymoon">Мёд</button>
         </div>
       </div>
-      <button class="theme-open" id="themesOpen" type="button" aria-expanded="false" aria-controls="themeWrap">
-        <span class="theme-open-dots" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span>
-        <span id="themesOpenLabel">Темы</span>
-        <svg class="theme-open-chev" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6.5 9.5 12 15l5.5-5.5"></path></svg>
-      </button>
       <button class="pick-own" id="bgOwn" type="button">Своё фото</button>
       <label class="color-own">
         <input type="color" id="bgColorPick" value="#101014">
@@ -210,7 +226,8 @@
     </div>
 
     <div class="field">Форма точек
-      <div class="pick-grid" id="shape">
+      <div class="more-wrap">
+        <div class="pick-grid" id="shape">
         <button data-v="circle" class="on">Круг</button>
         <button data-v="square">Квадрат</button>
         <button data-v="rounded">Мягкие</button>
@@ -226,6 +243,7 @@
         <button data-v="moon">Луна</button>
         <button data-v="ink">Клякса</button>
         <button data-v="tone">Растр</button>
+        </div>
       </div>
     </div>
 
@@ -347,7 +365,7 @@
 
 <script src="/static/vita-id.js?v=6"></script>
 <script src="/static/tg-login.js?v=4"></script>
-<script src="/static/scenes.js?v=1"></script>
-<script src="/static/app.js?v=62"></script>
+<script src="/static/scenes.js?v=2"></script>
+<script src="/static/app.js?v=63"></script>
 </body>
 </html>

@@ -28,6 +28,19 @@
       textColor: '#f7f7f7', textMuted: '#e2e2e2', textStroke: '#111111' },
     tuman: { bg: 'tuman', color: '#dfe7ea', shape: 'circle', font: 'ptserif', glass: true, glow: true,
       textColor: '#e4eaec', textMuted: '#aab4b8', textStroke: '' },
+    // старые сцены — тоже темы: к фону свой шрифт и свои точки
+    mountains: { bg: 'mountains', color: '#dfe9f2', shape: 'fir', font: 'ptnarrow', glass: false, glow: false,
+      textColor: '', textMuted: '', textStroke: '' },
+    ocean: { bg: 'ocean', color: '#7cc4f0', shape: 'drop', font: 'montserrat', glass: false, glow: false,
+      textColor: '', textMuted: '', textStroke: '' },
+    sunset: { bg: 'sunset', color: '#ffb37c', shape: 'circle', font: 'pacifico', glass: true, glow: true,
+      textColor: '', textMuted: '', textStroke: '' },
+    dembel: { bg: 'dembel', color: '#e8d890', shape: 'star', font: 'russo', glass: false, glow: false,
+      textColor: '', textMuted: '', textStroke: '' },
+    ramadan: { bg: 'ramadan', color: '#f5e6b8', shape: 'moon', font: 'playfair', glass: false, glow: false,
+      textColor: '', textMuted: '', textStroke: '' },
+    honeymoon: { bg: 'honeymoon', color: '#ff8fab', shape: 'heart', font: 'caveat', glass: false, glow: false,
+      textColor: '', textMuted: '', textStroke: '' },
   };
 
   // ------------------------------------------------------------ основа

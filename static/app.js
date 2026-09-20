@@ -1069,7 +1069,8 @@ addEventListener('pointerup', endPointer);
 addEventListener('pointercancel', endPointer);
 
 // тап по телефону — точки прыгают друг за другом (в демо уже крутится свой цикл)
-if (!DEMO) phoneEl.addEventListener('click', () => nextTheme());
+const phoneZone = $('phoneZone') || phoneEl;
+if (!DEMO) phoneZone.addEventListener('click', e => { if (!e.target.closest('a, button, input')) nextTheme(); });
 
 // Прокрутку к нужному месту ведём сами: встроенная «плавная» на айфоне
 // короткая и встаёт рывком. Здесь медленный ход с мягким разгоном и посадкой,
@@ -1120,7 +1121,7 @@ if (headLogo) {
 const phoneFlash = document.querySelector('.phone-flash');
 if (phoneFlash) {
   const unpress = () => phoneEl.classList.remove('press');
-  phoneEl.addEventListener('pointerdown', () => {
+  (document.getElementById('phoneZone') || phoneEl).addEventListener('pointerdown', () => {
     phoneEl.classList.add('press');
     phoneFlash.classList.remove('on');
     void phoneFlash.offsetWidth;
@@ -1325,8 +1326,7 @@ bindSeg('bg', v => {
   customBgImg = null;
   state.bgImageId = null;
   showBgTip('');
-  if (BG_LOOKS[v]) applyLook(BG_LOOKS[v]);
-  else dropThemeText();
+  dropThemeText();
   if (BG_TITLES[v] && customTitle) {
     // текст написан руками — не трогаем, только спрашиваем
     if (state.title !== BG_TITLES[v]) askBgTitle(v); else hideBgAsk();
@@ -1388,16 +1388,6 @@ function dropThemeText() {
   state.textColor = state.textMuted = state.textStroke = '';
 }
 
-// Старые сцены тоже стали темами: к фону — свой шрифт и свои точки.
-const BG_LOOKS = {
-  mountains: { shape: 'fir', font: 'ptnarrow', color: '#dfe9f2', glass: false, glow: false },
-  ocean: { shape: 'drop', font: 'montserrat', color: '#7cc4f0', glass: false, glow: false },
-  sunset: { shape: 'circle', font: 'pacifico', color: '#ffb37c', glass: true, glow: true },
-  dembel: { shape: 'star', font: 'russo', color: '#e8d890', glass: false, glow: false },
-  ramadan: { shape: 'moon', font: 'playfair', color: '#f5e6b8', glass: false, glow: false },
-  honeymoon: { shape: 'heart', font: 'caveat', color: '#ff8fab', glass: false, glow: false },
-};
-
 function applyLook(look) {
   state.shape = look.shape;
   markOn('shape', look.shape);
@@ -1413,6 +1403,8 @@ function applyLook(look) {
   state.textStroke = look.textStroke || '';
   markOn('font', look.font);
   if (look.font !== state.font) useFont(look.font);
+  showSelected('shape');
+  showSelected('font');
 }
 
 const THEME_ORDER = Object.keys(VitaScenes.THEMES);
@@ -1424,11 +1416,21 @@ function pickTheme(key) {
   customBgImg = null;
   state.bgImageId = null;
   $('bgOwn').classList.remove('on');
-  markOn('bg', '');
+  markOn('bg', t.bg);
   markOn('themes', key);
+  showSelected('bg');
+  showSelected('themes');
   hideBgAsk();
   showBgTip('');
-  if (bgAutoTitle) {                 // «ДО ДЕМБЕЛЯ» и прочие названия старых фонов уходят вместе с ними
+  // у Дембеля, Рамадана и Мёда есть своё название — предлагаем его так же,
+  // как это делал выбор фона
+  if (BG_TITLES[key] && customTitle) {
+    if (state.title !== BG_TITLES[key]) askBgTitle(key);
+  } else if (BG_TITLES[key]) {
+    state.title = BG_TITLES[key];
+    $('title').value = state.title;
+    bgAutoTitle = true;
+  } else if (bgAutoTitle) {
     state.title = TITLES[state.mode];
     $('title').value = state.title;
     bgAutoTitle = false;
@@ -1438,7 +1440,9 @@ function pickTheme(key) {
   animateReveal();
   // следующую сцену рисуем заранее, пока человек смотрит на эту
   const next = THEME_ORDER[(THEME_ORDER.indexOf(key) + 1) % THEME_ORDER.length];
-  (window.requestIdleCallback || (f => setTimeout(f, 400)))(() => VitaScenes.scene(next));
+  if (VitaScenes.SCENES.includes(VitaScenes.THEMES[next].bg)) {
+    (window.requestIdleCallback || (f => setTimeout(f, 400)))(() => VitaScenes.scene(VitaScenes.THEMES[next].bg));
+  }
 }
 
 $('themes').addEventListener('click', e => {
@@ -1446,54 +1450,104 @@ $('themes').addEventListener('click', e => {
   if (btn) pickTheme(btn.dataset.v);
 });
 
-// Тап по большому телефону — следующая тема. Защита от частых тапов: точки
-// добегают, проходит секунда, и только потом телефон слушает снова.
-let themeLock = 0;
+// Тап по телефону (и по полю вокруг него) — следующая тема. Защита от частых
+// тапов: точки добегают, проходит секунда, и только потом телефон слушает снова.
+let themeLock = 0, tipTimer = 0;
 function nextTheme() {
   const now = performance.now();
   if (now < themeLock) return;
   themeLock = now + 2000;
   const i = THEME_ORDER.indexOf(state.bg);
-  pickTheme(THEME_ORDER[(i + 1) % THEME_ORDER.length]);
+  const key = THEME_ORDER[(i + 1) % THEME_ORDER.length];
+  pickTheme(key);
+  // имя темы вместо подсказки — видно, что тап сработал
   const tip = $('phoneTip');
-  if (tip && !tip.hidden) {
-    tip.classList.add('gone');
-    try { localStorage.setItem('vitaThemeTap', '1'); } catch {}
+  if (tip) {
+    tip.textContent = document.querySelector(`#themes [data-v="${key}"]`)?.textContent || '';
+    tip.hidden = false;
+    tip.classList.remove('gone');
+    clearTimeout(tipTimer);
+    tipTimer = setTimeout(() => tip.classList.add('gone'), 1600);
   }
+  try { localStorage.setItem('vitaThemeTap', '1'); } catch {}
 }
-try { if (localStorage.getItem('vitaThemeTap') && $('phoneTip')) $('phoneTip').hidden = true; } catch {}
+try { if (localStorage.getItem('vitaThemeTap') && $('phoneTip')) $('phoneTip').classList.add('gone'); } catch {}
 
-// Панель «Темы» над «Своё фото»: по нажатию плавно уезжает вниз, а на её
-// месте раскрываются плитки тем. Второе нажатие сворачивает обратно.
-const themeWrap = $('themeWrap'), themesOpen = $('themesOpen');
-let themesShown = false, themeAnim = null;
-themeWrap.inert = true;
-themesOpen.addEventListener('click', () => {
-  themesShown = !themesShown;
-  themesOpen.setAttribute('aria-expanded', String(themesShown));
-  themesOpen.classList.toggle('open', themesShown);
-  $('themesOpenLabel').textContent = themesShown ? 'Свернуть темы' : 'Темы';
-  themeWrap.inert = !themesShown;
-  const from = themeWrap.getBoundingClientRect().height;
-  const to = themesShown ? themeWrap.scrollHeight : 0;
-  themeAnim?.cancel();
-  if (reduceMotion) { themeWrap.style.height = themesShown ? 'auto' : '0px'; return; }
-  themeWrap.style.height = to + 'px';
-  themeAnim = themeWrap.animate([{ height: from + 'px' }, { height: to + 'px' }],
-    { duration: themesShown ? 620 : 440, easing: 'cubic-bezier(.22, 1, .36, 1)' });
-  themeAnim.onfinish = () => {
-    themeWrap.style.height = themesShown ? 'auto' : '0px';
-    themeAnim = null;
+// --- «Ещё»: в каждой сетке видно три ряда, остальное открывается кнопкой ---
+const ROWS_SHOWN = 3, GRID_GAP = 8;
+
+function setupMore(wrap) {
+  const grid = wrap.firstElementChild;
+  if (!grid) return;
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'more-btn';
+  btn.setAttribute('aria-expanded', 'false');
+  btn.innerHTML = '<span class="more-label">Ещё</span>'
+    + '<svg class="more-chev" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6.5 9.5 12 15l5.5-5.5"></path></svg>';
+  wrap.after(btn);
+  let open = false, anim = null;
+
+  const rowTop = el => el.offsetTop - grid.offsetTop;
+  const cutAt = () => {
+    const rows = [...new Set([...grid.children].map(rowTop))].sort((a, b) => a - b);
+    return rows.length > ROWS_SHOWN ? rows[ROWS_SHOWN] - GRID_GAP : 0;
   };
-  if (themesShown) {
-    themeWrap.querySelectorAll('.theme-tile').forEach((b, k) => b.animate(
-      [{ opacity: 0, transform: 'translateY(-12px) scale(.94)' }, { opacity: 1, transform: 'none' }],
-      { duration: 460, delay: 90 + k * 45, easing: 'cubic-bezier(.22, 1, .36, 1)', fill: 'backwards' }));
-    (window.requestIdleCallback || (f => setTimeout(f, 400)))(() => VitaScenes.scene(THEME_ORDER[0]));
-  }
-});
 
-// Свой цвет фона: выбор гасит и картинки-темы, и своё фото — фон один.
+  function settle(cut) {
+    btn.hidden = !cut;
+    wrap.style.height = !cut || open ? 'auto' : cut + 'px';
+    [...grid.children].forEach(el => {
+      const hidden = !!cut && !open && rowTop(el) >= cut;
+      el.inert = hidden;
+      el.setAttribute('aria-hidden', hidden ? 'true' : 'false');
+    });
+  }
+
+  function toggle(next, animate = true) {
+    if (next === open) return;
+    const from = wrap.getBoundingClientRect().height;
+    open = next;
+    btn.setAttribute('aria-expanded', String(open));
+    btn.classList.toggle('open', open);
+    btn.querySelector('.more-label').textContent = open ? 'Свернуть' : 'Ещё';
+    const cut = cutAt();
+    const shown = [...grid.children].filter(el => rowTop(el) >= cut);
+    settle(cut);
+    anim?.cancel();
+    if (!animate || reduceMotion) return;
+    const to = open ? grid.scrollHeight : cut;
+    anim = wrap.animate([{ height: from + 'px' }, { height: to + 'px' }],
+      { duration: open ? 560 : 420, easing: 'cubic-bezier(.22, 1, .36, 1)' });
+    anim.onfinish = () => { wrap.style.height = open ? 'auto' : cut + 'px'; anim = null; };
+    if (open) {
+      shown.forEach((el, k) => el.animate(
+        [{ opacity: 0, transform: 'translateY(-10px) scale(.95)' }, { opacity: 1, transform: 'none' }],
+        { duration: 420, delay: 70 + k * 35, easing: 'cubic-bezier(.22, 1, .36, 1)', fill: 'backwards' }));
+    }
+  }
+
+  btn.addEventListener('click', () => toggle(!open));
+  settle(cutAt());
+  grid.__more = {
+    refresh: () => { if (!anim) settle(cutAt()); },
+    reveal: el => {
+      if (open || !el) return;
+      const cut = cutAt();
+      if (cut && rowTop(el) >= cut) toggle(true);
+    },
+  };
+}
+
+function showSelected(id) {
+  const grid = $(id);
+  grid?.__more?.reveal(grid.querySelector('.on'));
+}
+
+document.querySelectorAll('.more-wrap').forEach(setupMore);
+document.fonts?.ready.then(() => document.querySelectorAll('.more-wrap').forEach(w => w.firstElementChild?.__more?.refresh()));
+addEventListener('resize', () => document.querySelectorAll('.more-wrap').forEach(w => w.firstElementChild?.__more?.refresh()));
+
 $('bgColorPick').addEventListener('input', e => {
   markOn('themes', '');
   dropThemeText();

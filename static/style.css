@@ -3060,13 +3060,13 @@ body.login-page::before { display: none; }
   font-display: swap;
   src: url(/static/fonts/pacifico-chip.woff2) format('woff2');
 }
-.seg.roll button[data-v="montserrat"] { font-family: MontserratChip, sans-serif; font-weight: 700; }
-.seg.roll button[data-v="playfair"] { font-family: PlayfairChip, serif; font-weight: 700; }
-.seg.roll button[data-v="oswald"] { font-family: OswaldChip, sans-serif; font-weight: 600; }
-.seg.roll button[data-v="unbounded"] { font-family: UnboundedChip, sans-serif; font-weight: 700; font-size: 18px; }
-.seg.roll button[data-v="russo"] { font-family: RussoChip, sans-serif; font-weight: 400; }
-.seg.roll button[data-v="caveat"] { font-family: CaveatChip, cursive; font-weight: 700; font-size: 26px; }
-.seg.roll button[data-v="pacifico"] { font-family: PacificoChip, cursive; font-weight: 400; font-size: 22px; }
+#font button[data-v="montserrat"] { font-family: MontserratChip, sans-serif; font-weight: 700; }
+#font button[data-v="playfair"] { font-family: PlayfairChip, serif; font-weight: 700; }
+#font button[data-v="oswald"] { font-family: OswaldChip, sans-serif; font-weight: 600; }
+#font button[data-v="unbounded"] { font-family: UnboundedChip, sans-serif; font-weight: 700; font-size: 16px; }
+#font button[data-v="russo"] { font-family: RussoChip, sans-serif; font-weight: 400; }
+#font button[data-v="caveat"] { font-family: CaveatChip, cursive; font-weight: 700; font-size: 24px; }
+#font button[data-v="pacifico"] { font-family: PacificoChip, cursive; font-weight: 400; font-size: 20px; }
 @font-face {
   font-family: 'PTNarrowChip';
   font-style: normal;
@@ -3081,8 +3081,8 @@ body.login-page::before { display: none; }
   font-display: swap;
   src: url(/static/fonts/ptserif-chip.woff) format('woff');
 }
-.seg.roll button[data-v="ptnarrow"] { font-family: PTNarrowChip, sans-serif; font-weight: 700; }
-.seg.roll button[data-v="ptserif"] { font-family: PTSerifChip, serif; font-style: italic; font-weight: 400; }
+#font button[data-v="ptnarrow"] { font-family: PTNarrowChip, sans-serif; font-weight: 700; }
+#font button[data-v="ptserif"] { font-family: PTSerifChip, serif; font-style: italic; font-weight: 400; }
 
 /* Полные PT Sans Narrow и PT Serif Italic (ParaType, свободная лицензия):
    латиница и кириллица одним файлом. Имена свои, чтобы браузер не взял
@@ -3102,59 +3102,38 @@ body.login-page::before { display: none; }
   src: url(/static/fonts/ptserif.woff) format('woff');
 }
 
-/* ==================== темы ====================
-   Панель «Темы» стоит над «Своё фото» и того же размера, только стеклянная.
-   По нажатию над ней раскрываются плитки тем, а она сама плавно уезжает вниз
-   (высоту обёртки ведёт app.js). Плитки — маленькие картинки своих сцен. */
-/* у поля шаг 10 между строками; свёрнутая обёртка его съедает, чтобы
-   панель стояла от сетки фонов так же, как стояло «Своё фото» */
-.theme-wrap { height: 0; overflow: hidden; margin-top: -10px; }
-.theme-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  padding-top: 8px;
-}
-.theme-open {
-  position: relative;
+/* ==================== темы и «Ещё» ====================
+   Темы — отдельный параметр в самом верху конструктора: плитки-картинки своих
+   сцен. В каждой сетке (темы, фон, шрифт, форма точек) видно три ряда, дальше
+   кнопка «Ещё» со стрелкой: по нажатию сетка мягко раскрывается целиком. */
+.more-wrap { overflow: hidden; }
+.more-btn {
   width: 100%;
-  min-height: 44px;
+  min-height: 38px;
   margin-top: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 8px;
   border: 1px solid var(--seg-track-border);
   border-radius: 14px;
   background: var(--glass-shine), var(--glass-bg-soft);
   backdrop-filter: blur(14px) saturate(var(--glass-saturate));
   -webkit-backdrop-filter: blur(14px) saturate(var(--glass-saturate));
   box-shadow: var(--seg-track-inset);
-  color: var(--text-2);
+  color: var(--text-nav);
   font: inherit;
   font-size: 13px;
   font-weight: 600;
   letter-spacing: -0.01em;
+  text-transform: none;
   cursor: pointer;
-  transition: transform .2s cubic-bezier(.34, 1.56, .64, 1), box-shadow .3s, background .25s;
+  transition: transform .2s cubic-bezier(.34, 1.56, .64, 1), box-shadow .3s, color .25s;
 }
-.theme-open:active { transform: scale(0.99); box-shadow: 0 8px 26px var(--press-glow); }
-.theme-open-dots { display: inline-flex; gap: 3px; }
-.theme-open-dots i {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
-}
-.theme-open-dots i:nth-child(1) { background: #8fc0ec; }
-.theme-open-dots i:nth-child(2) { background: #f5f2ea; }
-.theme-open-dots i:nth-child(3) { background: #cf9f5c; }
-.theme-open-dots i:nth-child(4) { background: #2e2c28; }
-.theme-open-dots i:nth-child(5) { background: #9a9a9a; }
-.theme-open-dots i:nth-child(6) { background: #dfe7ea; }
-.theme-open-chev {
-  width: 16px;
-  height: 16px;
+.more-btn:active { transform: scale(0.99); box-shadow: 0 8px 26px var(--press-glow); }
+.more-chev {
+  width: 15px;
+  height: 15px;
   fill: none;
   stroke: currentColor;
   stroke-width: 2;
@@ -3162,8 +3141,13 @@ body.login-page::before { display: none; }
   stroke-linejoin: round;
   transition: transform .5s cubic-bezier(.22, 1, .36, 1);
 }
-.theme-open.open .theme-open-chev { transform: rotate(180deg); }
+.more-btn.open .more-chev { transform: rotate(180deg); }
 
+.theme-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
 .theme-tile {
   position: relative;
   isolation: isolate;
@@ -3214,6 +3198,51 @@ body.login-page::before { display: none; }
   background:
     linear-gradient(200deg, rgba(230, 238, 234, 0) 30%, rgba(230, 238, 234, 0.3) 45%, rgba(230, 238, 234, 0) 60%),
     linear-gradient(180deg, #0f1a12 0%, #2a3234 48%, #8b9396 74%, #2a3032 100%);
+}
+.t-mountains {
+  background:
+    linear-gradient(140deg, rgba(0, 0, 0, 0) 58%, #141c28 58.5%),
+    radial-gradient(circle at 78% 24%, #e8eef5 0 3px, transparent 4px),
+    linear-gradient(180deg, #16202e, #090d13);
+}
+.t-ocean {
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0) 68%, rgba(223, 233, 242, 0.22) 68.5%, rgba(0, 0, 0, 0) 71%),
+    linear-gradient(180deg, #0e2138 0%, #0a1a2b 55%, #062433 100%);
+}
+.t-sunset {
+  background:
+    radial-gradient(circle at 50% 104%, rgba(255, 155, 106, 0.6) 0 34%, rgba(0, 0, 0, 0) 36%),
+    linear-gradient(180deg, #331539, #4a1c40 45%, #1c0d24);
+}
+.t-dembel {
+  background:
+    radial-gradient(circle at 24% 26%, #e8d890 0 2.5px, transparent 3.5px),
+    linear-gradient(180deg, #2a3320, #3d4a2a 42%, #141a0e);
+}
+.t-ramadan {
+  background:
+    radial-gradient(circle at 74% 26%, #f5e6b8 0 7px, transparent 8px),
+    radial-gradient(circle at 70% 23%, #0f1a3d 0 6px, transparent 7px),
+    linear-gradient(180deg, #0f1a3d, #1a1445 48%, #080e20);
+}
+.t-honeymoon {
+  background:
+    radial-gradient(circle at 50% 96%, rgba(255, 184, 200, 0.5) 0 30%, rgba(0, 0, 0, 0) 32%),
+    linear-gradient(180deg, #4a2038, #6b3050 38%, #1f1018);
+}
+
+/* таблетки шрифтов той же сеткой, что фоны и формы точек */
+.font-grid button { font-size: 19px; padding: 8px 6px; line-height: 1.3; }
+
+/* тап меняет тему не только по корпусу, но и по полю вокруг него */
+.phone-zone {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 6px 0 2px;
+  cursor: pointer;
 }
 
 /* подсказка под большим телефоном: гаснет после первого тапа */
