@@ -20,7 +20,7 @@
   try { if (!localStorage.getItem('vitaSignedIn')) document.documentElement.classList.add('gate'); } catch (e) {}
 </script>
 <script src="/static/theme.js?v=8"></script>
-<link rel="stylesheet" href="/static/style.css?v=101">
+<link rel="stylesheet" href="/static/style.css?v=102">
 <style>
   .home-hero { animation: fadeUp .7s cubic-bezier(.22,1,.36,1) both; }
   .phone { animation: phoneReveal .85s cubic-bezier(.22,1,.36,1) both, phoneFloat 7s ease-in-out 1.1s infinite; }
@@ -173,19 +173,17 @@
     </label>
 
     <div class="field">Шрифт заголовка
-      <div class="more-wrap">
-        <div class="pick-grid font-grid" id="font">
-          <button data-v="system" class="on">Vita</button>
-          <button data-v="montserrat">Vita</button>
-          <button data-v="playfair">Vita</button>
-          <button data-v="oswald">Vita</button>
-          <button data-v="unbounded">Vita</button>
-          <button data-v="russo">Vita</button>
-          <button data-v="caveat">Vita</button>
-          <button data-v="pacifico">Vita</button>
-          <button data-v="ptnarrow">Vita</button>
-          <button data-v="ptserif">Vita</button>
-        </div>
+      <div class="seg roll" id="font">
+        <button data-v="system" class="on">Vita</button>
+        <button data-v="montserrat">Vita</button>
+        <button data-v="playfair">Vita</button>
+        <button data-v="oswald">Vita</button>
+        <button data-v="unbounded">Vita</button>
+        <button data-v="russo">Vita</button>
+        <button data-v="caveat">Vita</button>
+        <button data-v="pacifico">Vita</button>
+        <button data-v="ptnarrow">Vita</button>
+        <button data-v="ptserif">Vita</button>
       </div>
     </div>
 
@@ -363,9 +361,9 @@
   <a class="foot-help" href="mailto:{{SUPPORT}}">Помощь</a>
 </footer>
 
-<script src="/static/vita-id.js?v=6"></script>
+<script src="/static/vita-id.js?v=7"></script>
 <script src="/static/tg-login.js?v=4"></script>
 <script src="/static/scenes.js?v=2"></script>
-<script src="/static/app.js?v=63"></script>
+<script src="/static/app.js?v=64"></script>
 </body>
 </html>

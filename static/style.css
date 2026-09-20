@@ -58,6 +58,8 @@ html, body { touch-action: pan-x pan-y; }
   --fc-bg: var(--glass-bg);
   --fc-bg-top: rgba(255, 255, 255, 0.08);
   --press-glow: rgba(255, 255, 255, 0.20);
+  --tile-glow: rgba(255, 255, 255, 0.46);
+  --tile-glow-soft: rgba(255, 255, 255, 0.22);
   color-scheme: dark;
 }
 
@@ -111,6 +113,8 @@ html, body { touch-action: pan-x pan-y; }
   --fc-bg: rgba(255, 252, 246, 0.74);
   --fc-bg-top: rgba(255, 253, 248, 0.9);
   --press-glow: rgba(150, 110, 52, 0.26);
+  --tile-glow: rgba(120, 92, 48, 0.42);
+  --tile-glow-soft: rgba(120, 92, 48, 0.2);
   color-scheme: light;
 }
 
@@ -2168,6 +2172,7 @@ header { transition: box-shadow .45s ease; }
 /* --- профиль в шапке ---
    Кружок с силуэтом, как в соцсетях, пока человек не поставил фото. */
 .avatar-btn {
+  position: relative;
   margin-left: auto;
   flex: none;
   width: 34px;
@@ -2185,7 +2190,6 @@ header { transition: box-shadow .45s ease; }
   transition: border-color .2s, transform .15s;
 }
 .avatar-btn svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
-.avatar-btn img { width: 100%; height: 100%; object-fit: cover; }
 .avatar-btn:active { transform: scale(0.94); }
 .avatar-btn.filled { color: var(--text); }
 /* пока карточка открыта, фото живёт в ней, а в шапке на его месте пусто */
@@ -2241,8 +2245,15 @@ header { transition: box-shadow .45s ease; }
 }
 .ava-big { width: 96px; height: 96px; }
 .ava-big svg { width: 52px; height: 52px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; }
-/* фото остаётся таким, каким человек выбрал его в галерее */
-.ava img { width: 100%; height: 100%; object-fit: cover; }
+/* фото остаётся таким, каким человек выбрал его в галерее; кладём его поверх
+   силуэта, иначе оба делили кружок пополам */
+.ava img, .avatar-btn img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
 .ava-edit { color: var(--text-nav); font-size: 12.5px; }
 
 .prof-name {
@@ -3060,13 +3071,13 @@ body.login-page::before { display: none; }
   font-display: swap;
   src: url(/static/fonts/pacifico-chip.woff2) format('woff2');
 }
-#font button[data-v="montserrat"] { font-family: MontserratChip, sans-serif; font-weight: 700; }
-#font button[data-v="playfair"] { font-family: PlayfairChip, serif; font-weight: 700; }
-#font button[data-v="oswald"] { font-family: OswaldChip, sans-serif; font-weight: 600; }
-#font button[data-v="unbounded"] { font-family: UnboundedChip, sans-serif; font-weight: 700; font-size: 16px; }
-#font button[data-v="russo"] { font-family: RussoChip, sans-serif; font-weight: 400; }
-#font button[data-v="caveat"] { font-family: CaveatChip, cursive; font-weight: 700; font-size: 24px; }
-#font button[data-v="pacifico"] { font-family: PacificoChip, cursive; font-weight: 400; font-size: 20px; }
+.seg.roll button[data-v="montserrat"] { font-family: MontserratChip, sans-serif; font-weight: 700; }
+.seg.roll button[data-v="playfair"] { font-family: PlayfairChip, serif; font-weight: 700; }
+.seg.roll button[data-v="oswald"] { font-family: OswaldChip, sans-serif; font-weight: 600; }
+.seg.roll button[data-v="unbounded"] { font-family: UnboundedChip, sans-serif; font-weight: 700; font-size: 18px; }
+.seg.roll button[data-v="russo"] { font-family: RussoChip, sans-serif; font-weight: 400; }
+.seg.roll button[data-v="caveat"] { font-family: CaveatChip, cursive; font-weight: 700; font-size: 26px; }
+.seg.roll button[data-v="pacifico"] { font-family: PacificoChip, cursive; font-weight: 400; font-size: 22px; }
 @font-face {
   font-family: 'PTNarrowChip';
   font-style: normal;
@@ -3081,8 +3092,8 @@ body.login-page::before { display: none; }
   font-display: swap;
   src: url(/static/fonts/ptserif-chip.woff) format('woff');
 }
-#font button[data-v="ptnarrow"] { font-family: PTNarrowChip, sans-serif; font-weight: 700; }
-#font button[data-v="ptserif"] { font-family: PTSerifChip, serif; font-style: italic; font-weight: 400; }
+.seg.roll button[data-v="ptnarrow"] { font-family: PTNarrowChip, sans-serif; font-weight: 700; }
+.seg.roll button[data-v="ptserif"] { font-family: PTSerifChip, serif; font-style: italic; font-weight: 400; }
 
 /* Полные PT Sans Narrow и PT Serif Italic (ParaType, свободная лицензия):
    латиница и кириллица одним файлом. Имена свои, чтобы браузер не взял
@@ -3128,9 +3139,9 @@ body.login-page::before { display: none; }
   letter-spacing: -0.01em;
   text-transform: none;
   cursor: pointer;
-  transition: transform .2s cubic-bezier(.34, 1.56, .64, 1), box-shadow .3s, color .25s;
+  transition: transform .22s cubic-bezier(.32, .72, 0, 1), box-shadow .32s, color .25s;
 }
-.more-btn:active { transform: scale(0.99); box-shadow: 0 8px 26px var(--press-glow); }
+.more-btn:active { transform: scale(0.985); }
 .more-chev {
   width: 15px;
   height: 15px;
@@ -3139,7 +3150,7 @@ body.login-page::before { display: none; }
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
-  transition: transform .5s cubic-bezier(.22, 1, .36, 1);
+  transition: transform .46s cubic-bezier(.32, .72, 0, 1);
 }
 .more-btn.open .more-chev { transform: rotate(180deg); }
 
@@ -3154,8 +3165,10 @@ body.login-page::before { display: none; }
   overflow: hidden;
   min-height: 58px;
   padding: 8px 6px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 0;
   border-radius: 14px;
+  background-repeat: no-repeat;
+  background-size: cover;
   color: #fff;
   font: inherit;
   font-size: 13px;
@@ -3163,77 +3176,35 @@ body.login-page::before { display: none; }
   letter-spacing: -0.01em;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
   cursor: pointer;
-  transition: transform .2s cubic-bezier(.34, 1.56, .64, 1), box-shadow .3s;
+  transition: transform .22s cubic-bezier(.32, .72, 0, 1), box-shadow .32s cubic-bezier(.32, .72, 0, 1);
 }
+/* подпись читается на любой картинке: лёгкая тень снизу вверх */
 .theme-tile::after {
   content: "";
   position: absolute;
   inset: 0;
-  z-index: -1;
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0) 35%, rgba(0, 0, 0, 0.32));
+  z-index: 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0) 38%, rgba(0, 0, 0, 0.34));
 }
-.theme-tile:active { transform: scale(0.97); box-shadow: 0 8px 26px var(--press-glow); }
+.theme-tile > * , .theme-tile { z-index: 0; }
+.theme-tile { color: #fff; }
+.theme-tile:active { transform: scale(0.985); }
+/* выбранная тема не в рамке, а со свечением за плиткой */
 .theme-tile.on {
-  border-color: transparent;
-  box-shadow: 0 0 0 2px var(--text), 0 8px 24px var(--press-glow);
+  box-shadow: 0 0 18px 2px var(--tile-glow), 0 0 42px 8px var(--tile-glow-soft);
 }
-.t-pole { background: linear-gradient(180deg, #7db4e6 0%, #cde5f6 50%, #8ab356 51%, #355f1d 100%); }
-.t-romashki {
-  background:
-    radial-gradient(circle at 16% 24%, #f6f3ea 0 2.5px, transparent 3.5px),
-    radial-gradient(circle at 76% 16%, #f6f3ea 0 2px, transparent 3px),
-    radial-gradient(circle at 88% 74%, #f6f3ea 0 2.5px, transparent 3.5px),
-    radial-gradient(circle at 28% 82%, #f0d3cc 0 2px, transparent 3px),
-    radial-gradient(circle at 60% 88%, #f6f3ea 0 1.5px, transparent 2.5px),
-    linear-gradient(180deg, #26351f, #121b10);
-}
-.t-taiga { background: linear-gradient(180deg, #cdbfa8 0%, #9a8a6c 20%, #8a7650 21%, #4c4632 46%, #223022 47%, #0e140e 100%); }
-.t-tush { background: radial-gradient(circle at 50% 50%, transparent 0 14px, #3d3a34 15px 18px, transparent 19px), #0b0b0a; }
-.t-manga {
-  background:
-    radial-gradient(circle, rgba(0, 0, 0, 0.5) 1px, transparent 1.6px) 0 0 / 6px 6px,
-    linear-gradient(180deg, #2a2a2a 0%, #8a8a8a 62%, #6a6a6a 63%, #161616 100%);
-}
-.t-tuman {
-  background:
-    linear-gradient(200deg, rgba(230, 238, 234, 0) 30%, rgba(230, 238, 234, 0.3) 45%, rgba(230, 238, 234, 0) 60%),
-    linear-gradient(180deg, #0f1a12 0%, #2a3234 48%, #8b9396 74%, #2a3032 100%);
-}
-.t-mountains {
-  background:
-    linear-gradient(140deg, rgba(0, 0, 0, 0) 58%, #141c28 58.5%),
-    radial-gradient(circle at 78% 24%, #e8eef5 0 3px, transparent 4px),
-    linear-gradient(180deg, #16202e, #090d13);
-}
-.t-ocean {
-  background:
-    linear-gradient(180deg, rgba(0, 0, 0, 0) 68%, rgba(223, 233, 242, 0.22) 68.5%, rgba(0, 0, 0, 0) 71%),
-    linear-gradient(180deg, #0e2138 0%, #0a1a2b 55%, #062433 100%);
-}
-.t-sunset {
-  background:
-    radial-gradient(circle at 50% 104%, rgba(255, 155, 106, 0.6) 0 34%, rgba(0, 0, 0, 0) 36%),
-    linear-gradient(180deg, #331539, #4a1c40 45%, #1c0d24);
-}
-.t-dembel {
-  background:
-    radial-gradient(circle at 24% 26%, #e8d890 0 2.5px, transparent 3.5px),
-    linear-gradient(180deg, #2a3320, #3d4a2a 42%, #141a0e);
-}
-.t-ramadan {
-  background:
-    radial-gradient(circle at 74% 26%, #f5e6b8 0 7px, transparent 8px),
-    radial-gradient(circle at 70% 23%, #0f1a3d 0 6px, transparent 7px),
-    linear-gradient(180deg, #0f1a3d, #1a1445 48%, #080e20);
-}
-.t-honeymoon {
-  background:
-    radial-gradient(circle at 50% 96%, rgba(255, 184, 200, 0.5) 0 30%, rgba(0, 0, 0, 0) 32%),
-    linear-gradient(180deg, #4a2038, #6b3050 38%, #1f1018);
-}
-
-/* таблетки шрифтов той же сеткой, что фоны и формы точек */
-.font-grid button { font-size: 19px; padding: 8px 6px; line-height: 1.3; }
+.t-pole { background-image: linear-gradient(180deg, #7db4e6 0%, #cfe6f7 46%, #8ab356 47%, #33591c 100%); }
+.t-romashki { background-image: linear-gradient(180deg, #2b3b23 0%, #1d2a17 55%, #101809 100%); }
+.t-taiga { background-image: linear-gradient(180deg, #cdbfa8 0%, #8a7650 18%, #4c4632 45%, #1b2a1b 46%, #0c120c 100%); }
+.t-tush { background-image: linear-gradient(180deg, #1b1a18 0%, #0b0b0a 60%, #000000 100%); }
+.t-manga { background-image: linear-gradient(180deg, #232323 0%, #8a8a8a 60%, #5f5f5f 61%, #141414 100%); }
+.t-tuman { background-image: linear-gradient(180deg, #0f1a12 0%, #2a3234 45%, #93999b 72%, #2a3032 100%); }
+.t-mountains { background-image: linear-gradient(180deg, #16202e 0%, #0e1520 60%, #090d13 100%); }
+.t-ocean { background-image: linear-gradient(180deg, #0e2138 0%, #0a1a2b 55%, #062433 100%); }
+.t-sunset { background-image: linear-gradient(180deg, #331539 0%, #4a1c40 45%, #1c0d24 100%); }
+.t-dembel { background-image: linear-gradient(180deg, #2a3320 0%, #3d4a2a 42%, #141a0e 100%); }
+.t-ramadan { background-image: linear-gradient(180deg, #0f1a3d 0%, #1a1445 48%, #080e20 100%); }
+.t-honeymoon { background-image: linear-gradient(180deg, #4a2038 0%, #6b3050 38%, #1f1018 100%); }
 
 /* тап меняет тему не только по корпусу, но и по полю вокруг него */
 .phone-zone {

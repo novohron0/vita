@@ -23,12 +23,15 @@
   function ensureSession() {
     if (session) return session;
     session = (async () => {
-      const stored = localStorage.getItem(TOKEN_KEY) || '';
-      if (stored.length >= 20) return;
       try {
         const response = await fetch('/api/auth/session');
         const data = await response.json();
-        if (data && data.token) localStorage.setItem(TOKEN_KEY, data.token);
+        if (!data || !data.token) return;
+        // Кука сильнее хранилища: в нём мог остаться ключ случайного профиля,
+        // созданного до входа, и тогда человека каждый раз гнало к двери.
+        localStorage.setItem(TOKEN_KEY, data.token);
+        const access = data.access || {};
+        if (access.email || access.telegram) localStorage.setItem('vitaSignedIn', '1');
       } catch {}
     })();
     return session;

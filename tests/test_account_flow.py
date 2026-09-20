@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import io
+import json
 import os
 import sqlite3
 import sys
@@ -263,9 +264,10 @@ with tempfile.TemporaryDirectory(prefix="vita-account-") as data_dir:
     assert "code" not in feed_post["author"]
 
     connected_token = "a1b2c3d4e5f60718" * 3
-    connected = main.connect_profile(main.ProfileConnectIn(
+    # ручка ставит куку устройства, поэтому отвечает JSONResponse, а не словарём
+    connected = json.loads(main.connect_profile(main.ProfileConnectIn(
         ownerToken=connected_token, profileCode=profile["code"],
-    ))
+    )).body)
     assert connected["goals"][0]["code"] == goal["code"]
     assert connected["handle"] == "kamil_vita"
     assert main.profile_library(main.OwnerIn(ownerToken=connected_token))["code"] == profile["code"]

@@ -2010,7 +2010,10 @@ def auth_session(request: Request):
         profile_code = _profile_for_token(conn, token)
         if not profile_code:
             return {"token": ""}
-        return {"token": token, "access": _profile_access_state(conn, profile_code)}
+        # заодно продлеваем куку: человек заходит — ключ не должен истечь
+        return _with_session(
+            {"token": token, "access": _profile_access_state(conn, profile_code)}, token
+        )
 
 
 @app.post("/api/auth/logout")
@@ -2531,7 +2534,8 @@ def connect_profile(profile: ProfileConnectIn):
             "INSERT OR IGNORE INTO profile_devices(profile_code, token_hash) VALUES(?, ?)",
             (code, digest),
         )
-        return _profile_payload(conn, code)
+        # кука должна знать новый ключ: иначе следующий заход вернёт старый
+        return _with_session(_profile_payload(conn, code), token)
 
 
 @app.post("/api/me")

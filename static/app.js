@@ -1437,7 +1437,7 @@ function pickTheme(key) {
   }
   applyLook(t);
   refreshSwatches();
-  animateReveal();
+  draw();          // тема встаёт сразу: точки не перебегают заново
   // следующую сцену рисуем заранее, пока человек смотрит на эту
   const next = THEME_ORDER[(THEME_ORDER.indexOf(key) + 1) % THEME_ORDER.length];
   if (VitaScenes.SCENES.includes(VitaScenes.THEMES[next].bg)) {
@@ -1456,7 +1456,7 @@ let themeLock = 0, tipTimer = 0;
 function nextTheme() {
   const now = performance.now();
   if (now < themeLock) return;
-  themeLock = now + 2000;
+  themeLock = now + 600;
   const i = THEME_ORDER.indexOf(state.bg);
   const key = THEME_ORDER[(i + 1) % THEME_ORDER.length];
   pickTheme(key);
@@ -1518,12 +1518,12 @@ function setupMore(wrap) {
     if (!animate || reduceMotion) return;
     const to = open ? grid.scrollHeight : cut;
     anim = wrap.animate([{ height: from + 'px' }, { height: to + 'px' }],
-      { duration: open ? 560 : 420, easing: 'cubic-bezier(.22, 1, .36, 1)' });
+      { duration: open ? 500 : 380, easing: 'cubic-bezier(.32, .72, 0, 1)' });
     anim.onfinish = () => { wrap.style.height = open ? 'auto' : cut + 'px'; anim = null; };
     if (open) {
       shown.forEach((el, k) => el.animate(
-        [{ opacity: 0, transform: 'translateY(-10px) scale(.95)' }, { opacity: 1, transform: 'none' }],
-        { duration: 420, delay: 70 + k * 35, easing: 'cubic-bezier(.22, 1, .36, 1)', fill: 'backwards' }));
+        [{ opacity: 0, transform: 'scale(.97)' }, { opacity: 1, transform: 'none' }],
+        { duration: 380, delay: 40 + k * 22, easing: 'cubic-bezier(.32, .72, 0, 1)', fill: 'backwards' }));
     }
   }
 
@@ -1927,7 +1927,17 @@ function paintAvatar(url) {
   btn.classList.toggle('filled', !!url);
   btnImg.hidden = !url;
   bigImg.hidden = !url;
-  if (url) { btnImg.src = url; bigImg.src = url; }
+  if (!url) return;
+  // снимок мог пропасть с сервера: тогда показываем силуэт, а не битый значок
+  const fail = () => {
+    btnImg.hidden = true;
+    bigImg.hidden = true;
+    btn.classList.remove('filled');
+  };
+  btnImg.onerror = fail;
+  bigImg.onerror = fail;
+  btnImg.src = url;
+  bigImg.src = url;
 }
 
 function paintTagNote(profile) {
