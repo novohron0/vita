@@ -61,7 +61,22 @@ const STAT_LABELS = {
 const todayISO = new Date().toISOString().slice(0, 10);
 const plus30 = new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10);
 
+// Расположение: у каждого элемента свои координаты (доли ширины и высоты),
+// множитель размера и — у точек — число в ряду. x = null значит «как раньше»:
+// надпись висит на своём отступе от сетки, сетка стоит по центру.
+let placing = false;      // открыт режим «Расположение» (весь код — в конце файла)
+let placeSel = 'dots';
+let placeDrag = null;
+
+const placeDefault = () => ({
+  dots: { x: null, y: null, s: 1, cols: 0 },
+  title: { x: null, y: null, s: 1 },
+  vita: { x: null, y: null, s: 1 },
+  foot: { x: null, y: null, s: 1 },
+});
+
 const state = {
+  place: placeDefault(),
   mode: 'month', color: '#f2f2f2', bg: 'black', bgColor: '#101014', bgImageId: null, shape: 'circle', font: 'system',
   glass: false, glow: false, title: TITLES.month, footer: true, brand: true, birth: '2000-01-01',
   // цвета текста задаёт тема; пусто — заголовок цветом точек, подписи серым
@@ -615,6 +630,70 @@ function effectiveBgHex() {
 const TITLE_W = W * 0.84;
 const TITLE_TOP = H * 0.085;   // ниже «таблетки» айфона
 
+// Периметр режима «Расположение»: в нём человек двигает точки и надписи.
+// Границы дал владелец — по ширине 7…93 %, по высоте от 250 до 2430: почти
+// весь экран, кроме полоски под «таблеткой» сверху и узкой полосы снизу.
+// Те же числа лежат в render.py (PLACE_BOX) — менять парно.
+const PLACE_BOX = [Math.round(W * 0.07), 250, Math.round(W * 0.93), 2430];
+
+// Кламп центра элемента: за периметр не пускаем. Если элемент шире поля —
+// ставим его по середине, иначе он бы прыгал к краю.
+function clampPlace(cx, cy, w, h) {
+  const [bx0, by0, bx1, by1] = PLACE_BOX;
+  const minX = bx0 + w / 2, maxX = bx1 - w / 2;
+  const minY = by0 + h / 2, maxY = by1 - h / 2;
+  return [
+    minX > maxX ? W / 2 : Math.min(Math.max(cx, minX), maxX),
+    minY > maxY ? (by0 + by1) / 2 : Math.min(Math.max(cy, minY), maxY),
+  ];
+}
+
+// Диаметр точки: сперва по обычному полю (0.72 × 0.50 экрана), потом ползунком,
+// и в конце — чтобы сетка влезла в периметр. Формула повторена в render.py.
+function dotFit(cols, rows, maxW, maxH) {
+  const d = Math.min(maxW / (cols + (cols - 1) * GAP), maxH / (rows + (rows - 1) * GAP));
+  return cols <= 10 ? Math.min(d, 110) : d;
+}
+
+// Геометрия всех четырёх элементов обоев: сетка точек, заголовок, значок vita
+// и счётчик снизу. Пока человек ничего не двигал, всё считается как раньше —
+// надписи висят на своих отступах от сетки. Как только у элемента появились
+// свои координаты, он живёт сам по себе и держится внутри периметра.
+function placeGeom(totalIn) {
+  const total = totalIn ?? counts().total;
+  const p = state.place;
+  const colsAuto = gridCols(total);
+  const cols = p.dots.cols || colsAuto;
+  const rows = Math.ceil(total / cols);
+  const dotAuto = dotFit(colsAuto, Math.ceil(total / colsAuto), W * 0.72, H * 0.50);
+  const boxW = PLACE_BOX[2] - PLACE_BOX[0], boxH = PLACE_BOX[3] - PLACE_BOX[1];
+  let dot = dotFit(cols, rows, W * 0.72, H * 0.50) * p.dots.s;
+  dot = Math.min(dot, boxW / (cols + (cols - 1) * GAP), boxH / (rows + (rows - 1) * GAP));
+  const gap = dot * GAP;
+  const gw = cols * dot + (cols - 1) * gap, gh = rows * dot + (rows - 1) * gap;
+  // мельче точки — ближе подписи, иначе они повисают в пустоте
+  const k = Math.min(Math.max(dot / dotAuto, 0.55), 1.6);
+  let cx = W / 2, cy = H * 0.55;
+  if (p.dots.x !== null) [cx, cy] = clampPlace(p.dots.x * W, p.dots.y * H, gw, gh);
+  const x0 = cx - gw / 2, y0 = cy - gh / 2;
+  const vitaY = y0 - Math.max(64, 110 * k);
+  const el = (key, autoY, base) => {
+    const q = p[key];
+    return {
+      x: q.x === null ? W / 2 : q.x * W,
+      y: q.y === null ? autoY : q.y * H,
+      px: base * q.s,
+      free: q.x !== null,
+    };
+  };
+  return {
+    total, cols, dot, gap, gw, gh, x0, y0, k,
+    title: el('title', vitaY - 80, 64),
+    vita: el('vita', vitaY, 32),
+    foot: el('foot', y0 + gh + Math.max(76, 130 * k), 40),
+  };
+}
+
 // Эмодзи тут глиф шрифта, а на сервере — картинка ростом 1.08 от кегля.
 // Мерить их браузерной меркой нельзя: строки порвутся не там, где на обоях.
 // Поэтому и меряем, и рисуем по серверной: каждому эмодзи своё окно.
@@ -700,8 +779,10 @@ function wrapTitle(text, maxW, px) {
   return out;
 }
 
-function drawTitle(text, baseY) {
-  let px = 64, lines = [], lineH = 0;
+// Раскладку заголовка считаем отдельно: её же меркой режим «Расположение»
+// обводит заголовок рамкой, иначе рамка и текст разъедутся.
+function titleLayout(text, baseY, px0 = 64) {
+  let px = px0, lines = [], lineH = 0;
   for (;;) {
     ctx.font = titleFont(px);
     lines = wrapTitle(text, TITLE_W, px);
@@ -710,17 +791,24 @@ function drawTitle(text, baseY) {
     if (top >= TITLE_TOP || px <= 30) break;
     px -= 3;
   }
+  return { px, lines, lineH };
+}
+
+function drawTitle(text, baseY, cx = W / 2, px0 = 64) {
+  const { px, lines, lineH } = titleLayout(text, baseY, px0);
+  ctx.font = titleFont(px);
   lines.forEach((line, i) => {
-    fillRich(line, W / 2, baseY - (lines.length - 1 - i) * lineH, px);
+    fillRich(line, cx, baseY - (lines.length - 1 - i) * lineH, px);
   });
 }
 
-function drawWatermark(cx, cy, fill) {
-  const r = 5, dx = 17, dy = 15;
-  ctx.font = wallFont(32, 400);
+function drawWatermark(cx, cy, fill, px = 32) {
+  const q = px / 32;
+  const r = 5 * q, dx = 17 * q, dy = 15 * q;
+  ctx.font = wallFont(px, 400);
   const textW = ctx.measureText('vita').width;
-  const dotsW = 2 * dx + 2 * r;
-  const x = cx - (dotsW + 14 + textW) / 2;
+  const dotsW = 2 * dx + 2 * r, pad = 14 * q;
+  const x = cx - (dotsW + pad + textW) / 2;
   ctx.fillStyle = fill;
   for (let i = 0; i < 3; i++) for (let j = 0; j < 2; j++) {
     ctx.beginPath();
@@ -728,7 +816,7 @@ function drawWatermark(cx, cy, fill) {
     ctx.fill();
   }
   ctx.textAlign = 'left';
-  ctx.fillText('vita', x + dotsW + 14, cy);
+  ctx.fillText('vita', x + dotsW + pad, cy);
   ctx.textAlign = 'center';
 }
 
@@ -748,16 +836,12 @@ function draw(reveal = 1, pulse = 0, fill = null) {
   const statDone = fill !== null ? fullDone : done;
   const current = fill !== null ? null : reveal >= 1 ? fullCurrent : (done < total ? done : null);
   const lead = fill !== null || reveal >= 1 ? -2 : current; // ведущая точка при анимации ярче
-  const cols = gridCols(total), rows = Math.ceil(total / cols);
 
   ctx.setTransform(cvScale, 0, 0, cvScale, 0, 0);
   paintBG(ctx);
 
-  let dot = Math.min(W * 0.72 / (cols + (cols - 1) * GAP), H * 0.50 / (rows + (rows - 1) * GAP));
-  if (cols <= 10) dot = Math.min(dot, 110);
-  const gap = dot * GAP;
-  const gridW = cols * dot + (cols - 1) * gap, gridH = rows * dot + (rows - 1) * gap;
-  const x0 = (W - gridW) / 2, y0 = H * 0.55 - gridH / 2;
+  const g = placeGeom(total);
+  const { cols, dot, gap, gw: gridW, gh: gridH, x0, y0 } = g;
 
   // свечение — ореол под закрашенными точками; на крошечных точках «Жизни»
   // его не видно, а превью бы на нём захлебнулось (так же в render.py)
@@ -780,13 +864,13 @@ function draw(reveal = 1, pulse = 0, fill = null) {
   ctx.textBaseline = 'middle';
   if (state.title.trim()) {
     ctx.fillStyle = state.textColor || state.color;
-    drawTitle(state.title.trim(), y0 - 190);
+    drawTitle(state.title.trim(), g.title.y, g.title.x, g.title.px);
   }
-  if (state.brand) drawWatermark(W / 2, y0 - 110, text);
+  if (state.brand) drawWatermark(g.vita.x, g.vita.y, text, g.vita.px);
   if (state.footer) {
     ctx.fillStyle = text;
-    ctx.font = wallFont(40, 400);
-    ctx.fillText(footerText(total, statDone), W / 2, y0 + gridH + 130);
+    ctx.font = wallFont(g.foot.px, 400);
+    ctx.fillText(footerText(total, statDone), g.foot.x, g.foot.y);
   }
 
   const fmt = n => n.toLocaleString('ru-RU');
@@ -797,6 +881,7 @@ function draw(reveal = 1, pulse = 0, fill = null) {
   $('stat2l').textContent = l2;
 
   copyToMini();
+  if (placing) drawPlaceHints();
 }
 
 // точки закрашиваются по одной при загрузке и смене режима — «оживает» на глазах
@@ -1065,7 +1150,10 @@ addEventListener('pointercancel', endPointer);
 
 // тап по телефону — точки прыгают друг за другом (в демо уже крутится свой цикл)
 const phoneZone = $('phoneZone') || phoneEl;
-if (!DEMO) phoneZone.addEventListener('click', e => { if (!e.target.closest('a, button, input')) nextTheme(); });
+if (!DEMO) phoneZone.addEventListener('click', e => {
+  if (placing) return;   // в режиме «Расположение» телефон — холст, а не переключатель тем
+  if (!e.target.closest('a, button, input')) nextTheme();
+});
 
 // Прокрутку к нужному месту ведём сами: встроенная «плавная» на айфоне
 // короткая и встаёт рывком. Здесь медленный ход с мягким разгоном и посадкой,
@@ -1206,6 +1294,8 @@ document.querySelectorAll('main .seg').forEach(glideSeg);
 
 bindSeg('mode', v => {
   state.mode = v;
+  state.place.dots.cols = 0;   // у каждого режима свой набор «в ряду»
+  if (typeof placeSync === 'function') placeSync();
   $('birthRow').hidden = v !== 'life';
   $('goalRow').hidden = v !== 'goal';
   if (!customTitle && !bgAutoTitle) {
@@ -1677,7 +1767,7 @@ async function makeWallpaper(btn, err) {
         bgImage: state.bgImageId || '', shape: state.shape, glass: state.glass, glow: state.glow,
         textColor: state.textColor, textMuted: state.textMuted, textStroke: state.textStroke,
         title: state.title, font: state.font, footer: state.footer, brand: state.brand, birth: state.birth,
-        start: state.start, end: state.end,
+        start: state.start, end: state.end, place: state.place,
         ownerToken: window.VitaID?.token() || '',
       }),
     });
@@ -2512,3 +2602,224 @@ guard();
     }
   } catch {}
 })();
+
+
+// ——— Режим «Расположение» ———————————————————————————————————
+// Человек тащит пальцем прямо по телефону: сетку точек, заголовок, значок vita
+// и счётчик. Панель снизу меняет размер выбранного и число точек в ряду.
+// Границы — PLACE_BOX; выше первого ряда точки не пускаем, там часы.
+const PLACE_COLS = {
+  month: [0, 5, 6, 10, 15],
+  year: [0, 10, 14, 20, 30],
+  life: [0, 26, 52, 60],
+  goal: [0, 5, 6, 10, 14],
+};
+function placeAlive(key) {
+  if (key === 'title') return !!state.title.trim();
+  if (key === 'vita') return state.brand;
+  if (key === 'foot') return state.footer;
+  return true;
+}
+
+// Прямоугольники элементов на обоях: по ним ловим палец и рисуем рамку.
+// Меряем той же меркой, что и отрисовка, иначе рамка встанет мимо текста.
+function placeBoxes() {
+  const g = placeGeom();
+  const { total, done } = counts();
+  const out = {
+    dots: {
+      box: [g.x0, g.y0, g.x0 + g.gw, g.y0 + g.gh],
+      at: [g.x0 + g.gw / 2, g.y0 + g.gh / 2],
+    },
+  };
+  if (placeAlive('title')) {
+    const t = state.title.trim();
+    const { px, lines, lineH } = titleLayout(t, g.title.y, g.title.px);
+    ctx.font = titleFont(px);
+    let w = 0;
+    for (const line of lines) w = Math.max(w, measureRich(line, px));
+    out.title = {
+      box: [g.title.x - w / 2, g.title.y - (lines.length - 1) * lineH - lineH * 0.62,
+        g.title.x + w / 2, g.title.y + lineH * 0.62],
+      at: [g.title.x, g.title.y],
+    };
+  }
+  if (placeAlive('vita')) {
+    const q = g.vita.px / 32;
+    ctx.font = wallFont(g.vita.px, 400);
+    const w = 2 * 17 * q + 2 * 5 * q + 14 * q + ctx.measureText('vita').width;
+    const h = g.vita.px * 1.3;
+    out.vita = {
+      box: [g.vita.x - w / 2, g.vita.y - h / 2, g.vita.x + w / 2, g.vita.y + h / 2],
+      at: [g.vita.x, g.vita.y],
+    };
+  }
+  if (placeAlive('foot')) {
+    ctx.font = wallFont(g.foot.px, 400);
+    const w = ctx.measureText(footerText(total, done)).width;
+    const h = g.foot.px * 1.3;
+    out.foot = {
+      box: [g.foot.x - w / 2, g.foot.y - h / 2, g.foot.x + w / 2, g.foot.y + h / 2],
+      at: [g.foot.x, g.foot.y],
+    };
+  }
+  return out;
+}
+
+// Поверх обоев: пунктир периметра и уголки у выбранного элемента.
+// Рисуется только в режиме — на готовые обои с сервера это не попадает.
+function drawPlaceHints() {
+  const [bx0, by0, bx1, by1] = PLACE_BOX;
+  ctx.save();
+  ctx.setLineDash([20, 16]);
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.32)';
+  ctx.strokeRect(bx0, by0, bx1 - bx0, by1 - by0);
+  ctx.setLineDash([]);
+  const b = placeBoxes()[placeSel];
+  if (b) {
+    const pad = 24, arm = 46;
+    const x0 = b.box[0] - pad, y0 = b.box[1] - pad, x1 = b.box[2] + pad, y1 = b.box[3] + pad;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.92)';
+    ctx.lineWidth = 7;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    for (const [cx, sx] of [[x0, 1], [x1, -1]]) {
+      for (const [cy, sy] of [[y0, 1], [y1, -1]]) {
+        ctx.moveTo(cx + sx * arm, cy);
+        ctx.lineTo(cx, cy);
+        ctx.lineTo(cx, cy + sy * arm);
+      }
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function placeColsFill() {
+  const box = $('placeCols');
+  if (!box) return;
+  const list = PLACE_COLS[state.mode] || PLACE_COLS.month;
+  box.textContent = '';
+  for (const c of list) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.dataset.v = String(c);
+    b.textContent = c || 'авто';
+    if (state.place.dots.cols === c) b.className = 'on';
+    box.appendChild(b);
+  }
+}
+
+function placeSync() {
+  const pick = $('placePick');
+  if (!pick) return;
+  for (const b of pick.children) {
+    b.disabled = !placeAlive(b.dataset.v);
+    b.classList.toggle('on', b.dataset.v === placeSel);
+  }
+  if (!placeAlive(placeSel)) placeSel = 'dots';
+  const size = $('placeSize');
+  size.value = Math.round(state.place[placeSel].s * 100);
+  $('placeSizeVal').textContent = size.value + ' %';
+  $('placeColsRow').hidden = placeSel !== 'dots';
+  placeColsFill();
+}
+
+function placeOpen(on) {
+  placing = on;
+  document.body.classList.toggle('placing', on);
+  $('placeBar').hidden = !on;
+  if (on) {
+    if (!placeAlive(placeSel)) placeSel = 'dots';
+    placeSync();
+    const phone = document.querySelector('.phone');
+    const head = document.querySelector('header');
+    // шапка висит поверх страницы: без её высоты телефон уезжает под стекло
+    if (phone) slowScroll(phone.getBoundingClientRect().top + scrollY
+      - (head ? head.getBoundingClientRect().height : 0) - 26);
+  }
+  draw();
+}
+
+if ($('placeBtn')) {
+  const cvEl = $('cv');
+  const evPoint = e => {
+    const r = cvEl.getBoundingClientRect();
+    return { x: (e.clientX - r.left) / r.width * W, y: (e.clientY - r.top) / r.height * H };
+  };
+
+  $('placeBtn').addEventListener('click', () => placeOpen(true));
+  $('placeDone').addEventListener('click', () => placeOpen(false));
+  $('placeReset').addEventListener('click', () => {
+    state.place = placeDefault();
+    placeSel = 'dots';
+    placeSync();
+    draw();
+  });
+  $('placeCenter').addEventListener('click', () => {
+    const q = state.place[placeSel];
+    if (q.x !== null) { q.x = 0.5; draw(); }
+  });
+  $('placeSize').addEventListener('input', e => {
+    state.place[placeSel].s = Math.min(1.3, Math.max(0.4, +e.target.value / 100));
+    $('placeSizeVal').textContent = e.target.value + ' %';
+    draw();
+  });
+  $('placePick').addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (!b || b.disabled) return;
+    placeSel = b.dataset.v;
+    placeSync();
+    draw();
+  });
+  $('placeCols').addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    state.place.dots.cols = +b.dataset.v;
+    placeColsFill();
+    draw();
+  });
+  addEventListener('keydown', e => { if (placing && e.key === 'Escape') placeOpen(false); });
+
+  // тащим: палец берёт элемент там, где взял, и элемент не прыгает под центр
+  cvEl.addEventListener('pointerdown', e => {
+    if (!placing) return;
+    const p = evPoint(e);
+    const boxes = placeBoxes();
+    let hit = null;
+    for (const key of [placeSel, 'title', 'vita', 'foot', 'dots']) {
+      const b = boxes[key];
+      if (!b) continue;
+      const [x0, y0, x1, y1] = b.box;
+      if (p.x >= x0 - 26 && p.x <= x1 + 26 && p.y >= y0 - 26 && p.y <= y1 + 26) { hit = key; break; }
+    }
+    if (!hit) return;
+    e.preventDefault();
+    placeSel = hit;
+    placeSync();
+    placeDrag = { key: hit, p0: p, at: boxes[hit].at.slice(), box: boxes[hit].box.slice(), id: e.pointerId };
+    try { cvEl.setPointerCapture(e.pointerId); } catch {}   // без захвата тоже тащится
+    cvEl.classList.add('dragging');
+    draw();
+  });
+  cvEl.addEventListener('pointermove', e => {
+    if (!placeDrag || e.pointerId !== placeDrag.id) return;
+    const p = evPoint(e);
+    const [bx0, by0, bx1, by1] = placeDrag.box;
+    const midX = (bx0 + bx1) / 2, midY = (by0 + by1) / 2;
+    const [ccx, ccy] = clampPlace(midX + p.x - placeDrag.p0.x, midY + p.y - placeDrag.p0.y,
+      bx1 - bx0, by1 - by0);
+    const q = state.place[placeDrag.key];
+    q.x = (placeDrag.at[0] + ccx - midX) / W;
+    q.y = (placeDrag.at[1] + ccy - midY) / H;
+    draw();
+  });
+  const dragEnd = () => {
+    if (!placeDrag) return;
+    placeDrag = null;
+    cvEl.classList.remove('dragging');
+  };
+  cvEl.addEventListener('pointerup', dragEnd);
+  cvEl.addEventListener('pointercancel', dragEnd);
+}

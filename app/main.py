@@ -24,7 +24,7 @@ from pydantic import BaseModel, Field
 from PIL import Image, ImageOps
 
 from . import billing
-from .render import SHAPES, render_goal, render_wallpaper
+from .render import SHAPES, place_cfg, render_goal, render_wallpaper
 
 ROOT = Path(__file__).resolve().parent.parent
 # VITA_DATA — переопределение каталога данных (dev/тесты не трогают боевую БД)
@@ -444,6 +444,9 @@ class LinkIn(BaseModel):
     birth: str = "2000-01-01"
     start: str = ""
     end: str = ""
+    # расположение: свои координаты, размер и число точек в ряду у каждого
+    # элемента обоев. Пусто — всё стоит как раньше (см. render.place_cfg)
+    place: dict = {}
     idea: str = ""
     contact: str = ""
     ownerToken: str = ""
@@ -1048,6 +1051,7 @@ def create_link(cfg: LinkIn, request: Request):
     code = "".join(secrets.choice(CODE_ALPHABET) for _ in range(6))
     trial_until = (date.today() + timedelta(days=TRIAL_DAYS)).isoformat()
     cfg.title = cfg.title[:200]  # поле в браузере можно обойти, длину режем тут
+    cfg.place = place_cfg(cfg.place)  # в базу кладём только разобранное, без мусора
     for field in ("textColor", "textMuted", "textStroke"):
         if not re.fullmatch(r"#[0-9a-fA-F]{6}", getattr(cfg, field) or ""):
             setattr(cfg, field, "")

@@ -270,8 +270,9 @@ def _wrap_title(draw: ImageDraw.ImageDraw, text: str, font, max_w: float) -> lis
 
 
 def _draw_title(img: Image.Image, draw: ImageDraw.ImageDraw, text: str,
-                base_y: float, font_key: str, fill, stroke: str | None = None) -> None:
-    px = 64
+                base_y: float, font_key: str, fill, stroke: str | None = None,
+                cx: float = W / 2, px0: float = 64) -> None:
+    px = px0
     while True:
         font = _title_font(px, font_key)
         lines = _wrap_title(draw, text, font, TITLE_W)
@@ -282,7 +283,7 @@ def _draw_title(img: Image.Image, draw: ImageDraw.ImageDraw, text: str,
         px -= 3
     for i, line in enumerate(lines):
         y = base_y - (len(lines) - 1 - i) * line_h
-        draw_text(img, draw, (W / 2, y), line, font, fill, stroke=stroke)
+        draw_text(img, draw, (cx, y), line, font, fill, stroke=stroke)
 
 
 def _rgb(hx: str) -> tuple[int, int, int]:
@@ -758,6 +759,86 @@ def _cols(mode: str, total: int) -> int:
     return {"month": 6, "year": 14, "life": 52}[mode]
 
 
+# Периметр режима «Расположение»: в нём человек двигает точки и надписи.
+# Границы дал владелец — 7…93 % по ширине, 250…2430 по высоте. Те же числа
+# лежат в static/app.js (PLACE_BOX) — менять парно.
+PLACE_BOX = (round(W * 0.07), 250, round(W * 0.93), 2430)
+PLACE_KEYS = ("dots", "title", "vita", "foot")
+
+
+def place_cfg(raw) -> dict:
+    """Расположение из конфига: что пришло не числом — то по умолчанию."""
+    out = {k: {"x": None, "y": None, "s": 1.0} for k in PLACE_KEYS}
+    out["dots"]["cols"] = 0
+    if not isinstance(raw, dict):
+        return out
+    for key in PLACE_KEYS:
+        q = raw.get(key)
+        if not isinstance(q, dict):
+            continue
+        x, y = q.get("x"), q.get("y")
+        if isinstance(x, (int, float)) and isinstance(y, (int, float)):
+            out[key]["x"] = min(max(float(x), -1.0), 2.0)
+            out[key]["y"] = min(max(float(y), -1.0), 2.0)
+        size = q.get("s")
+        if isinstance(size, (int, float)):
+            out[key]["s"] = min(max(float(size), 0.4), 1.3)
+    cols = raw.get("dots", {}).get("cols") if isinstance(raw.get("dots"), dict) else 0
+    if isinstance(cols, int) and 2 <= cols <= 60:
+        out["dots"]["cols"] = cols
+    return out
+
+
+def _dot_fit(cols: int, rows: int, max_w: float, max_h: float) -> float:
+    d = min(max_w / (cols + (cols - 1) * GAP), max_h / (rows + (rows - 1) * GAP))
+    return min(d, 110) if cols <= 10 else d
+
+
+def _clamp_place(cx: float, cy: float, w: float, h: float) -> tuple[float, float]:
+    bx0, by0, bx1, by1 = PLACE_BOX
+    min_x, max_x = bx0 + w / 2, bx1 - w / 2
+    min_y, max_y = by0 + h / 2, by1 - h / 2
+    x = W / 2 if min_x > max_x else min(max(cx, min_x), max_x)
+    y = (by0 + by1) / 2 if min_y > max_y else min(max(cy, min_y), max_y)
+    return x, y
+
+
+def _place_geom(place: dict, mode: str, total: int) -> dict:
+    """Сетка и три надписи. Пока элемент не двигали, он стоит как раньше."""
+    cols_auto = _cols(mode, total)
+    cols = place["dots"]["cols"] or cols_auto
+    rows = math.ceil(total / cols)
+    dot_auto = _dot_fit(cols_auto, math.ceil(total / cols_auto), W * 0.72, H * 0.50)
+    box_w, box_h = PLACE_BOX[2] - PLACE_BOX[0], PLACE_BOX[3] - PLACE_BOX[1]
+    dot = _dot_fit(cols, rows, W * 0.72, H * 0.50) * place["dots"]["s"]
+    dot = min(dot, box_w / (cols + (cols - 1) * GAP), box_h / (rows + (rows - 1) * GAP))
+    gap = dot * GAP
+    grid_w, grid_h = cols * dot + (cols - 1) * gap, rows * dot + (rows - 1) * gap
+    # мельче точки — ближе подписи, иначе они повисают в пустоте
+    k = min(max(dot / dot_auto, 0.55), 1.6)
+    cx, cy = W / 2, H * 0.55
+    if place["dots"]["x"] is not None:
+        cx, cy = _clamp_place(place["dots"]["x"] * W, place["dots"]["y"] * H, grid_w, grid_h)
+    x0, y0 = cx - grid_w / 2, cy - grid_h / 2
+    vita_y = y0 - max(64, 110 * k)
+
+    def el(key: str, auto_y: float, base: float) -> dict:
+        q = place[key]
+        return {
+            "x": W / 2 if q["x"] is None else q["x"] * W,
+            "y": auto_y if q["y"] is None else q["y"] * H,
+            "px": base * q["s"],
+        }
+
+    return {
+        "cols": cols, "dot": dot, "gap": gap, "grid_w": grid_w, "grid_h": grid_h,
+        "x0": x0, "y0": y0,
+        "title": el("title", vita_y - 80, 64),
+        "vita": el("vita", vita_y, 32),
+        "foot": el("foot", y0 + grid_h + max(76, 130 * k), 40),
+    }
+
+
 def _weeks_word(n: int) -> str:
     if n % 100 in (11, 12, 13, 14) or n % 10 in (0, 5, 6, 7, 8, 9):
         return "недель"
@@ -777,19 +858,22 @@ def _footer(mode: str, total: int, done: int) -> str:
     return f"день {min(done + 1, total)} из {total}"
 
 
-def _watermark(draw: ImageDraw.ImageDraw, cx: float, cy: float, fill, font_key: str = "") -> None:
+def _watermark(draw: ImageDraw.ImageDraw, cx: float, cy: float, fill, font_key: str = "",
+               px: float = 32) -> None:
     """Мини-логотип: 6 точек + «vita» (вирусный штамп на бесплатных обоях)."""
-    font = _title_font(32, font_key)
+    font = _title_font(round(px), font_key)
     label = "vita"
-    r, dx, dy = 5, 17, 15
+    q = px / 32
+    r, dx, dy = 5 * q, 17 * q, 15 * q
     dots_w = 2 * dx + 2 * r
+    pad = 14 * q
     text_w = draw.textlength(label, font=font)
-    x = cx - (dots_w + 14 + text_w) / 2
+    x = cx - (dots_w + pad + text_w) / 2
     for i in range(3):
         for j in range(2):
             px, py = x + r + i * dx, cy + (j - 0.5) * dy
             draw.ellipse((px - r, py - r, px + r, py + r), fill=fill)
-    draw.text((x + dots_w + 14, cy), label, font=font, fill=fill, anchor="lm")
+    draw.text((x + dots_w + pad, cy), label, font=font, fill=fill, anchor="lm")
 
 
 def _streak(done_idx: set[int], upto: int) -> int:
@@ -893,21 +977,15 @@ def render_wallpaper(cfg: dict, today: date | None = None, expired: bool = False
     stroke = _hex(cfg.get("textStroke"))
 
     total, done, current = _counts(cfg, mode, today)
-    cols = _cols(mode, total)
-    rows = math.ceil(total / cols)
+    place = place_cfg(cfg.get("place"))
+    geom = _place_geom(place, mode, total)
+    cols = geom["cols"]
+    dot, gap = geom["dot"], geom["gap"]
+    grid_w, grid_h = geom["grid_w"], geom["grid_h"]
+    x0, y0 = geom["x0"], geom["y0"]
 
     img = _paint_wallpaper_bg(cfg, bg_key)
     draw = ImageDraw.Draw(img)
-
-    max_w, max_h = W * 0.72, H * 0.50
-    dot = min(max_w / (cols + (cols - 1) * GAP), max_h / (rows + (rows - 1) * GAP))
-    if cols <= 10:
-        dot = min(dot, 110)
-    gap = dot * GAP
-    grid_w = cols * dot + (cols - 1) * gap
-    grid_h = rows * dot + (rows - 1) * gap
-    x0 = (W - grid_w) / 2
-    y0 = H * 0.55 - grid_h / 2
 
     # свечение — мягкий ореол под закрашенными точками; на крошечных точках
     # «Жизни» его не видно, и превью бы на нём захлебнулось
@@ -927,20 +1005,17 @@ def render_wallpaper(cfg: dict, today: date | None = None, expired: bool = False
 
     draw = ImageDraw.Draw(img)
     if title:
-        _draw_title(img, draw, title, y0 - 190, cfg.get("font", ""), title_fill, stroke)
+        _draw_title(img, draw, title, geom["title"]["y"], cfg.get("font", ""), title_fill,
+                    stroke, geom["title"]["x"], geom["title"]["px"])
     font_key = cfg.get("font", "")
     if cfg.get("brand", True):
-        _watermark(draw, W / 2, y0 - 110, text, font_key)
+        _watermark(draw, geom["vita"]["x"], geom["vita"]["y"], text, font_key, geom["vita"]["px"])
+    foot_font = _title_font(round(geom["foot"]["px"]), font_key)
+    foot_xy = (geom["foot"]["x"], geom["foot"]["y"])
     if expired:
         # доступ кончился: прогресс заморожен (today = дата окончания), обои сами напоминают
-        draw.text((W / 2, y0 + grid_h + 130), "точки замерли · vitadots.ru",
-                  font=_title_font(40, font_key), fill=title_fill, anchor="mm")
+        draw.text(foot_xy, "точки замерли · vitadots.ru", font=foot_font,
+                  fill=title_fill, anchor="mm")
     elif cfg.get("footer", True):
-        draw.text(
-            (W / 2, y0 + grid_h + 130),
-            _footer(mode, total, done),
-            font=_title_font(40, font_key),
-            fill=text,
-            anchor="mm",
-        )
+        draw.text(foot_xy, _footer(mode, total, done), font=foot_font, fill=text, anchor="mm")
     return img

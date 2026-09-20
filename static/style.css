@@ -3264,3 +3264,153 @@ body.login-page::before { display: none; }
 @media (prefers-reduced-motion: reduce) {
   .theme-open-chev, .phone-tip { transition: none; }
 }
+
+/* ——— Режим «Расположение» ———————————————————————————————
+   Кнопка под телефоном открывает режим: страница убирает всё лишнее, телефон
+   становится холстом, а пультом работает одна панель снизу. */
+.phone-place {
+  align-self: center;
+  margin-top: 12px;
+  padding: 9px 20px;
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  background: var(--glass-bg-soft);
+  backdrop-filter: blur(16px) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(16px) saturate(var(--glass-saturate));
+  box-shadow: var(--seg-track-inset);
+  color: var(--text-2);
+  font: inherit;
+  font-size: 13.5px;
+  cursor: pointer;
+  transition: background .18s ease, color .18s ease, scale .18s cubic-bezier(.22, 1, .36, 1);
+}
+.phone-place:hover { background: var(--glass-bg-lift); color: var(--text); }
+.phone-place:active { scale: .97; }
+
+body.placing .home-hero,
+body.placing #mode,
+body.placing .hero-act,
+body.placing .stats,
+body.placing .controls,
+body.placing .page-foot,
+body.placing .mini-wrap,
+body.placing .phone-tip,
+body.placing .phone-place { display: none; }
+/* панель стоит внизу и не должна закрывать телефон */
+body.placing main { padding-bottom: 330px; }
+body.placing .phone-zone { cursor: default; }
+/* холст ловит палец сам: иначе айфон уедет страницей вместо точек */
+body.placing #cv { touch-action: none; cursor: grab; }
+body.placing #cv.dragging { cursor: grabbing; }
+
+.place-bar {
+  position: fixed;
+  left: 50%;
+  bottom: max(10px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 60;
+  width: min(520px, calc(100vw - 20px));
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 28px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow), var(--glass-inset);
+}
+.place-bar[hidden] { display: none; }
+.place-bar .seg.wide button { font-size: 14px; padding: 9px 6px; }
+.place-bar .seg.wide button:disabled { opacity: .38; cursor: default; }
+
+.place-size {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-2);
+  font-size: 14px;
+}
+.place-size b { font-variant-numeric: tabular-nums; font-weight: 600; min-width: 52px; text-align: right; }
+
+.place-size input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 26px;
+  background: transparent;
+  cursor: pointer;
+}
+.place-size input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow: var(--seg-track-inset);
+}
+.place-size input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 22px;
+  height: 22px;
+  margin-top: -8px;
+  border-radius: 50%;
+  background: var(--seg-on-bg);
+  box-shadow: var(--seg-on-shadow);
+  transition: scale .16s cubic-bezier(.22, 1, .36, 1);
+}
+.place-size input[type="range"]:active::-webkit-slider-thumb { scale: 1.12; }
+.place-size input[type="range"]::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+}
+.place-size input[type="range"]::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--seg-on-bg);
+  box-shadow: var(--seg-on-shadow);
+}
+
+.place-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-2);
+  font-size: 14px;
+}
+.place-row[hidden] { display: none; }
+.place-row .seg.roll button { min-width: 50px; font-size: 14px; padding: 8px 10px; }
+
+.place-acts { display: flex; gap: 8px; }
+.place-acts button {
+  flex: 1;
+  padding: 11px 8px;
+  white-space: nowrap;
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  background: var(--glass-bg-soft);
+  color: var(--text-2);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background .18s ease, color .18s ease, scale .18s cubic-bezier(.22, 1, .36, 1);
+}
+.place-acts button:hover { background: var(--glass-bg-lift); color: var(--text); }
+.place-acts button:active { scale: .97; }
+.place-acts button.primary {
+  border-color: transparent;
+  background: var(--primary-bg);
+  color: var(--primary-text);
+  font-weight: 600;
+  box-shadow: var(--primary-inset), var(--primary-glow);
+}
+.place-bar button:focus-visible,
+.phone-place:focus-visible,
+.place-size input[type="range"]:focus-visible { outline: 2px solid var(--glass-edge); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .phone-place, .place-acts button, .place-size input[type="range"]::-webkit-slider-thumb { transition: none; }
+}
