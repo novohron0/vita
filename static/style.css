@@ -3117,7 +3117,15 @@ body.login-page::before { display: none; }
    Темы — отдельный параметр в самом верху конструктора: плитки-картинки своих
    сцен. В каждой сетке (темы, фон, шрифт, форма точек) видно три ряда, дальше
    кнопка «Ещё» со стрелкой: по нажатию сетка мягко раскрывается целиком. */
-.more-wrap { overflow: hidden; }
+/* Обёртка режет по высоте — иначе раскрытие не анимировать. Поэтому даём ей
+   поля и утягиваем их отрицательным отступом: свечение выбранной плитки
+   помещается внутрь и больше не обрезается по краю. */
+.more-wrap {
+  overflow: hidden;
+  margin: -26px;
+  padding: 26px;
+  width: calc(100% + 52px);
+}
 .more-btn {
   width: 100%;
   min-height: 38px;
@@ -3191,7 +3199,7 @@ body.login-page::before { display: none; }
 .theme-tile:active { transform: scale(0.985); }
 /* выбранная тема не в рамке, а со свечением за плиткой */
 .theme-tile.on {
-  box-shadow: 0 0 18px 2px var(--tile-glow), 0 0 42px 8px var(--tile-glow-soft);
+  box-shadow: 0 0 16px 1px var(--tile-glow), 0 0 34px 5px var(--tile-glow-soft);
 }
 .t-pole { background-image: linear-gradient(180deg, #7db4e6 0%, #cfe6f7 46%, #8ab356 47%, #33591c 100%); }
 .t-romashki { background-image: linear-gradient(180deg, #2b3b23 0%, #1d2a17 55%, #101809 100%); }
@@ -3205,6 +3213,15 @@ body.login-page::before { display: none; }
 .t-dembel { background-image: linear-gradient(180deg, #2a3320 0%, #3d4a2a 42%, #141a0e 100%); }
 .t-ramadan { background-image: linear-gradient(180deg, #0f1a3d 0%, #1a1445 48%, #080e20 100%); }
 .t-honeymoon { background-image: linear-gradient(180deg, #4a2038 0%, #6b3050 38%, #1f1018 100%); }
+
+/* лента форм точек: на таблетке нарисована сама точка, без слов */
+.seg.roll.shapes button {
+  min-width: 56px;
+  padding: 5px 10px;
+  font-size: 0;
+  line-height: 0;
+}
+.shape-chip { display: block; width: 34px; height: 34px; }
 
 /* тап меняет тему не только по корпусу, но и по полю вокруг него */
 .phone-zone {

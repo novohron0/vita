@@ -843,9 +843,9 @@ function startPulse() {
 
 // тап по телефону: шарик скачет по сетке дугами и штампует точки одну за другой,
 // в конце приземляется на сегодняшнюю точку и становится дышащим кольцом
-function animateJump() {
+function animateJump(done_cb = null) {
   const { total, done } = counts();
-  if (reduceMotion || done <= 0) { animateReveal(); return; }
+  if (reduceMotion || done <= 0) { animateReveal(); done_cb?.(); return; }
   cancelAnimationFrame(revealRAF);
   cancelAnimationFrame(pulseRAF);
   cancelAnimationFrame(jumpRAF);
@@ -855,8 +855,11 @@ function animateJump() {
   const step = now => {
     const p = Math.min(N, (now - t0) / interval);
     draw(1, 0, { p, interval, N });
-    if (p < N) jumpRAF = requestAnimationFrame(step);
-    else { draw(); startPulse(); }
+    if (p < N) { jumpRAF = requestAnimationFrame(step); return; }
+    // точки допрыгали — только теперь встаёт новая тема
+    done_cb?.();
+    draw();
+    startPulse();
   };
   jumpRAF = requestAnimationFrame(step);
 }
@@ -1232,7 +1235,7 @@ async function useFont(key) {
 }
 bindSeg('font', v => { useFont(v); });
 
-bindSeg('glass', v => { state.glass = v !== '0'; state.glow = v === '2'; }, true);
+bindSeg('glass', v => { state.glass = v !== '0'; state.glow = v === '2'; paintShapeChips(); }, true);
 bindSeg('footer', v => { state.footer = v === '1'; });
 // Логотип на обоях убирается только на полном доступе: клик по «Убрать» без
 // покупки ничего не переключает, а объясняет, что это даёт.
@@ -1401,6 +1404,7 @@ function applyLook(look) {
   state.textColor = look.textColor || '';
   state.textMuted = look.textMuted || '';
   state.textStroke = look.textStroke || '';
+  paintShapeChips();
   markOn('font', look.font);
   if (look.font !== state.font) useFont(look.font);
   showSelected('shape');
@@ -1456,25 +1460,31 @@ let themeLock = 0, tipTimer = 0;
 function nextTheme() {
   const now = performance.now();
   if (now < themeLock) return;
-  themeLock = now + 600;
+  const { total, done } = counts();
+  const N = Math.max(1, Math.min(done, total - 1));
+  const run = reduceMotion || done <= 0 ? 0 : Math.min(2600, Math.max(700, N * 140));
+  themeLock = now + run + 400;
   const i = THEME_ORDER.indexOf(state.bg);
   const key = THEME_ORDER[(i + 1) % THEME_ORDER.length];
-  pickTheme(key);
-  // имя темы вместо подсказки — видно, что тап сработал
-  const tip = $('phoneTip');
-  if (tip) {
+  // сначала точки пробегают по нынешней теме, и только когда допрыгали —
+  // встаёт следующая: так тап виден, а не просто мигает картинкой
+  animateJump(() => {
+    pickTheme(key);
+    // имя темы показываем ровно тогда, когда она встала
+    const tip = $('phoneTip');
+    if (!tip) return;
     tip.textContent = document.querySelector(`#themes [data-v="${key}"]`)?.textContent || '';
     tip.hidden = false;
     tip.classList.remove('gone');
     clearTimeout(tipTimer);
     tipTimer = setTimeout(() => tip.classList.add('gone'), 1600);
-  }
+  });
   try { localStorage.setItem('vitaThemeTap', '1'); } catch {}
 }
 try { if (localStorage.getItem('vitaThemeTap') && $('phoneTip')) $('phoneTip').classList.add('gone'); } catch {}
 
 // --- «Ещё»: в каждой сетке видно три ряда, остальное открывается кнопкой ---
-const ROWS_SHOWN = 3, GRID_GAP = 8;
+const ROWS_SHOWN = 3, GRID_GAP = 8, WRAP_PAD = 52;   // поля обёртки под свечение
 
 function setupMore(wrap) {
   const grid = wrap.firstElementChild;
@@ -1496,7 +1506,7 @@ function setupMore(wrap) {
 
   function settle(cut) {
     btn.hidden = !cut;
-    wrap.style.height = !cut || open ? 'auto' : cut + 'px';
+    wrap.style.height = !cut || open ? 'auto' : cut + WRAP_PAD + 'px';
     [...grid.children].forEach(el => {
       const hidden = !!cut && !open && rowTop(el) >= cut;
       el.inert = hidden;
@@ -1516,10 +1526,10 @@ function setupMore(wrap) {
     settle(cut);
     anim?.cancel();
     if (!animate || reduceMotion) return;
-    const to = open ? grid.scrollHeight : cut;
+    const to = open ? wrap.scrollHeight : cut + WRAP_PAD;
     anim = wrap.animate([{ height: from + 'px' }, { height: to + 'px' }],
       { duration: open ? 500 : 380, easing: 'cubic-bezier(.32, .72, 0, 1)' });
-    anim.onfinish = () => { wrap.style.height = open ? 'auto' : cut + 'px'; anim = null; };
+    anim.onfinish = () => { wrap.style.height = open ? 'auto' : cut + WRAP_PAD + 'px'; anim = null; };
     if (open) {
       shown.forEach((el, k) => el.animate(
         [{ opacity: 0, transform: 'scale(.97)' }, { opacity: 1, transform: 'none' }],
@@ -1545,6 +1555,38 @@ function showSelected(id) {
 }
 
 document.querySelectorAll('.more-wrap').forEach(setupMore);
+
+// Форма точек — лентой, как шрифты: на таблетке нарисована сама точка,
+// тем же кодом, что уйдёт на обои, и тем же цветом, что выбран.
+const shapeChips = new Map();
+function paintShapeChips() {
+  const dpr = Math.min(2, devicePixelRatio || 1);
+  const box = 34, d = 26;
+  const keepShape = state.shape, keepGlass = state.glass, keepGlow = state.glow;
+  for (const btn of $('shape').querySelectorAll('button[data-v]')) {
+    let cv = shapeChips.get(btn);
+    if (!cv) {
+      cv = document.createElement('canvas');
+      cv.className = 'shape-chip';
+      cv.width = Math.round(box * dpr);
+      cv.height = Math.round(box * dpr);
+      btn.textContent = '';
+      btn.appendChild(cv);
+      shapeChips.set(btn, cv);
+    }
+    const c = cv.getContext('2d');
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.clearRect(0, 0, box, box);
+    state.shape = btn.dataset.v;
+    state.glass = keepGlass;
+    state.glow = false;
+    drawDot(c, (box - d) / 2, (box - d) / 2, d, state.color, 'filled', 0, false, 3);
+  }
+  state.shape = keepShape;
+  state.glass = keepGlass;
+  state.glow = keepGlow;
+}
+paintShapeChips();
 document.fonts?.ready.then(() => document.querySelectorAll('.more-wrap').forEach(w => w.firstElementChild?.__more?.refresh()));
 addEventListener('resize', () => document.querySelectorAll('.more-wrap').forEach(w => w.firstElementChild?.__more?.refresh()));
 
@@ -1585,6 +1627,7 @@ swatches.addEventListener('click', e => {
   state.color = btn.dataset.v;
   customColor = false;
   $('colorPick').value = state.color;
+  paintShapeChips();
   draw();
 });
 
@@ -1592,6 +1635,7 @@ $('colorPick').addEventListener('input', e => {
   customColor = true;
   state.color = e.target.value;
   swatches.querySelectorAll('.swatch').forEach(s => s.classList.remove('on'));
+  paintShapeChips();
   draw();
 });
 
