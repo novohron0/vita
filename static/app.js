@@ -843,13 +843,15 @@ function startPulse() {
 
 // тап по телефону: шарик скачет по сетке дугами и штампует точки одну за другой,
 // в конце приземляется на сегодняшнюю точку и становится дышащим кольцом
-function animateJump(done_cb = null) {
+function animateJump(done_cb = null, limit = 0) {
   const { total, done } = counts();
   if (reduceMotion || done <= 0) { animateReveal(); done_cb?.(); return; }
   cancelAnimationFrame(revealRAF);
   cancelAnimationFrame(pulseRAF);
   cancelAnimationFrame(jumpRAF);
-  const N = Math.min(done, total - 1); // финиш — на сегодняшней точке
+  // limit — сколько точек пробежать: при смене темы дальше седьмой не бежим,
+  // иначе смена ждёт две с половиной секунды
+  const N = Math.min(done, total - 1, limit || total); // финиш — на сегодняшней точке
   const interval = Math.min(2600, Math.max(700, N * 140)) / N; // мс на прыжок
   const t0 = performance.now();
   const step = now => {
@@ -1457,28 +1459,26 @@ $('themes').addEventListener('click', e => {
 // Тап по телефону (и по полю вокруг него) — следующая тема. Защита от частых
 // тапов: точки добегают, проходит секунда, и только потом телефон слушает снова.
 let themeLock = 0, tipTimer = 0;
+const JUMP_DOTS = 7;   // при смене темы точки бегут до седьмой — дальше долго
 function nextTheme() {
   const now = performance.now();
   if (now < themeLock) return;
-  const { total, done } = counts();
-  const N = Math.max(1, Math.min(done, total - 1));
-  const run = reduceMotion || done <= 0 ? 0 : Math.min(2600, Math.max(700, N * 140));
-  themeLock = now + run + 400;
+  const { done } = counts();
+  const run = reduceMotion || done <= 0 ? 0 : Math.min(2600, Math.max(700, JUMP_DOTS * 140));
+  themeLock = now + run + 300;
   const i = THEME_ORDER.indexOf(state.bg);
   const key = THEME_ORDER[(i + 1) % THEME_ORDER.length];
-  // сначала точки пробегают по нынешней теме, и только когда допрыгали —
-  // встаёт следующая: так тап виден, а не просто мигает картинкой
-  animateJump(() => {
-    pickTheme(key);
-    // имя темы показываем ровно тогда, когда она встала
-    const tip = $('phoneTip');
-    if (!tip) return;
+  // сначала встаёт новая тема, и уже её точки пробегают по сетке
+  pickTheme(key);
+  const tip = $('phoneTip');
+  if (tip) {
     tip.textContent = document.querySelector(`#themes [data-v="${key}"]`)?.textContent || '';
     tip.hidden = false;
     tip.classList.remove('gone');
     clearTimeout(tipTimer);
     tipTimer = setTimeout(() => tip.classList.add('gone'), 1600);
-  });
+  }
+  animateJump(null, JUMP_DOTS);
   try { localStorage.setItem('vitaThemeTap', '1'); } catch {}
 }
 try { if (localStorage.getItem('vitaThemeTap') && $('phoneTip')) $('phoneTip').classList.add('gone'); } catch {}

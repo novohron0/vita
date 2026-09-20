@@ -698,8 +698,7 @@ main { width: 100%; max-width: 430px; display: flex; flex-direction: column; gap
 [data-theme="light"] .swatch.on { box-shadow: 0 0 0 3px var(--swatch-halo), 0 0 10px rgba(0, 0, 0, 0.08); }
 .swatch:disabled { opacity: 0.22; cursor: default; }
 .swatch-dim { opacity: 0.42; }
-.swatch-ink:not(:disabled) { border-color: rgba(255, 255, 255, 0.3); }
-[data-theme="light"] .swatch-ink:not(:disabled) { border-color: rgba(0, 0, 0, 0.18); }
+.swatch-ink:not(:disabled) { border-color: transparent; }
 .swatches { flex-wrap: wrap; }
 
 .color-own {
@@ -711,12 +710,14 @@ main { width: 100%; max-width: 430px; display: flex; flex-direction: column; gap
    кнопке его две внутренние линии загибались белыми дугами по краям. */
 .color-own input[type="color"] {
   -webkit-appearance: none; appearance: none;
-  width: 42px; height: 42px; padding: 0; border: 2px solid rgba(255,255,255,0.14);
+  width: 42px; height: 42px; padding: 0; border: 0;
   border-radius: 50%; background: transparent; cursor: pointer;
   box-shadow: none;
+  overflow: hidden;
 }
-.color-own input[type="color"]::-webkit-color-swatch-wrapper { padding: 3px; }
+.color-own input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; border-radius: 50%; }
 .color-own input[type="color"]::-webkit-color-swatch { border: 0; border-radius: 50%; }
+.color-own input[type="color"]::-moz-color-swatch { border: 0; border-radius: 50%; }
 
 .primary, .secondary {
   border: 0;
@@ -1503,7 +1504,6 @@ main   { animation: fadeUp .7s cubic-bezier(.22,1,.36,1) both; }
 [data-theme="light"] .tariff { opacity: 0.72; }
 [data-theme="light"] .field input:focus,
 [data-theme="light"] .field textarea:focus { box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.06); }
-[data-theme="light"] .color-own input[type="color"] { border-color: var(--glass-border); }
 [data-theme="light"] .fc-peers { color: var(--text-2); }
 [data-theme="light"] .feed-top-h { color: var(--text-muted); }
 
