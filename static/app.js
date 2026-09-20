@@ -737,6 +737,9 @@ function draw(reveal = 1, pulse = 0, fx = null) {
   // точки позади него проштампованы, кольцо «сегодня» прячется до приземления
   const done = fx ? Math.min(fullDone, Math.floor(fx.p) + 1)
     : reveal >= 1 ? fullDone : Math.round(fullDone * reveal);
+  // fx.stop — кадр, на котором прыжки закончились: точки дальше не закрашиваем,
+  // но счётчики и подпись показывают настоящий день, а не место остановки
+  const statDone = fx && fx.stop ? fullDone : done;
   const current = fx ? null : reveal >= 1 ? fullCurrent : (done < total ? done : null);
   const lead = fx || reveal >= 1 ? -2 : current; // ведущая точка при анимации подсвечивается ярче
   const cols = gridCols(total), rows = Math.ceil(total / cols);
@@ -756,7 +759,9 @@ function draw(reveal = 1, pulse = 0, fx = null) {
   for (let i = 0; i < total; i++) {
     const x = x0 + (i % cols) * (dot + gap), y = y0 + Math.floor(i / cols) * (dot + gap);
     let dd = dot;
-    if (i < done && fx) {
+    // на застывшем кадре точки уже полного размера — «надувается» только та,
+    // на которую шарик сел сию секунду
+    if (i < done && fx && !fx.stop) {
       const k = Math.min(1, (fx.p - i) * fx.interval / 300);
       if (k < 1) dd = dot * (0.5 + 0.5 * easeOutBack(k));
     }
@@ -771,7 +776,7 @@ function draw(reveal = 1, pulse = 0, fx = null) {
     }
   }
 
-  if (fx) {
+  if (fx && !fx.stop) {
     const p = Math.min(fx.p, fx.N);
     const i0 = Math.floor(p), i1 = Math.min(i0 + 1, fx.N), frac = p - i0;
     const cx = i => x0 + (i % cols) * (dot + gap) + dot / 2;
@@ -793,14 +798,14 @@ function draw(reveal = 1, pulse = 0, fx = null) {
   if (state.footer) {
     ctx.fillStyle = text;
     ctx.font = wallFont(40, 400);
-    ctx.fillText(footerText(total, done), W / 2, y0 + gridH + 130);
+    ctx.fillText(footerText(total, statDone), W / 2, y0 + gridH + 130);
   }
 
   const fmt = n => n.toLocaleString('ru-RU');
   const [l1, l2] = STAT_LABELS[state.mode];
-  $('stat1').textContent = fmt(done);
+  $('stat1').textContent = fmt(statDone);
   $('stat1l').textContent = l1;
-  $('stat2').textContent = fmt(total - done);
+  $('stat2').textContent = fmt(total - statDone);
   $('stat2l').textContent = l2;
 
   copyToMini();
@@ -849,9 +854,11 @@ function animateJump(done_cb = null, limit = 0) {
   cancelAnimationFrame(revealRAF);
   cancelAnimationFrame(pulseRAF);
   cancelAnimationFrame(jumpRAF);
-  // limit — сколько точек пробежать: при смене темы дальше седьмой не бежим,
-  // иначе смена ждёт две с половиной секунды
-  const N = Math.min(done, total - 1, limit || total); // финиш — на сегодняшней точке
+  // limit — сколько точек пробежать: при смене темы бежим до пятнадцатой,
+  // дальше сетку не дорисовываем
+  // без limit финиш — на сегодняшней точке; с limit шарик встаёт на limit-ю
+  // точку (индекс limit - 1) и там остаётся
+  const N = Math.min(done, total - 1, limit ? limit - 1 : total);
   const interval = Math.min(2600, Math.max(700, N * 140)) / N; // мс на прыжок
   const t0 = performance.now();
   const step = now => {
@@ -860,6 +867,8 @@ function animateJump(done_cb = null, limit = 0) {
     if (p < N) { jumpRAF = requestAnimationFrame(step); return; }
     // точки допрыгали — только теперь встаёт новая тема
     done_cb?.();
+    // с limit на этом всё: остальные точки не вспыхивают, кадр замирает
+    if (limit) { draw(1, 0, { p: N, interval, N, stop: true }); return; }
     draw();
     startPulse();
   };
@@ -1459,7 +1468,7 @@ $('themes').addEventListener('click', e => {
 // Тап по телефону (и по полю вокруг него) — следующая тема. Защита от частых
 // тапов: точки добегают, проходит секунда, и только потом телефон слушает снова.
 let themeLock = 0, tipTimer = 0;
-const JUMP_DOTS = 7;   // при смене темы точки бегут до седьмой — дальше долго
+const JUMP_DOTS = 15;  // при смене темы точки бегут до пятнадцатой и замирают
 function nextTheme() {
   const now = performance.now();
   if (now < themeLock) return;
