@@ -16,6 +16,7 @@ from html import escape as esc
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -2167,6 +2168,25 @@ def _page(name: str, extra: dict | None = None) -> HTMLResponse:
     for key, value in values.items():
         html = html.replace(key, value)
     return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
+
+
+# Битая ссылка человеку показывает страницу сайта, а не строку {"detail":...}.
+# Машинным адресам (ручки API, картинки обоев, вебхук) JSON нужнее — им и оставляем.
+_JSON_404 = ("/api/", "/tg/", "/pay/", "/media/", "/admin")
+
+
+@app.exception_handler(StarletteHTTPException)
+def not_found(request: Request, exc: StarletteHTTPException):
+    path = request.url.path
+    human = (exc.status_code == 404
+             and request.method == "GET"
+             and not path.startswith(_JSON_404)
+             and not path.endswith((".png", ".jpg", ".json", ".txt", ".xml", ".css", ".js")))
+    if human:
+        page = _page("404.html")
+        return HTMLResponse(page.body, status_code=404, headers=dict(page.headers))
+    return JSONResponse({"detail": exc.detail}, status_code=exc.status_code,
+                        headers=getattr(exc, "headers", None))
 
 
 @app.get("/buy")

@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<link rel="icon" type="image/png" href="/static/img/favicon.png">
+<link rel="apple-touch-icon" href="/static/img/apple-touch.png">
+<title>Страницы нет — Vita</title>
+<meta name="robots" content="noindex, follow">
+<script src="/static/theme.js?v=8"></script>
+<link rel="stylesheet" href="/static/style.css?v=108">
+<style>
+  /* Сетка месяца — язык продукта: одна точка выпала, как и эта страница */
+  .lost { align-items: center; text-align: center; gap: 24px; padding-top: 12px; }
+  .lost-dots { width: 168px; height: 140px; display: block; }
+  .lost-dots circle { fill: var(--text-faint); }
+  .lost-dots .gone { fill: none; stroke: var(--text-muted); stroke-width: 2.2; }
+  .lost h1 { font-size: 30px; line-height: 1.15; letter-spacing: -0.02em; text-wrap: balance; }
+  .lost .sub { color: var(--text-2); font-size: 15px; line-height: 1.5; max-width: 330px; }
+  .lost-act { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 330px; }
+</style>
+</head>
+<body>
+<header class="head-shrink">
+  <div class="head-pill">
+    <a class="logo" href="/">⠿ <span class="logo-word">vita</span></a>
+    <span class="tag">страница</span>
+  </div>
+</header>
+
+<main class="lost">
+  <svg class="lost-dots" viewBox="0 0 168 140" aria-hidden="true" focusable="false">
+    <g>
+      <circle cx="14" cy="14" r="10"/><circle cx="42" cy="14" r="10"/><circle cx="70" cy="14" r="10"/>
+      <circle cx="98" cy="14" r="10"/><circle cx="126" cy="14" r="10"/><circle cx="154" cy="14" r="10"/>
+      <circle cx="14" cy="42" r="10"/><circle cx="42" cy="42" r="10"/><circle cx="70" cy="42" r="10"/>
+      <circle cx="98" cy="42" r="10"/><circle cx="126" cy="42" r="10"/><circle cx="154" cy="42" r="10"/>
+      <circle cx="14" cy="70" r="10"/><circle cx="42" cy="70" r="10"/>
+      <circle class="gone" cx="70" cy="70" r="10"/>
+      <circle cx="98" cy="70" r="10"/><circle cx="126" cy="70" r="10"/><circle cx="154" cy="70" r="10"/>
+      <circle cx="14" cy="98" r="10"/><circle cx="42" cy="98" r="10"/><circle cx="70" cy="98" r="10"/>
+      <circle cx="98" cy="98" r="10"/><circle cx="126" cy="98" r="10"/><circle cx="154" cy="98" r="10"/>
+      <circle cx="14" cy="126" r="10"/><circle cx="42" cy="126" r="10"/><circle cx="70" cy="126" r="10"/>
+      <circle cx="98" cy="126" r="10"/><circle cx="126" cy="126" r="10"/><circle cx="154" cy="126" r="10"/>
+    </g>
+  </svg>
+
+  <div>
+    <h1>Такой страницы нет</h1>
+    <p class="sub">Ссылка устарела или в адресе опечатка. Твои обои и настройки на месте —
+      они закреплены за аккаунтом.</p>
+  </div>
+
+  <div class="lost-act">
+    <a class="btn primary" href="/">На главную</a>
+    <a class="btn secondary" href="/me">Мои обои</a>
+  </div>
+</main>
+
+<footer class="page-foot">Пришёл по ссылке из Vita, а она не открылась — напиши: {{SUPPORT}}</footer>
+</body>
+</html>

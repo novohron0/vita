@@ -42,7 +42,7 @@ html, body { touch-action: pan-x pan-y; }
   --input-inset: inset 0 1px 0 rgba(255, 255, 255, 0.08);
   --seg-off: #9a9aa0;
   --seg-on-bg: rgba(255, 255, 255, 0.92);
-  --seg-on-text: #000;
+  --seg-on-text: #000000;   /* читается из app.js: только полный hex */
   --seg-on-shadow: inset 0 1px 0 #fff, 0 4px 14px rgba(255, 255, 255, 0.12);
   --primary-bg: rgba(255, 255, 255, 0.9);
   --primary-text: #000;

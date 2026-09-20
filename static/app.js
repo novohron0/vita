@@ -170,7 +170,15 @@ if (window.visualViewport) {
   window.visualViewport.addEventListener('resize', onZoom);
 }
 
-const rgb = hx => [1, 3, 5].map(i => parseInt(hx.slice(i, i + 2), 16));
+const rgb = hx => {
+  // цвет приходит и из настроек, и из CSS-переменных: там пишут и #000, и
+  // #000000. Короткий hex через slice давал NaN, а NaN в градиенте роняет
+  // всю отрисовку точки — таблетка формы оставалась пустой
+  let h = String(hx).trim().replace(/^#/, '');
+  if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+  const n = parseInt(h.slice(0, 6), 16);
+  return h.length >= 6 && Number.isFinite(n) ? [(n >> 16) & 255, (n >> 8) & 255, n & 255] : [0, 0, 0];
+};
 const blend = (fg, bg, a) => {
   const f = rgb(fg), b = rgb(bg);
   return `rgb(${f.map((v, i) => Math.round(v * a + b[i] * (1 - a))).join(',')})`;
