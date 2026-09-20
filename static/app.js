@@ -179,7 +179,6 @@ const lum = hx => {
   const [r, g, b] = rgb(hx);
   return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
 };
-const easeOutBack = t => { const u = t - 1; return 1 + 3.6 * u * u * u + 2.6 * u * u; };
 
 // фон: сплошной цвет, сцена или своё фото (cover-crop 1:1 с render.py)
 function paintBG(c) {
@@ -725,7 +724,7 @@ function drawWatermark(cx, cy, fill) {
   ctx.textAlign = 'center';
 }
 
-function draw(reveal = 1, pulse = 0, fx = null) {
+function draw(reveal = 1, pulse = 0, fill = null) {
   const text = state.textMuted || (state.bg === 'white' ? '#8a857a' : '#8e8e8e');
   const { total, done: realDone, current: realCurrent } = counts();
   // демо/рилс: заполняем всю сетку, последняя точка остаётся дышащим кольцом
@@ -733,15 +732,14 @@ function draw(reveal = 1, pulse = 0, fx = null) {
   const fullCurrent = (DEMO || (REEL && reelFull)) ? total - 1 : realCurrent;
   // reveal < 1 — точки закрашиваются по одной (анимация загрузки/смены режима);
   // счётчики и подпись бегут вместе с ними
-  // fx — прыжковая анимация по тапу: шарик летит по сетке (fx.p — дробный индекс),
-  // точки позади него проштампованы, кольцо «сегодня» прячется до приземления
-  const done = fx ? Math.min(fullDone, Math.floor(fx.p) + 1)
+  // fill — закрашивание по тапу: залито ровно столько точек, сколько сказано,
+  // кольцо «сегодня» не рисуется, а счётчики и подпись показывают настоящий
+  // день, а не место, где счёт остановился
+  const done = fill !== null ? Math.min(fullDone, Math.floor(fill))
     : reveal >= 1 ? fullDone : Math.round(fullDone * reveal);
-  // fx.stop — кадр, на котором прыжки закончились: точки дальше не закрашиваем,
-  // но счётчики и подпись показывают настоящий день, а не место остановки
-  const statDone = fx && fx.stop ? fullDone : done;
-  const current = fx ? null : reveal >= 1 ? fullCurrent : (done < total ? done : null);
-  const lead = fx || reveal >= 1 ? -2 : current; // ведущая точка при анимации подсвечивается ярче
+  const statDone = fill !== null ? fullDone : done;
+  const current = fill !== null ? null : reveal >= 1 ? fullCurrent : (done < total ? done : null);
+  const lead = fill !== null || reveal >= 1 ? -2 : current; // ведущая точка при анимации ярче
   const cols = gridCols(total), rows = Math.ceil(total / cols);
 
   ctx.setTransform(cvScale, 0, 0, cvScale, 0, 0);
@@ -758,13 +756,7 @@ function draw(reveal = 1, pulse = 0, fx = null) {
   const glowOn = state.glow && dot >= 14;
   for (let i = 0; i < total; i++) {
     const x = x0 + (i % cols) * (dot + gap), y = y0 + Math.floor(i / cols) * (dot + gap);
-    let dd = dot;
-    // на застывшем кадре точки уже полного размера — «надувается» только та,
-    // на которую шарик сел сию секунду
-    if (i < done && fx && !fx.stop) {
-      const k = Math.min(1, (fx.p - i) * fx.interval / 300);
-      if (k < 1) dd = dot * (0.5 + 0.5 * easeOutBack(k));
-    }
+    const dd = dot;
     const dx = x + (dot - dd) / 2, dy = y + (dot - dd) / 2;
     if (i < done) {
       if (glowOn) VitaScenes.glow(ctx, dx, dy, dd, state.color);
@@ -774,18 +766,6 @@ function draw(reveal = 1, pulse = 0, fx = null) {
     } else {
       drawDot(ctx, x, y, dot, state.color, 'empty', 0, false, i);
     }
-  }
-
-  if (fx && !fx.stop) {
-    const p = Math.min(fx.p, fx.N);
-    const i0 = Math.floor(p), i1 = Math.min(i0 + 1, fx.N), frac = p - i0;
-    const cx = i => x0 + (i % cols) * (dot + gap) + dot / 2;
-    const cy = i => y0 + Math.floor(i / cols) * (dot + gap) + dot / 2;
-    const hop = Math.max(dot * 0.9, Math.hypot(cx(i1) - cx(i0), cy(i1) - cy(i0)) * 0.22);
-    const lx = cx(i0) + (cx(i1) - cx(i0)) * frac;
-    const ly = cy(i0) + (cy(i1) - cy(i0)) * frac - hop * Math.sin(Math.PI * frac);
-    if (glowOn) VitaScenes.glow(ctx, lx - dot / 2, ly - dot / 2, dot, state.color);
-    drawDot(ctx, lx - dot / 2, ly - dot / 2, dot, state.color, 'filled', 0, false, i0);
   }
 
   ctx.textAlign = 'center';
@@ -813,11 +793,11 @@ function draw(reveal = 1, pulse = 0, fx = null) {
 
 // точки закрашиваются по одной при загрузке и смене режима — «оживает» на глазах
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-let revealRAF = null, jumpRAF = null;
+let revealRAF = null, fillRAF = null;
 function animateReveal(dur = 1150) {
   cancelAnimationFrame(revealRAF);
   cancelAnimationFrame(pulseRAF);
-  cancelAnimationFrame(jumpRAF);
+  cancelAnimationFrame(fillRAF);
   if (reduceMotion || (!DEMO && counts().done <= 0)) { draw(); startPulse(); return; }
   const t0 = performance.now();
   const step = now => {
@@ -846,33 +826,26 @@ function startPulse() {
   pulseRAF = requestAnimationFrame(loop);
 }
 
-// тап по телефону: шарик скачет по сетке дугами и штампует точки одну за другой,
-// в конце приземляется на сегодняшнюю точку и становится дышащим кольцом
-function animateJump(done_cb = null, limit = 0) {
-  const { total, done } = counts();
-  if (reduceMotion || done <= 0) { animateReveal(); done_cb?.(); return; }
+// тап по телефону: точки заливаются волной, как при загрузке главной, но не
+// все — счёт останавливается на случайной точке от восьмой до пятнадцатой,
+// и кадр замирает на ней
+const FILL_MIN = 8, FILL_MAX = 15, FILL_MS = 520;
+const fillLimit = () => FILL_MIN + Math.floor(Math.random() * (FILL_MAX - FILL_MIN + 1));
+function animateFill(limit, dur = FILL_MS) {
   cancelAnimationFrame(revealRAF);
   cancelAnimationFrame(pulseRAF);
-  cancelAnimationFrame(jumpRAF);
-  // limit — сколько точек пробежать: при смене темы бежим до пятнадцатой,
-  // дальше сетку не дорисовываем
-  // без limit финиш — на сегодняшней точке; с limit шарик встаёт на limit-ю
-  // точку (индекс limit - 1) и там остаётся
-  const N = Math.min(done, total - 1, limit ? limit - 1 : total);
-  const interval = Math.min(2600, Math.max(700, N * 140)) / N; // мс на прыжок
+  cancelAnimationFrame(fillRAF);
+  const { done } = counts();
+  const N = Math.min(done, Math.max(1, limit));
+  if (done <= 0) { draw(); startPulse(); return; }
+  if (reduceMotion || N <= 1) { draw(1, 0, N); return; }
   const t0 = performance.now();
   const step = now => {
-    const p = Math.min(N, (now - t0) / interval);
-    draw(1, 0, { p, interval, N });
-    if (p < N) { jumpRAF = requestAnimationFrame(step); return; }
-    // точки допрыгали — только теперь встаёт новая тема
-    done_cb?.();
-    // с limit на этом всё: остальные точки не вспыхивают, кадр замирает
-    if (limit) { draw(1, 0, { p: N, interval, N, stop: true }); return; }
-    draw();
-    startPulse();
+    const k = Math.min(1, (now - t0) / dur);
+    draw(1, 0, 1 + (1 - Math.pow(1 - k, 3)) * (N - 1)); // easeOutCubic, как reveal
+    if (k < 1) fillRAF = requestAnimationFrame(step);
   };
-  jumpRAF = requestAnimationFrame(step);
+  fillRAF = requestAnimationFrame(step);
 }
 
 // --- плавающий предпросмотр ---
@@ -1424,7 +1397,7 @@ function applyLook(look) {
 
 const THEME_ORDER = Object.keys(VitaScenes.THEMES);
 
-function pickTheme(key) {
+function pickTheme(key, redraw = true) {
   const t = VitaScenes.THEMES[key];
   if (!t) return;
   state.bg = t.bg;
@@ -1452,7 +1425,9 @@ function pickTheme(key) {
   }
   applyLook(t);
   refreshSwatches();
-  draw();          // тема встаёт сразу: точки не перебегают заново
+  // тема встаёт сразу; по тапу рисовать нечего — сетку тут же заливает animateFill,
+  // и лишний полный кадр мелькнул бы всеми точками разом
+  if (redraw) draw();
   // следующую сцену рисуем заранее, пока человек смотрит на эту
   const next = THEME_ORDER[(THEME_ORDER.indexOf(key) + 1) % THEME_ORDER.length];
   if (VitaScenes.SCENES.includes(VitaScenes.THEMES[next].bg)) {
@@ -1468,17 +1443,16 @@ $('themes').addEventListener('click', e => {
 // Тап по телефону (и по полю вокруг него) — следующая тема. Защита от частых
 // тапов: точки добегают, проходит секунда, и только потом телефон слушает снова.
 let themeLock = 0, tipTimer = 0;
-const JUMP_DOTS = 15;  // при смене темы точки бегут до пятнадцатой и замирают
 function nextTheme() {
   const now = performance.now();
   if (now < themeLock) return;
   const { done } = counts();
-  const run = reduceMotion || done <= 0 ? 0 : Math.min(2600, Math.max(700, JUMP_DOTS * 140));
+  const run = reduceMotion || done <= 0 ? 0 : FILL_MS;
   themeLock = now + run + 300;
   const i = THEME_ORDER.indexOf(state.bg);
   const key = THEME_ORDER[(i + 1) % THEME_ORDER.length];
-  // сначала встаёт новая тема, и уже её точки пробегают по сетке
-  pickTheme(key);
+  // сначала встаёт новая тема, и уже её точки заливают сетку
+  pickTheme(key, false);
   const tip = $('phoneTip');
   if (tip) {
     tip.textContent = document.querySelector(`#themes [data-v="${key}"]`)?.textContent || '';
@@ -1487,7 +1461,7 @@ function nextTheme() {
     clearTimeout(tipTimer);
     tipTimer = setTimeout(() => tip.classList.add('gone'), 1600);
   }
-  animateJump(null, JUMP_DOTS);
+  animateFill(fillLimit());
   try { localStorage.setItem('vitaThemeTap', '1'); } catch {}
 }
 try { if (localStorage.getItem('vitaThemeTap') && $('phoneTip')) $('phoneTip').classList.add('gone'); } catch {}
