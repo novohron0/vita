@@ -707,11 +707,13 @@ main { width: 100%; max-width: 430px; display: flex; flex-direction: column; gap
   color: var(--text-nav); font-size: 13px; letter-spacing: normal; text-transform: none;
   cursor: pointer;
 }
+/* Кружок «свой цвет». Общего стеклянного блика тут быть не должно: на круглой
+   кнопке его две внутренние линии загибались белыми дугами по краям. */
 .color-own input[type="color"] {
   -webkit-appearance: none; appearance: none;
   width: 42px; height: 42px; padding: 0; border: 2px solid rgba(255,255,255,0.14);
   border-radius: 50%; background: transparent; cursor: pointer;
-  box-shadow: var(--glass-inset);
+  box-shadow: none;
 }
 .color-own input[type="color"]::-webkit-color-swatch-wrapper { padding: 3px; }
 .color-own input[type="color"]::-webkit-color-swatch { border: 0; border-radius: 50%; }
