@@ -20,7 +20,7 @@
   try { if (!localStorage.getItem('vitaSignedIn')) document.documentElement.classList.add('gate'); } catch (e) {}
 </script>
 <script src="/static/theme.js?v=8"></script>
-<link rel="stylesheet" href="/static/style.css?v=111">
+<link rel="stylesheet" href="/static/style.css?v=112">
 <style>
   .home-hero { animation: fadeUp .7s cubic-bezier(.22,1,.36,1) both; }
   .phone { animation: phoneReveal .85s cubic-bezier(.22,1,.36,1) both, phoneFloat 7s ease-in-out 1.1s infinite; }
@@ -309,8 +309,6 @@
       <input type="file" id="avaFile" accept="image/jpeg,image/png,image/webp" hidden>
     </label>
 
-    <input class="prof-name" id="profName" maxlength="40" placeholder="Твоё имя"
-      autocomplete="name" spellcheck="false">
     <div class="prof-tag"><span>@</span><input id="profTag" maxlength="24" placeholder="ник"
       autocomplete="off" autocapitalize="none" spellcheck="false"></div>
     <p class="tag-note" id="tagNote"></p>
@@ -329,6 +327,7 @@
 
     <button class="primary" id="profSave" type="button">Сохранить</button>
     <p class="hint prof-status" id="profStatus" role="status" aria-live="polite"></p>
+    <a class="prof-walls" href="/me">Мои обои</a>
     <button class="prof-exit" id="profLogout" type="button" hidden>Выйти из аккаунта</button>
   </div>
 </div>
@@ -403,7 +402,6 @@
 
 <footer class="page-foot">
   <nav class="foot-links">
-    <a href="/me">Мои обои</a>
     <a href="/buy">Оплата</a>
     <a href="/offer">Реквизиты</a>
   </nav>
@@ -413,6 +411,6 @@
 <script src="/static/vita-id.js?v=7"></script>
 <script src="/static/tg-login.js?v=4"></script>
 <script src="/static/scenes.js?v=3"></script>
-<script src="/static/app.js?v=73"></script>
+<script src="/static/app.js?v=74"></script>
 </body>
 </html>

@@ -11,7 +11,7 @@
 <script src="/static/vita-id.js?v=7"></script>
 <script src="/static/gate.js?v=2"></script>
 <script src="/static/tg-login.js?v=4"></script>
-<link rel="stylesheet" href="/static/style.css?v=111">
+<link rel="stylesheet" href="/static/style.css?v=112">
 </head>
 <body>
 <header class="head-shrink">
@@ -26,7 +26,7 @@
 
 <main>
   <div class="field"><span class="goal-title" style="text-transform:none">Моя Vita</span></div>
-  <p class="hint" style="margin-top:-8px">Vita создаёт твой аккаунт автоматически. Имя, аватар и твой @тег живут здесь.</p>
+  <p class="hint" style="margin-top:-8px">Твой тег, обои и доступ — всё здесь.</p>
 
   <section class="library-card profile-editor-card">
     <div class="profile-editor-head">
@@ -45,86 +45,32 @@
       </div>
     </div>
     <div class="profile-fields">
-      <label class="field">Имя
-        <input id="profileName" minlength="2" maxlength="40" autocomplete="name" placeholder="Как тебя зовут">
-      </label>
       <label class="field">Твой @тег
         <input id="profileHandle" minlength="3" maxlength="24" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="vita_friend">
       </label>
-      <label class="field">О себе
-        <textarea id="profileBio" maxlength="280" rows="3" placeholder="Что тебе важно и к чему ты идёшь"></textarea>
-      </label>
+      <p class="hint tag-note" id="handleNote" role="status" aria-live="polite"></p>
     </div>
-    <button id="saveProfile" type="button" class="primary" disabled>Сохранить профиль</button>
+    <button id="saveProfile" type="button" class="primary" disabled>Сохранить тег</button>
     <p id="profileStatus" class="hint profile-status" role="status" aria-live="polite"></p>
   </section>
 
-  <!-- TODO(достижения): карточка плашек спрятана — вернётся как «Достижения». -->
-  <section class="library-card tags-card" hidden>
-    <div class="library-head"><div><h2>Коллекция тегов</h2><p class="hint">Редкость показывает пройденный путь и не даёт преимуществ.</p></div></div>
-    <div id="profileTags" class="tag-collection"><p class="hint">Первый тег появится за первый шаг.</p></div>
-  </section>
-
-  <section class="library-card vita-id-card">
-    <span class="library-label">Приватный код восстановления</span>
-    <div class="vita-code-row"><b id="profileCode">создаём…</b><button id="copyProfile" type="button" class="secondary" disabled>Скопировать</button></div>
-    <p class="hint">Он подключает твои устройства к одному аккаунту. Никому его не показывай — в публичном профиле кода нет.</p>
-    <details class="profile-connect"><summary>Восстановить свой аккаунт</summary>
-      <div class="profile-connect-row"><input id="existingProfileCode" maxlength="10" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="abcdefgh23"><button id="connectExisting" type="button" class="secondary">Войти</button></div>
-      <p class="hint" id="connectStatus" role="status" aria-live="polite"></p>
-    </details>
-  </section>
-
-  <section class="library-card access-card" id="loginCard" hidden>
-    <div class="library-head"><h2>Вход</h2></div>
-    <p class="access-line" id="loginLine"></p>
-    <div class="tg-login" id="tgBox" hidden><div class="tg-widget"></div><p class="tg-status"></p></div>
-    <button class="secondary" id="logoutBtn" type="button" hidden>Выйти</button>
-  </section>
-
-  <section class="library-card access-card" id="accessCard" hidden>
-    <div class="library-head"><h2>Доступ</h2></div>
+  <section class="library-card prime-card" id="accessCard" hidden>
+    <span class="prime-word" aria-label="prime">prime</span>
     <p class="access-line" id="accessLine"></p>
-    <a class="btn primary" id="accessBuy" href="/buy" hidden></a>
+    <a class="btn primary prime-open" id="accessBuy" href="/buy" hidden><i class="prime-art" aria-hidden="true"></i><span id="accessBuyText"></span></a>
   </section>
 
   <section class="library-card">
-    <div class="library-head"><h2>Цели</h2><a class="btn secondary" href="/goals">＋ Новая</a></div>
-    <div id="goalsList"><p class="page-foot">Загружаю…</p></div>
-  </section>
-
-  <section class="library-card">
-    <div class="library-head"><h2>Обои</h2><a class="btn secondary" href="/">＋ Новые</a></div>
-    <div id="wallpapersList"><p class="page-foot">Загружаю…</p></div>
-  </section>
-
-  <section class="library-card">
-    <div class="library-head"><h2>Виджет цели</h2></div>
-    <label class="field">Тема
-      <select id="widgetTheme"><option value="graphite">Графит</option><option value="violet">Vita</option><option value="ocean">Океан</option><option value="ember">Закат</option></select>
-    </label>
-    <label class="field">Форма точек
-      <select id="dotStyle"><option value="goal">Как у цели</option><option value="circle">Круг</option><option value="soft">Мягкие</option><option value="square">Квадрат</option><option value="diamond">Ромб</option><option value="heart">Сердце</option><option value="star">Звезда</option><option value="hex">Соты</option></select>
-    </label>
-    <label class="field">Цвет<input id="dotColor" type="color" value="#A855F7"></label>
-    <button class="primary" id="saveSettings">Сохранить настройки</button>
-    <p class="hint" id="settingsStatus"></p>
-  </section>
-
-  <section class="library-card" id="publishCard" hidden>
-    <div class="library-head"><h2>Опубликовать в ленте</h2><button class="library-x" id="closePublish">✕</button></div>
-    <input id="publishKind" type="hidden"><input id="publishSource" type="hidden">
-    <label class="field">Название<input id="publishTitle" maxlength="80"></label>
-    <label class="field">Описание<textarea id="publishDescription" maxlength="500" rows="3" placeholder="Расскажи, как идёт путь или почему выбрал такой дизайн"></textarea></label>
-    <label class="field">Фото — необязательно<input id="publishImage" type="file" accept="image/*"></label>
-    <button class="primary" id="publish">Выложить</button>
-    <p class="err" id="publishError"></p>
+    <div class="library-head"><h2>Мои обои</h2><a class="btn secondary" href="/">＋ Новые</a></div>
+    <div id="wallpapersList" class="wall-list"><p class="page-foot">Загружаю…</p></div>
   </section>
 
   <section class="library-card" id="postsCard" hidden>
     <div class="library-head"><h2>Мои публикации</h2><a class="btn secondary" href="/feed">Открыть ленту</a></div>
     <div id="postsList"></div>
   </section>
+
+  <button class="ghost-exit" id="logoutBtn" type="button">Выйти</button>
 </main>
 
 <script>
@@ -132,8 +78,7 @@ const $ = id => document.getElementById(id);
 const esc = value => { const node = document.createElement('div'); node.textContent = value ?? ''; return node.innerHTML; };
 let profile = null;
 
-const rarityNames = { common: 'Обычный', rare: 'Редкий', epic: 'Эпический', legendary: 'Легендарный' };
-const safeCode = value => /^[a-z0-9]+$/i.test(String(value || '')) ? String(value) : '';
+const safeCode = value => /^[a-z0-9]{6}$/i.test(String(value || '')) ? String(value) : '';
 const safeColor = value => /^#[0-9a-f]{6}$/i.test(String(value || '')) ? String(value) : '#a855f7';
 const cleanHandle = value => String(value || '').trim().replace(/^@+/, '');
 const safeMediaUrl = value => {
@@ -143,122 +88,104 @@ const safeMediaUrl = value => {
   } catch { return ''; }
 };
 
-function normalizedTag(value) {
-  const tag = typeof value === 'string' ? { name: value } : (value || {});
-  const rarity = Object.prototype.hasOwnProperty.call(rarityNames, tag.rarity) ? tag.rarity : 'common';
-  const progress = Number(tag.progress);
-  const target = Number(tag.target ?? tag.threshold);
-  return {
-    name: String(tag.name || tag.title || tag.id || 'Тег'),
-    description: String(tag.description || ''),
-    icon: String(tag.icon || tag.glyph || '◆').slice(0, 4),
-    rarity,
-    earned: tag.earned !== false && tag.locked !== true,
-    progress: Number.isFinite(progress) ? Math.max(0, progress) : null,
-    target: Number.isFinite(target) && target > 0 ? target : null
-  };
-}
-
-function renderTags(values) {
-  const tags = Array.isArray(values) ? values.map(normalizedTag) : [];
-  $('profileTags').innerHTML = tags.length ? tags.map(tag => {
-    const progress = tag.target !== null && tag.progress !== null
-      ? ` · ${Math.min(tag.progress, tag.target)}/${tag.target}` : '';
-    return `<article class="vita-tag rarity-${tag.rarity}${tag.earned ? '' : ' is-locked'}">
-      <span class="vita-tag-icon" aria-hidden="true">${esc(tag.icon)}</span>
-      <span><b>${esc(tag.name)}</b><small>${rarityNames[tag.rarity]}${progress}</small>${tag.description ? `<em>${esc(tag.description)}</em>` : ''}</span>
-    </article>`;
-  }).join('') : '<p class="hint">Первый тег появится за первый шаг.</p>';
-}
-
 function renderIdentity(data, { preserveFields = false } = {}) {
-  const savedName = String(data.name || '');
   const savedHandle = cleanHandle(data.handle);
   const avatar = safeMediaUrl(data.avatar);
-  if (!preserveFields) {
-    $('profileName').value = savedName;
-    $('profileHandle').value = savedHandle;
-    $('profileBio').value = String(data.bio || '');
-  }
-  const name = preserveFields ? $('profileName').value.trim() : savedName;
+  if (!preserveFields) $('profileHandle').value = savedHandle;
   const handle = preserveFields ? cleanHandle($('profileHandle').value) : savedHandle;
-  $('profilePreviewName').textContent = name || 'Твоя Vita';
-  $('profileAvatarFallback').textContent = (name || handle || 'V').trim().charAt(0).toUpperCase() || 'V';
+  $('profilePreviewName').textContent = handle ? '@' + handle : 'Твоя Vita';
+  $('profileAvatarFallback').textContent = (handle || 'V').trim().charAt(0).toUpperCase() || 'V';
   $('profileAvatarImage').hidden = !avatar;
   if (avatar) $('profileAvatarImage').src = avatar;
   else $('profileAvatarImage').removeAttribute('src');
   const publicLink = $('publicProfileLink');
   publicLink.hidden = !savedHandle;
-  publicLink.textContent = savedHandle ? `@${savedHandle}` : '';
+  publicLink.textContent = savedHandle ? 'твоя страница · /u/' + savedHandle : '';
   publicLink.href = savedHandle ? `/u/${encodeURIComponent(savedHandle)}` : '#';
   $('accountState').innerHTML = '<i></i>Аккаунт готов';
   $('saveProfile').disabled = false;
   $('profileAvatar').disabled = false;
-  renderTags(data.tags);
+  handleNote();
 }
 
-function libraryItem(item, kind) {
-  const isGoal = kind === 'goal';
+// Сколько замен осталось: тег выбирают один раз и один раз меняют.
+function handleNote(extra) {
+  const note = $('handleNote');
+  if (extra) { note.textContent = extra.text; note.className = 'hint tag-note ' + (extra.cls || ''); return; }
+  const left = Number(profile && profile.handleLeft);
+  note.className = 'hint tag-note';
+  if (profile && profile.handleLocked) note.textContent = 'Тег закреплён за тобой навсегда';
+  else if (left === 1) note.textContent = 'Тег выбирается один раз, потом его можно поменять один раз';
+  else note.textContent = 'Осталась последняя замена — дальше тег остаётся навсегда';
+}
+
+const ICON = {
+  edit: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M13.4 3.6l3 3M4 16.4l.6-3 8.3-8.3 3 3-8.3 8.3-3.6.4Z"/></svg>',
+  share: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 13V3m0 0L6.6 6.4M10 3l3.4 3.4M4.5 11.5V16a1 1 0 001 1h9a1 1 0 001-1v-4.5"/></svg>',
+  trash: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4.5 5.5h11M8 5.5V4h4v1.5M6 5.5l.7 10.2a1 1 0 001 .8h4.6a1 1 0 001-.8L15 5.5M8.6 8.6v5M11.4 8.6v5"/></svg>',
+};
+
+// Ссылка «поделиться» открывает конструктор с уже собранными обоями: человеку
+// остаётся нажать «Поставить», будто он сам всё настроил.
+const shareUrl = code => `${location.origin}/?w=${encodeURIComponent(code)}`;
+
+function wallItem(item) {
   const code = safeCode(item.code);
-  const href = isGoal ? `/g/${encodeURIComponent(code)}` : `/s/${encodeURIComponent(code)}`;
-  const meta = isGoal ? `${item.done}/${item.days} дней` : `${item.mode} · ${item.shape}`;
-  // обои можно скачать прямо отсюда, без похода в конструктор
-  const download = isGoal ? '' : `<a class="lib-dl" href="/w/${encodeURIComponent(code)}.png" download="vita-${esc(code)}.png" title="Скачать обои">⤓ Скачать</a>`;
-  return `<div class="library-item">
+  return `<div class="wall-item" data-code="${esc(code)}">
     <i style="background:${safeColor(item.color)}"></i>
-    <div><b>${esc(item.title)}</b><span>${esc(meta)} · ${esc(code)}</span></div>
-    ${download}
-    <a href="${href}">Открыть</a>
-    <button class="publish-item" data-kind="${isGoal ? 'goal' : 'wallpaper'}" data-code="${esc(code)}" data-title="${encodeURIComponent(String(item.title || ''))}">В ленту</button>
+    <div class="wall-info"><b>${esc(item.title)}</b><span>${esc(item.mode)} · ${esc(item.shape)} · ${esc(code)}</span></div>
+    <a class="btn primary wall-set" href="/s/${encodeURIComponent(code)}">Поставить</a>
+    <div class="wall-acts">
+      <a class="icon-btn" href="/?w=${encodeURIComponent(code)}" title="Изменить" aria-label="Изменить обои">${ICON.edit}</a>
+      <button class="icon-btn" type="button" data-share="${esc(code)}" title="Поделиться" aria-label="Поделиться обоями">${ICON.share}</button>
+      <button class="icon-btn danger" type="button" data-del="${esc(code)}" title="Удалить" aria-label="Удалить обои">${ICON.trash}</button>
+    </div>
   </div>`;
+}
+
+function renderWalls() {
+  const walls = Array.isArray(profile && profile.wallpapers) ? profile.wallpapers : [];
+  $('wallpapersList').innerHTML = walls.length
+    ? walls.map(wallItem).join('')
+    : '<p class="hint">Пока нет сохранённых обоев. Сделай первые — это минута.</p>';
 }
 
 function render(data) {
   profile = data;
   renderIdentity(data);
-  $('profileCode').textContent = String(data.code || '—');
-  $('copyProfile').disabled = !safeCode(data.code);
-  const goals = Array.isArray(data.goals) ? data.goals : [];
-  const wallpapers = Array.isArray(data.wallpapers) ? data.wallpapers : [];
+  renderWalls();
   const posts = Array.isArray(data.posts) ? data.posts : [];
-  $('goalsList').innerHTML = goals.length ? goals.map(item => libraryItem(item, 'goal')).join('') : '<p class="hint">Пока нет целей.</p>';
-  $('wallpapersList').innerHTML = wallpapers.length ? wallpapers.map(item => libraryItem(item, 'wallpaper')).join('') : '<p class="hint">Пока нет сохранённых обоев.</p>';
-  const settings = data.settings || {};
-  $('widgetTheme').value = settings.theme || 'graphite';
-  $('dotStyle').value = settings.dotStyle || 'goal';
-  if (/^#[0-9a-f]{6}$/i.test(settings.dotColor || '')) $('dotColor').value = settings.dotColor;
   $('postsCard').hidden = !posts.length;
   $('postsList').innerHTML = posts.map(post => {
     const postCode = safeCode(post.code), sourceCode = safeCode(post.sourceCode);
     return `<div class="library-item"><div><b>${esc(post.title)}</b><span>${esc(post.kind)} · код ${esc(sourceCode)}</span></div><a href="/feed#post-${encodeURIComponent(postCode)}">Открыть</a></div>`;
   }).join('');
-  document.querySelectorAll('.publish-item').forEach(button => button.addEventListener('click', () => openPublish(button)));
 }
 
-function openPublish(button) {
-  $('publishKind').value = button.dataset.kind;
-  $('publishSource').value = button.dataset.code;
-  $('publishTitle').value = decodeURIComponent(button.dataset.title);
-  $('publishDescription').value = '';
-  $('publishImage').value = '';
-  $('publishError').textContent = '';
-  $('publishCard').hidden = false;
-  $('publishCard').scrollIntoView({ behavior: 'smooth', block: 'center' });
-}
+// Занятый тег ловим до «Сохранить», а не после отказа сервера.
+let tagTimer = 0;
+$('profileHandle').addEventListener('input', () => {
+  clearTimeout(tagTimer);
+  const handle = cleanHandle($('profileHandle').value).toLowerCase();
+  if (!handle || handle === cleanHandle(profile && profile.handle).toLowerCase()) { handleNote(); return; }
+  tagTimer = setTimeout(async () => {
+    try {
+      const res = await fetch('/api/tag-free?tag=' + encodeURIComponent(handle));
+      const data = await res.json();
+      if (cleanHandle($('profileHandle').value).toLowerCase() !== handle) return;
+      if (!data.ok) handleNote({ text: data.why, cls: 'err' });
+      else if (!data.free) handleNote({ text: '@' + handle + ' уже занят — придумай другой', cls: 'err' });
+      else handleNote({ text: '@' + handle + ' свободен', cls: 'ok' });
+    } catch {}
+  }, 320);
+});
 
-$('closePublish').addEventListener('click', () => { $('publishCard').hidden = true; });
 $('saveProfile').addEventListener('click', async () => {
   const button = $('saveProfile');
   const status = $('profileStatus');
-  const name = $('profileName').value.trim();
   const handle = cleanHandle($('profileHandle').value).toLowerCase();
-  if (name.length < 2 || name.length > 40) {
-    status.textContent = 'Имя: от 2 до 40 символов';
-    status.classList.add('err');
-    return;
-  }
   if (!/^[a-z0-9_]{3,24}$/.test(handle)) {
-    status.textContent = 'Handle: 3–24 латинских буквы, цифры или _';
+    status.textContent = 'Тег: 3–24 латинских буквы, цифры или _';
     status.classList.add('err');
     return;
   }
@@ -266,14 +193,10 @@ $('saveProfile').addEventListener('click', async () => {
   status.textContent = 'Сохраняем…';
   status.classList.remove('err');
   try {
-    const data = await VitaID.updateProfile({
-      name,
-      handle,
-      bio: $('profileBio').value.trim()
-    });
+    const data = await VitaID.updateProfile({ handle });
     profile = { ...profile, ...(data.profile || data) };
     renderIdentity(profile);
-    status.textContent = '✓ Профиль сохранён';
+    status.textContent = '✓ Тег сохранён';
   } catch (error) {
     status.textContent = error.message;
     status.classList.add('err');
@@ -317,93 +240,54 @@ $('profileAvatarImage').addEventListener('error', event => {
   event.currentTarget.removeAttribute('src');
 });
 
-$('copyProfile').addEventListener('click', async () => {
-  const code = safeCode(profile && profile.code);
-  if (!code) return;
-  try { await navigator.clipboard.writeText(code); } catch { window.prompt('Скопируй Vita ID', code); }
-  $('copyProfile').textContent = '✓ Скопировано';
-  setTimeout(() => { $('copyProfile').textContent = 'Скопировать'; }, 1400);
-});
-
-$('connectExisting').addEventListener('click', async () => {
-  const button = $('connectExisting'); button.disabled = true; $('connectStatus').textContent = 'Подключаю…';
-  try {
-    const data = await VitaID.connect($('existingProfileCode').value.trim());
-    render(data); $('connectStatus').textContent = '✓ Этот Vita ID подключён';
-  } catch (error) { $('connectStatus').textContent = error.message; }
-  button.disabled = false;
-});
-
-$('saveSettings').addEventListener('click', async () => {
-  const button = $('saveSettings'); button.disabled = true; $('settingsStatus').textContent = 'Сохраняю…';
-  try {
-    const response = await fetch('/api/profile/settings', {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ownerToken: VitaID.token(), settings: { theme: $('widgetTheme').value, dotStyle: $('dotStyle').value, dotColor: $('dotColor').value } })
-    });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.detail || 'Ошибка');
-    $('settingsStatus').textContent = '✓ Настройки сохранены';
-  } catch (error) { $('settingsStatus').textContent = error.message; }
-  button.disabled = false;
-});
-
-$('publish').addEventListener('click', async () => {
-  const button = $('publish'); button.disabled = true; $('publishError').textContent = '';
-  try {
-    let imageId = '';
-    const file = $('publishImage').files[0];
-    if (file) {
-      const form = new FormData(); form.append('file', file);
-      const upload = await fetch('/api/upload-post-image', { method: 'POST', body: form });
-      const image = await upload.json();
-      if (!upload.ok) throw new Error(image.detail || 'Не удалось загрузить фото');
-      imageId = image.id;
-    }
-    const response = await fetch('/api/feed-post', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ownerToken: VitaID.token(), kind: $('publishKind').value, sourceCode: $('publishSource').value, title: $('publishTitle').value, description: $('publishDescription').value, imageId })
-    });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.detail || 'Не удалось опубликовать');
-    location.href = data.url;
-  } catch (error) { $('publishError').textContent = error.message; button.disabled = false; }
-});
-
-function renderLogin(state) {
-  const line = $('loginLine'), box = $('tgBox'), out = $('logoutBtn');
-  if (state.telegram) {
-    line.innerHTML = `Вошёл как <b>${esc(state.telegram)}</b>. На другом телефоне нажми ту же кнопку — попадёшь в этот же аккаунт.`;
-    out.hidden = false;
-  } else if (state.tgBot) {
-    line.innerHTML = 'Войди через телеграм — и доступ вернётся на любом телефоне, даже если очистишь браузер.';
-    VitaTG.mount(box, state);
-  } else {
-    line.innerHTML = 'Аккаунт держится на приватном коде ниже. Сохрани его — по нему вернёшь доступ.';
+$('wallpapersList').addEventListener('click', async event => {
+  const share = event.target.closest('[data-share]');
+  const del = event.target.closest('[data-del]');
+  if (share) {
+    const url = shareUrl(share.dataset.share);
+    const title = 'Обои Vita';
+    if (navigator.share) { try { await navigator.share({ title, url }); return; } catch { return; } }
+    try { await navigator.clipboard.writeText(url); } catch { window.prompt('Скопируй ссылку', url); return; }
+    share.classList.add('done');
+    setTimeout(() => share.classList.remove('done'), 1400);
+    return;
   }
-  $('loginCard').hidden = false;
-}
+  if (!del) return;
+  const code = del.dataset.del;
+  if (!confirm('Удалить эти обои? Ссылка на них перестанет работать.')) return;
+  del.disabled = true;
+  try {
+    const res = await fetch('/api/link/' + encodeURIComponent(code) + '?ownerToken=' + encodeURIComponent(VitaID.token() || ''), { method: 'DELETE' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || 'Не вышло удалить');
+    profile.wallpapers = (profile.wallpapers || []).filter(w => w.code !== code);
+    renderWalls();
+  } catch (error) {
+    del.disabled = false;
+    $('profileStatus').textContent = error.message;
+    $('profileStatus').classList.add('err');
+  }
+});
 
 $('logoutBtn').addEventListener('click', () => {
-  if (!confirm('Выйти из аккаунта? Вернуться сможешь через телеграм.')) return;
+  if (!confirm('Выйти из аккаунта? Вернуться сможешь через телеграм или почту.')) return;
   VitaID.logout();
-  location.href = '/me';
+  location.href = '/';
 });
 
 async function renderAccess() {
   let state;
   try { state = await VitaID.access(); } catch { return; }
-  renderLogin(state);
   const line = $('accessLine'), buy = $('accessBuy');
   if (state.paid) {
     line.innerHTML = '<b>Открыт навсегда.</b> Спасибо — Vita твоя, платить больше не нужно.';
   } else if (state.until && !state.expired) {
     const until = new Date(state.until).toLocaleDateString('ru-RU', { day: '2-digit', month: 'long' });
     line.innerHTML = `Пробные дни идут до <b>${esc(until)}</b>. Дальше точки замрут.`;
-    if (state.payable) { buy.textContent = `Открыть навсегда — ${esc(state.price)} ₽`; buy.hidden = false; }
+    if (state.payable) { $('accessBuyText').textContent = `Открыть навсегда — ${state.price} ₽`; buy.hidden = false; }
   } else if (state.expired) {
     line.innerHTML = '<b>Точки замерли.</b> Пробные дни закончились — обои перестали обновляться.';
-    if (state.payable) { buy.textContent = `Оживить обои — ${esc(state.price)} ₽ навсегда`; buy.hidden = false; }
+    if (state.payable) { $('accessBuyText').textContent = `Оживить обои — ${state.price} ₽ навсегда`; buy.hidden = false; }
   } else {
     line.innerHTML = 'Сделай первые обои — 7 дней бесплатно, без карты.';
   }

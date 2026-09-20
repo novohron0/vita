@@ -40,7 +40,7 @@ DEVELOPER_HANDLE = "vit"
 # Зарезервированные теги выдаются только через /admin/handle.
 RESERVED_HANDLES = {DEVELOPER_HANDLE, "vita", "vitadots", "admin", "support"}
 # Тег выбирается один раз при регистрации, потом его можно поменять дважды.
-HANDLE_CHANGE_LIMIT = 2
+HANDLE_CHANGE_LIMIT = 1
 
 # Starter tags are issued only by the server. The rarity roll is intentionally
 # simple and auditable: 70% common, 22% rare, 7% epic, 1% legendary.
@@ -1070,6 +1070,72 @@ def create_link(cfg: LinkIn, request: Request):
             )
     base = str(request.base_url).rstrip("/")
     return {"code": code, "url": f"{base}/w/{code}.png", "setup": f"{base}/s/{code}", "until": until}
+
+
+@app.get("/api/link/{code}")
+def link_config(code: str):
+    """Настройки обоев для конструктора: по ссылке «поделиться» и по карандашу.
+
+    Отдаём только внешний вид. Сами обои и так лежат открытой картинкой на
+    /w/<code>.png, так что ничего нового тут не раскрывается.
+    """
+    if not re.fullmatch(r"[a-z0-9]{6}", code):
+        raise HTTPException(404, "Нет такой ссылки")
+    with db() as conn:
+        row = conn.execute("SELECT config FROM links WHERE code = ?", (code,)).fetchone()
+    if row is None:
+        raise HTTPException(404, "Нет такой ссылки")
+    try:
+        cfg = json.loads(row[0])
+    except ValueError:
+        raise HTTPException(404, "Настройки потерялись")
+    return {"code": code, "config": cfg}
+
+
+@app.delete("/api/link/{code}")
+def drop_link(code: str, ownerToken: str = ""):
+    """Убрать обои из «Моих обоев». Удаляем только свои."""
+    if not re.fullmatch(r"[a-z0-9]{6}", code):
+        raise HTTPException(404, "Нет такой ссылки")
+    with db() as conn:
+        owner = _profile_for_token(conn, ownerToken, create=False)
+        if not owner:
+            raise HTTPException(403, "Это не твои обои")
+        row = conn.execute("SELECT owner_code FROM links WHERE code = ?", (code,)).fetchone()
+        if row is None:
+            raise HTTPException(404, "Нет такой ссылки")
+        if (row[0] or "") != owner:
+            raise HTTPException(403, "Это не твои обои")
+        conn.execute("DELETE FROM links WHERE code = ?", (code,))
+    return {"ok": True}
+
+
+@app.get("/api/tag-free")
+def tag_free(tag: str = ""):
+    """Свободен ли тег. Человек должен видеть это до «Сохранить», а не после."""
+    handle = tag.strip().lstrip("@").lower()
+    if not re.fullmatch(r"[a-z0-9_]{3,24}", handle):
+        return {"tag": handle, "ok": False, "free": False, "why": "3–24 латинских буквы, цифры или _"}
+    with db() as conn:
+        taken = conn.execute(
+            "SELECT 1 FROM profiles WHERE handle = ? COLLATE NOCASE", (handle,)
+        ).fetchone()
+    return {"tag": handle, "ok": True, "free": not taken,
+            "why": "" if not taken else "Этот тег уже занят"}
+
+
+@app.get("/bg/{name}")
+def bg_image(name: str):
+    """Своё фото фона. Оно и так впечатано в открытую картинку обоев —
+    конструктору оно нужно, чтобы показать чужую сборку по ссылке."""
+    ident = name[:-4] if name.endswith(".jpg") else name
+    if not re.fullmatch(r"[a-z0-9]{6}", ident):
+        raise HTTPException(404, "Нет такого фона")
+    path = DATA / "bg" / f"{ident}.jpg"
+    if not path.exists():
+        raise HTTPException(404, "Нет такого фона")
+    return FileResponse(path, media_type="image/jpeg",
+                        headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
 
 @app.post("/api/review")
@@ -2457,8 +2523,7 @@ def update_profile(profile: ProfileUpdateIn):
                 elif changes >= HANDLE_CHANGE_LIMIT:
                     raise HTTPException(
                         409,
-                        f"Тег можно поменять только {HANDLE_CHANGE_LIMIT} раза — "
-                        "дальше он остаётся навсегда",
+                        "Тег меняют один раз — этот остаётся за тобой навсегда",
                     )
                 else:
                     fields["handle_changes"] = changes + 1

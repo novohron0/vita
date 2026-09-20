@@ -1798,6 +1798,8 @@ $('getBtn').addEventListener('click', () => makeWallpaper($('getBtn'), $('getErr
 // Кнопка сверху не делает обои и ничего не прячет: она плавно подвозит
 // человека к настройкам — там он выбирает вид и уже сам мотает дальше.
 if ($('heroBtn')) $('heroBtn').addEventListener('click', () => {
+  // пришли по чужой ссылке — обои уже собраны, кнопка сразу их и делает
+  if (sharedOn) { makeWallpaper($('heroBtn'), $('heroErr')); return; }
   const target = $('tune');
   if (!target) return;
   const margin = parseFloat(getComputedStyle(target).scrollMarginTop) || 0;
@@ -2086,14 +2088,40 @@ function paintAvatar(url) {
   bigImg.src = url;
 }
 
-function paintTagNote(profile) {
+function paintTagNote(profile, extra) {
   const note = $('tagNote'), input = $('profTag');
-  const left = profile.handleLeft ?? 2;
+  if (extra) { note.textContent = extra.text; note.className = 'tag-note ' + (extra.cls || ''); return; }
+  note.className = 'tag-note';
+  const left = profile.handleLeft ?? 1;
   input.disabled = !!profile.handleLocked;
   if (profile.handleLocked) note.textContent = 'Тег закреплён навсегда';
-  else if (left === 2) note.textContent = 'Тег выбирается один раз, потом его можно поменять дважды';
-  else note.textContent = left === 1 ? 'Поменять тег можно ещё один раз' : 'Замены тега закончились';
+  else if (left >= 1) note.textContent = 'Тег выбирается один раз, потом его можно поменять один раз';
+  else note.textContent = 'Замены тега закончились';
 }
+
+// Занятый тег показываем прямо под полем, пока человек печатает, —
+// иначе он узнаёт об этом только после «Сохранить».
+let tagFreeTimer = 0, tagOwn = '';
+function watchTag() {
+  const input = $('profTag');
+  if (!input) return;
+  input.addEventListener('input', () => {
+    clearTimeout(tagFreeTimer);
+    const tag = input.value.trim().replace(/^@+/, '').toLowerCase();
+    if (!tag || tag === tagOwn) { paintTagNote(lastProfile || {}); return; }
+    tagFreeTimer = setTimeout(async () => {
+      try {
+        const data = await (await fetch('/api/tag-free?tag=' + encodeURIComponent(tag))).json();
+        if (input.value.trim().replace(/^@+/, '').toLowerCase() !== tag) return;
+        if (!data.ok) paintTagNote(null, { text: data.why, cls: 'err' });
+        else if (!data.free) paintTagNote(null, { text: '@' + tag + ' уже занят — придумай другой', cls: 'err' });
+        else paintTagNote(null, { text: '@' + tag + ' свободен', cls: 'ok' });
+      } catch {}
+    }, 320);
+  });
+}
+let lastProfile = null;
+watchTag();
 
 function paintPrime(access) {
   const row = $('primeRow'), state = $('primeState'), buy = $('primeBuy');
@@ -2115,8 +2143,8 @@ function paintPrime(access) {
 async function loadProfile() {
   try {
     const [profile, access] = await Promise.all([VitaID.ensure(), VitaID.access()]);
-    const autoName = profile.name && profile.name === profile.handle;
-    $('profName').value = autoName ? '' : (profile.name || '');
+    lastProfile = profile;
+    tagOwn = (profile.handle || '').replace(/^@+/, '').toLowerCase();
     $('profTag').value = (profile.handle || '').replace(/^@+/, '');
     paintTagNote(profile);
     paintAvatar(profile.avatar);
@@ -2535,11 +2563,9 @@ $('profSave').addEventListener('click', async () => {
       setSaveState('');
       return;
     }
-    const data = await VitaID.updateProfile({
-      name: $('profName').value.trim(),
-      handle: $('profTag').value.trim(),
-    });
-    $('profName').value = data.name || '';
+    const data = await VitaID.updateProfile({ handle: $('profTag').value.trim() });
+    lastProfile = data;
+    tagOwn = (data.handle || '').replace(/^@+/, '').toLowerCase();
     $('profTag').value = (data.handle || '').replace(/^@+/, '');
     paintTagNote(data);
     setSaveState('done');
@@ -3175,3 +3201,108 @@ if ($('placeBtn')) {
     if (placeView.own) { placeFree(); placeApply(); } else placeFit();
   });
 }
+
+
+// ——— Чужая сборка по ссылке ——————————————————————————————————
+// Значок «поделиться» в «Моих обоях» даёт адрес вида /?w=<код>. По нему
+// конструктор открывается уже собранным: человеку остаётся нажать одну
+// кнопку, будто он всё выбрал сам, — и он всё ещё может поменять что угодно.
+let sharedOn = false;
+
+async function loadShared(code) {
+  if (!/^[a-z0-9]{6}$/i.test(code)) return false;
+  let cfg = null;
+  try {
+    const res = await fetch('/api/link/' + encodeURIComponent(code));
+    if (!res.ok) return false;
+    cfg = (await res.json()).config;
+  } catch { return false; }
+  if (!cfg || typeof cfg !== 'object') return false;
+  const hex = v => /^#[0-9a-f]{6}$/i.test(String(v || ''));
+  // жмём те же кнопки, что и человек: тогда ничего не разъедется
+  const hit = (group, v) => {
+    const box = $(group);
+    if (!box) return;
+    for (const b of box.querySelectorAll('button[data-v]'))
+      if (b.dataset.v === String(v)) { b.click(); return; }
+  };
+
+  if (cfg.mode) hit('mode', cfg.mode);
+  if (cfg.bg === 'custom' && /^[a-z0-9]{6}$/.test(cfg.bgImage || '')) {
+    // своё фото лежит на сервере — без него фон уехал бы в чёрный
+    await new Promise(done => {
+      const img = new Image();
+      img.onload = () => {
+        customBgImg = img;
+        state.bg = 'custom';
+        state.bgImageId = cfg.bgImage;
+        markOn('bg', '');
+        markOn('themes', '');
+        $('bgOwn').classList.add('on');
+        done();
+      };
+      img.onerror = done;
+      img.src = '/bg/' + cfg.bgImage + '.jpg';
+    });
+  } else if (cfg.bg) {
+    hit('bg', cfg.bg);
+    hideBgAsk();
+    if (cfg.bg === 'owncolor' && hex(cfg.bgColor)) {
+      state.bgColor = cfg.bgColor;
+      $('bgColorPick').value = cfg.bgColor;
+    }
+  }
+  if (cfg.shape) hit('shape', cfg.shape);
+  hit('glass', cfg.glow ? '2' : cfg.glass ? '1' : '0');
+  hit('footer', cfg.footer === false ? '0' : '1');
+  // логотип снимается только на полном доступе — чужая ссылка это не обходит
+  state.brand = !(cfg.brand === false && hasFullAccess) ? true : false;
+  markOn('brand', state.brand ? '1' : '0');
+
+  if (hex(cfg.color)) {
+    state.color = cfg.color;
+    customColor = !COLORS.includes(cfg.color);
+    swatches.querySelectorAll('.swatch').forEach(b => b.classList.toggle('on', b.dataset.v === cfg.color));
+    $('colorPick').value = cfg.color;
+  }
+  for (const key of ['textColor', 'textMuted', 'textStroke'])
+    state[key] = hex(cfg[key]) ? cfg[key] : '';
+
+  if (typeof cfg.title === 'string') {
+    state.title = cfg.title.slice(0, 200);
+    $('title').value = state.title;
+    customTitle = true;
+    bgAutoTitle = false;
+  }
+  const day = v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ''));
+  if (day(cfg.birth)) { state.birth = cfg.birth; $('birth').value = cfg.birth; }
+  if (day(cfg.start)) { state.start = cfg.start; $('goalStart').value = cfg.start; }
+  if (day(cfg.end)) { state.end = cfg.end; $('goalEnd').value = cfg.end; }
+  if (cfg.place && typeof cfg.place === 'object') {
+    const place = placeDefault();
+    for (const key of Object.keys(place))
+      if (cfg.place[key] && typeof cfg.place[key] === 'object') Object.assign(place[key], cfg.place[key]);
+    state.place = place;
+    if (typeof placeSync === 'function' && placing) placeSync();
+  }
+
+  if (cfg.font) { markOn('font', cfg.font); showSelected('font'); await useFont(cfg.font); }
+  paintShapeChips();
+  refreshSwatches();
+  showSelected('shape');
+  showSelected('bg');
+  draw();
+  return true;
+}
+
+(async () => {
+  const code = new URLSearchParams(location.search).get('w');
+  if (!code) return;
+  if (!(await loadShared(code))) return;
+  sharedOn = true;
+  const hero = $('heroBtn'), note = document.querySelector('.hero-note');
+  if (hero) hero.textContent = 'Поставить эти обои';
+  if (note) note.innerHTML = 'Готовая сборка — можно поставить как есть или <a href="#tune">поменять</a>';
+  const tip = $('phoneTip');
+  if (tip) { tip.textContent = 'это чужая сборка — меняй что хочешь'; tip.classList.remove('gone'); }
+})();
