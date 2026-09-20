@@ -2721,13 +2721,13 @@ body.login-page::before { display: none; }
 
 /* Низ главной собран, как на двери: две строки ссылок вместо простыни с
    реквизитами — сами реквизиты живут в оферте, куда ведёт «Реквизиты». */
+/* Подвал — обычная строка текста со ссылками: флекс-колонка разбивала её на
+   части, и разделитель «·» повисал отдельной строкой под «Офертой». */
 .page-foot {
   width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
+  display: block;
   text-align: center;
+  line-height: 1.9;
 }
 .foot-links {
   display: flex;
