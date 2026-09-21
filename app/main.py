@@ -11,9 +11,10 @@ import threading
 import time
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager, contextmanager
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from html import escape as esc
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -331,6 +332,7 @@ def _init_schema(conn: sqlite3.Connection) -> None:
         "last_fetch TEXT",
         "access_until TEXT",
         "review_at TEXT",  # когда получена вторая неделя за отзыв (одноразово)
+        "tz TEXT",  # часовой пояс телефона; пусто — Москва, как было раньше
     ):
         try:
             conn.execute(f"ALTER TABLE links ADD COLUMN {col}")
@@ -452,6 +454,7 @@ class LinkIn(BaseModel):
     idea: str = ""
     contact: str = ""
     ownerToken: str = ""
+    tz: str = ""
 
 
 class BuyIn(BaseModel):
@@ -504,6 +507,7 @@ class GoalEditIn(BaseModel):
 
 class OwnerIn(BaseModel):
     ownerToken: str = ""
+    tz: str = ""  # часовой пояс браузера: по нему обои считают «сегодня»
 
 
 class FeedPostIn(BaseModel):
@@ -1057,13 +1061,13 @@ def create_link(cfg: LinkIn, request: Request):
     for field in ("textColor", "textMuted", "textStroke"):
         if not re.fullmatch(r"#[0-9a-fA-F]{6}", getattr(cfg, field) or ""):
             setattr(cfg, field, "")
-    config = json.dumps(cfg.model_dump(exclude={"idea", "contact", "ownerToken"}), ensure_ascii=False)
+    config = json.dumps(cfg.model_dump(exclude={"idea", "contact", "ownerToken", "tz"}), ensure_ascii=False)
     with db() as conn:
         owner_code = _profile_for_token(conn, cfg.ownerToken, create=bool(cfg.ownerToken.strip()))
         until = _effective_access_until(conn, trial_until, owner_code)
         conn.execute(
-            "INSERT INTO links(code, config, access_until, owner_code) VALUES(?, ?, ?, ?)",
-            (code, config, until, owner_code),
+            "INSERT INTO links(code, config, access_until, owner_code, tz) VALUES(?, ?, ?, ?, ?)",
+            (code, config, until, owner_code, _clean_tz(cfg.tz)),
         )
         if idea or contact:
             conn.execute(
@@ -1171,6 +1175,37 @@ def create_review(rv: ReviewIn):
         _in_background(_tg_send, TG_REVIEWS_CHAT, _review_note(stars, nick, text))
     until_d = date.fromisoformat(new_until)
     return {"code": rv.code, "until": new_until, "until_h": until_d.strftime("%d.%m")}
+
+
+TZ_RE = re.compile(r"[A-Za-z][A-Za-z0-9_+\-]*(/[A-Za-z0-9_+\-]+){0,2}")
+
+
+def _clean_tz(value: str | None) -> str:
+    """Часовой пояс из браузера (Asia/Yekaterinburg) или пусто, если он кривой."""
+    value = (value or "").strip()
+    if len(value) > 64 or TZ_RE.fullmatch(value) is None:
+        return ""
+    try:
+        ZoneInfo(value)
+    except Exception:
+        return ""
+    return value
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)  # отдельно — тест подменяет «сейчас»
+
+
+def _local_today(tz: str | None) -> date:
+    """Какое сегодня число у человека. Ярлык ходит за картинкой в 00:05 по
+    его часам: в Екатеринбурге это 22:05 по Москве, и по московской дате
+    обои всегда отставали бы на день."""
+    if tz:
+        try:
+            return _utcnow().astimezone(ZoneInfo(tz)).date()
+        except Exception:
+            pass
+    return date.today()
 
 
 def _access_state(access_until: str | None) -> tuple[bool, date | None]:
@@ -2103,6 +2138,14 @@ def access_state(owner: OwnerIn):
     """Статус доступа по приватному Vita ID — для кабинета и кнопки покупки."""
     with db() as conn:
         profile_code = _profile_for_token(conn, owner.ownerToken)
+        tz = _clean_tz(owner.tz)
+        if profile_code and tz:
+            # обои, сделанные до того, как мы спрашивали пояс, и переезды:
+            # берём пояс, в котором человек заходил на сайт последним
+            conn.execute(
+                "UPDATE links SET tz = ? WHERE owner_code = ? AND COALESCE(tz, '') != ?",
+                (tz, profile_code, tz),
+            )
         return _profile_access_state(conn, profile_code)
 
 
@@ -2346,25 +2389,26 @@ def setup_page(code: str, request: Request):
 WP_CACHE = DATA / "wpcache"
 
 
-def _wallpaper_png(config: str, expired: bool, until: date | None) -> bytes:
+def _wallpaper_png(config: str, until: date | None, day: date) -> bytes:
     """PNG обоев с дневным кэшем: за сутки одна картинка рисуется один раз.
 
-    Ключ включает дату — в полночь кэш протухает сам, лишней инвалидации не надо.
+    day — «сегодня» по часам человека. Проба кончается в его полночь, и
+    прогресс замирает на дате окончания. Ключ включает день рисунка, а имя
+    файла — дату сервера: в полночь по Москве кэш протухает сам.
     """
+    expired = until is not None and day > until
+    if expired:
+        day = until
     today = date.today().isoformat()
     digest = hashlib.sha256(
-        f"{config}|{expired}|{until.isoformat() if until else ''}".encode("utf-8")
+        f"{config}|{expired}|{until.isoformat() if until else ''}|{day.isoformat()}".encode("utf-8")
     ).hexdigest()[:20]
     path = WP_CACHE / f"{today}-{digest}.png"
     try:
         return path.read_bytes()
     except OSError:
         pass
-    img = render_wallpaper(
-        json.loads(config),
-        today=until if expired else None,  # прогресс заморожен на дате окончания
-        expired=expired,
-    )
+    img = render_wallpaper(json.loads(config), today=day, expired=expired)
     buf = io.BytesIO()
     img.save(buf, "PNG")
     data = buf.getvalue()
@@ -2385,7 +2429,7 @@ def _wallpaper_png(config: str, expired: bool, until: date | None) -> bytes:
 def wallpaper(code: str):
     with db() as conn:
         row = conn.execute(
-            "SELECT config, access_until, owner_code FROM links WHERE code = ?", (code,)
+            "SELECT config, access_until, owner_code, tz FROM links WHERE code = ?", (code,)
         ).fetchone()
         effective_until = (
             _effective_access_until(conn, row[1], row[2]) if row is not None else None
@@ -2397,9 +2441,9 @@ def wallpaper(code: str):
             )
     if row is None:
         raise HTTPException(404, "Нет такой ссылки")
-    expired, until = _access_state(effective_until)
+    _, until = _access_state(effective_until)
     return Response(
-        _wallpaper_png(row[0], expired, until),
+        _wallpaper_png(row[0], until, _local_today(row[3])),
         media_type="image/png",
         headers={"Cache-Control": "no-store"},  # Ярлыки должны тянуть свежую картинку каждый день
     )

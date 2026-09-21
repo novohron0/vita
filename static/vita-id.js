@@ -104,10 +104,13 @@
 
   async function access() {
     await ensureSession();
+    let tz = '';
+    try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch {}
     const response = await fetch('/api/access', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ownerToken: token() })
+      // пояс телефона: сервер рисует обои на «сегодня» по нему
+      body: JSON.stringify({ ownerToken: token(), tz })
     });
     return responseData(response, 'Не удалось проверить доступ');
   }

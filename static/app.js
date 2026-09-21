@@ -58,8 +58,13 @@ const STAT_LABELS = {
   goal: ['дней прошло', 'осталось'],
 };
 
-const todayISO = new Date().toISOString().slice(0, 10);
-const plus30 = new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10);
+// дата по часам телефона: toISOString даёт Гринвич, и до трёх ночи по Москве
+// «сегодня» выходило вчерашним
+const localISO = d => new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
+const todayISO = localISO(new Date());
+const plus30 = localISO(new Date(Date.now() + 30 * 864e5));
+// часовой пояс уходит на сервер вместе с обоями: он рисует «сегодня» по нему
+const phoneTZ = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch { return ''; } })();
 
 // Расположение: у каждого элемента свои координаты (доли ширины и высоты),
 // множитель размера и — у точек — число в ряду. x = null значит «как раньше»:
@@ -1793,7 +1798,7 @@ async function makeWallpaper(btn, err) {
         textColor: state.textColor, textMuted: state.textMuted, textStroke: state.textStroke,
         title: state.title, font: state.font, footer: state.footer, brand: state.brand, birth: state.birth,
         start: state.start, end: state.end, place: state.place,
-        ownerToken: window.VitaID?.token() || '',
+        ownerToken: window.VitaID?.token() || '', tz: phoneTZ,
       }),
     });
     const data = await res.json();
