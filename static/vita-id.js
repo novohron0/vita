@@ -83,12 +83,12 @@
     const response = await fetch('/api/profile', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ownerToken: token(),
-        name: values.name || '',
-        handle: (values.handle || '').replace(/^@+/, ''),
-        bio: values.bio || ''
-      })
+      // шлём только те поля, что дали: пустое имя сервер считал бы ошибкой,
+      // а в профиле его больше нет — человека держит один тег
+      body: JSON.stringify(Object.assign({ ownerToken: token() },
+        values.name !== undefined ? { name: values.name } : null,
+        values.handle !== undefined ? { handle: String(values.handle).replace(/^@+/, '') } : null,
+        values.bio !== undefined ? { bio: values.bio } : null))
     });
     return responseData(response, 'Не удалось сохранить профиль');
   }

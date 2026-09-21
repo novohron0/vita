@@ -111,7 +111,9 @@ if (DEMO) {
 }
 
 const $ = id => document.getElementById(id);
-const cv = $('cv'), ctx = cv.getContext('2d');
+const cv = $('cv'), ctxMain = cv.getContext('2d');
+// ctx — куда сейчас рисуем: большой телефон или экранчик в углу
+let ctx = ctxMain;
 const cv2 = $('cv2'), ctx2 = cv2.getContext('2d');
 
 // Экранчик шириной в сотню точек, а канва у него была в полный размер обоев:
@@ -153,8 +155,19 @@ function setMiniRes(w) {
   if (w === cv2.width) return false;
   cv2.width = w;
   cv2.height = Math.round(w * H / W);
-  copyToMini();
+  drawMini();
   return true;
+}
+
+// Экранчик рисуем прямо в его размере: точки и буквы выходят с острыми краями,
+// а не уменьшенной большой картинкой. На кадрах анимации (дыхание кольца,
+// заливка по тапу) остаётся дешёвая копия — там разницы не видно, а рисовать
+// всё дважды по пятнадцать раз в секунду незачем.
+function drawMini() {
+  if (!miniShown || cv2.width < 2) return;
+  const was = ctx;
+  ctx = ctx2;
+  try { draw(); } finally { ctx = was; }
 }
 
 // Превью — растр размером настоящих обоев (1179 точек). Пока телефон на
@@ -843,7 +856,9 @@ function draw(reveal = 1, pulse = 0, fill = null) {
   const current = fill !== null ? null : reveal >= 1 ? fullCurrent : (done < total ? done : null);
   const lead = fill !== null || reveal >= 1 ? -2 : current; // ведущая точка при анимации ярче
 
-  ctx.setTransform(cvScale, 0, 0, cvScale, 0, 0);
+  // множитель берём от самой канвы: у телефона он свой, у экранчика свой
+  const k = ctx === ctxMain ? cvScale : ctx.canvas.width / W;
+  ctx.setTransform(k, 0, 0, k, 0, 0);
   paintBG(ctx);
 
   const g = placeGeom(total);
@@ -879,6 +894,9 @@ function draw(reveal = 1, pulse = 0, fill = null) {
     ctx.fillText(footerText(total, statDone), g.foot.x, g.foot.y);
   }
 
+  // хвост — только на большом телефоне: экранчик сюда заходит вторым кругом
+  if (ctx !== ctxMain) return;
+
   const fmt = n => n.toLocaleString('ru-RU');
   const [l1, l2] = STAT_LABELS[state.mode];
   $('stat1').textContent = fmt(statDone);
@@ -886,7 +904,8 @@ function draw(reveal = 1, pulse = 0, fill = null) {
   $('stat2').textContent = fmt(total - statDone);
   $('stat2l').textContent = l2;
 
-  copyToMini();
+  if (pulse === 0 && reveal >= 1 && fill === null) drawMini();
+  else copyToMini();
   if (placing) drawPlaceHints();
 }
 
@@ -1028,7 +1047,7 @@ function updateMini() {
   miniWrap.setAttribute('aria-hidden', show ? 'false' : 'true');
   // спрятанному экранчику кадры не копируем — на выезде он получает свежий
   miniShown = show;
-  if (show && !setMiniRes(miniTarget(miniZoom))) copyToMini();
+  if (show && !setMiniRes(miniTarget(miniZoom))) drawMini();
   // подсказку показываем при каждом выезде: с первого раза её легко не заметить.
   // Но если по экранчику уже тыкали — человек всё понял, больше не мозолим
   clearTimeout(miniTipTimer);
@@ -2102,6 +2121,9 @@ function paintTagNote(profile, extra) {
 // Занятый тег показываем прямо под полем, пока человек печатает, —
 // иначе он узнаёт об этом только после «Сохранить».
 let tagFreeTimer = 0, tagOwn = '';
+// то же правило, что на сервере: латиница, цифры и _, начинать с буквы
+const TAG_RE = /^[a-z][a-z0-9_]{1,22}[a-z0-9]$/;
+const tagOk = t => TAG_RE.test(t) && !t.includes('__');
 function watchTag() {
   const input = $('profTag');
   if (!input) return;
@@ -2111,6 +2133,10 @@ function watchTag() {
     if (!tag || tag === tagOwn) { paintTagNote(lastProfile || {}); return; }
     tagFreeTimer = setTimeout(async () => {
       try {
+        if (!tagOk(tag)) {
+          paintTagNote(null, { text: 'Латиница, цифры и _, начинать с буквы', cls: 'err' });
+          return;
+        }
         const data = await (await fetch('/api/tag-free?tag=' + encodeURIComponent(tag))).json();
         if (input.value.trim().replace(/^@+/, '').toLowerCase() !== tag) return;
         if (!data.ok) paintTagNote(null, { text: data.why, cls: 'err' });

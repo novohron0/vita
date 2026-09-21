@@ -8,10 +8,10 @@
 <link rel="apple-touch-icon" href="/static/img/apple-touch.png">
 <title>Моя Vita</title>
 <script src="/static/theme.js?v=8"></script>
-<script src="/static/vita-id.js?v=7"></script>
+<script src="/static/vita-id.js?v=8"></script>
 <script src="/static/gate.js?v=2"></script>
 <script src="/static/tg-login.js?v=4"></script>
-<link rel="stylesheet" href="/static/style.css?v=114">
+<link rel="stylesheet" href="/static/style.css?v=115">
 </head>
 <body>
 <header class="head-shrink">
@@ -78,6 +78,9 @@ const $ = id => document.getElementById(id);
 const esc = value => { const node = document.createElement('div'); node.textContent = value ?? ''; return node.innerHTML; };
 let profile = null;
 
+const TAG_RE = /^[a-z][a-z0-9_]{1,22}[a-z0-9]$/;
+const TAG_RULE = 'Тег: 3–24 знака, латиница, цифры и _, начинать с буквы';
+const tagOk = t => TAG_RE.test(t) && !t.includes('__');
 const safeCode = value => /^[a-z0-9]{6}$/i.test(String(value || '')) ? String(value) : '';
 const safeColor = value => /^#[0-9a-f]{6}$/i.test(String(value || '')) ? String(value) : '#a855f7';
 const cleanHandle = value => String(value || '').trim().replace(/^@+/, '');
@@ -168,6 +171,7 @@ $('profileHandle').addEventListener('input', () => {
   clearTimeout(tagTimer);
   const handle = cleanHandle($('profileHandle').value).toLowerCase();
   if (!handle || handle === cleanHandle(profile && profile.handle).toLowerCase()) { handleNote(); return; }
+  if (!tagOk(handle)) { handleNote({ text: TAG_RULE, cls: 'err' }); return; }
   tagTimer = setTimeout(async () => {
     try {
       const res = await fetch('/api/tag-free?tag=' + encodeURIComponent(handle));
@@ -184,8 +188,8 @@ $('saveProfile').addEventListener('click', async () => {
   const button = $('saveProfile');
   const status = $('profileStatus');
   const handle = cleanHandle($('profileHandle').value).toLowerCase();
-  if (!/^[a-z0-9_]{3,24}$/.test(handle)) {
-    status.textContent = 'Тег: 3–24 латинских буквы, цифры или _';
+  if (!tagOk(handle)) {
+    status.textContent = TAG_RULE;
     status.classList.add('err');
     return;
   }

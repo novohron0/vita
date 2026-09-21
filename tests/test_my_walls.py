@@ -38,6 +38,11 @@ with tempfile.TemporaryDirectory(prefix="vita-walls-") as data_dir:
     # свободен ли тег
     assert main.tag_free("novyj_teg")["free"] is True
     assert main.tag_free("абвгд")["ok"] is False
+    # правила тега: как в телеграме, с латинской буквы и без смайликов
+    for bad in ("12345", "_kam", "kam_", "ka__m", "ka", "kam😀", "ка_м"):
+        assert main.tag_free(bad)["ok"] is False, bad
+    for good in ("kam", "kamil_vita", "k1_2"):
+        assert main.tag_free(good)["ok"] is True, good
     busy = main.update_profile(main.ProfileUpdateIn(ownerToken=mine, handle="kamil_vita"))["handle"]
     assert main.tag_free(busy)["free"] is False
     assert main.tag_free("KAMIL_VITA")["free"] is False, "регистр не должен пускать двойника"

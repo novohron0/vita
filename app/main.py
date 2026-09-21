@@ -33,7 +33,9 @@ DATA.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA / "vita.db"
 
 CODE_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"
-HANDLE_RE = re.compile(r"[a-z0-9_]{3,24}")
+HANDLE_RE = re.compile(r"[a-z][a-z0-9_]{1,22}[a-z0-9]")
+HANDLE_RULE = ("Тег: 3–24 знака, только латиница, цифры и _. "
+               "Начинается с буквы, кончается буквой или цифрой")
 # Тег (бывший «ник») — уникальный @идентификатор профиля.
 # Профиль с тегом владельца получает плашку «Разработчик Vita».
 DEVELOPER_HANDLE = "vit"
@@ -597,8 +599,8 @@ def _avatar_url(avatar_id: str) -> str:
 
 def _normalize_handle(raw: str) -> str:
     handle = raw.strip().lower().removeprefix("@")
-    if HANDLE_RE.fullmatch(handle) is None:
-        raise HTTPException(422, "Тег: 3–24 символа, только латиница, цифры и _")
+    if HANDLE_RE.fullmatch(handle) is None or "__" in handle:
+        raise HTTPException(422, HANDLE_RULE)
     return handle
 
 
@@ -1114,8 +1116,9 @@ def drop_link(code: str, ownerToken: str = ""):
 def tag_free(tag: str = ""):
     """Свободен ли тег. Человек должен видеть это до «Сохранить», а не после."""
     handle = tag.strip().lstrip("@").lower()
-    if not re.fullmatch(r"[a-z0-9_]{3,24}", handle):
-        return {"tag": handle, "ok": False, "free": False, "why": "3–24 латинских буквы, цифры или _"}
+    if HANDLE_RE.fullmatch(handle) is None or "__" in handle:
+        return {"tag": handle, "ok": False, "free": False,
+                "why": "3–24 знака: латиница, цифры и _, начинать с буквы"}
     with db() as conn:
         taken = conn.execute(
             "SELECT 1 FROM profiles WHERE handle = ? COLLATE NOCASE", (handle,)
@@ -2493,7 +2496,9 @@ def update_profile(profile: ProfileUpdateIn):
             raise HTTPException(401, "Нет доступа к Vita ID")
 
         fields: dict[str, str] = {}
-        if profile.name is not None:
+        # имени в профиле больше нет: пустую строку считаем «не присылали»,
+        # иначе сохранение одного тега падало с «Имя должно быть от 2 до 40»
+        if profile.name:
             fields["name"] = _normalize_profile_name(profile.name)
         if profile.handle is not None:
             handle = _normalize_handle(profile.handle)
