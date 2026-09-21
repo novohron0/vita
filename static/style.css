@@ -817,6 +817,11 @@ main { width: 100%; max-width: 430px; display: flex; flex-direction: column; gap
   font-size: 14px;
   color: var(--accent-soft);
   word-break: break-all;
+  /* один клик выделяет ссылку целиком: если мак не даёт вставить то, что в
+     буфер положила страница, человек копирует её руками, и это проходит */
+  user-select: all;
+  -webkit-user-select: all;
+  cursor: text;
 }
 .linkbox button {
   align-self: flex-start;

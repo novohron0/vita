@@ -8,7 +8,7 @@
   <link rel="apple-touch-icon" href="/static/img/apple-touch.png">
 <title>Установка — Vita</title>
 <script src="/static/theme.js?v=8"></script>
-<link rel="stylesheet" href="/static/style.css?v=113">
+<link rel="stylesheet" href="/static/style.css?v=114">
 </head>
 <body>
 <header class="head-shrink">
@@ -129,8 +129,19 @@ const CODE = "{{CODE}}";
   } catch {}
 })();
 
-document.getElementById('copy').addEventListener('click', () => {
-  navigator.clipboard.writeText(document.getElementById('myUrl').textContent);
+document.getElementById('copy').addEventListener('click', async () => {
+  const link = document.getElementById('myUrl');
+  const text = link.textContent.trim();
+  try { await navigator.clipboard.writeText(text); } catch {}
+  // мак умеет не пускать в «Команды» то, что в буфер положила страница;
+  // выделяем ссылку сразу — тогда её копируют руками и вставка проходит
+  try {
+    const range = document.createRange();
+    range.selectNodeContents(link);
+    const sel = getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  } catch {}
   document.getElementById('copy').textContent = 'Скопировано ✓';
 });
 
