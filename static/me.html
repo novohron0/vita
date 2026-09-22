@@ -11,7 +11,7 @@
 <script src="/static/vita-id.js?v=9"></script>
 <script src="/static/gate.js?v=2"></script>
 <script src="/static/tg-login.js?v=4"></script>
-<link rel="stylesheet" href="/static/style.css?v=115">
+<link rel="stylesheet" href="/static/style.css?v=116">
 </head>
 <body>
 <header class="head-shrink">
@@ -60,8 +60,24 @@
     <a class="btn primary prime-open" id="accessBuy" href="/buy" hidden><i class="prime-art" aria-hidden="true"></i><span id="accessBuyText"></span></a>
   </section>
 
+  <section class="library-card admin-card" id="adminCard" hidden>
+    <div class="library-head"><h2>Админка</h2><span class="hint">видна только @kam</span></div>
+    <label class="field">Тег человека
+      <input id="adminTag" placeholder="@masha_test" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="25">
+    </label>
+    <button type="button" class="primary" id="adminGo">Активировать prime</button>
+    <p class="hint prof-status" id="adminStatus" role="status" aria-live="polite"></p>
+  </section>
+
   <section class="library-card">
     <div class="library-head"><h2>Мои обои</h2><a class="btn secondary" href="/">＋ Новые</a></div>
+    <div class="linkbox wall-link" id="wallLink" hidden>
+      <span class="library-label">постоянный адрес обоев</span>
+      <code id="wallUrl"></code>
+      <button type="button" id="wallCopy">Скопировать</button>
+      <p class="hint">Вписывается в ярлык один раз. Ночью придёт тот дизайн, на котором
+        написано «На обоях», — чтобы сменить, нажми «Поставить» на другом.</p>
+    </div>
     <div id="wallpapersList" class="wall-list"><p class="page-foot">Загружаю…</p></div>
   </section>
 
@@ -132,12 +148,17 @@ const ICON = {
 // остаётся нажать «Поставить», будто он сам всё настроил.
 const shareUrl = code => `${location.origin}/?w=${encodeURIComponent(code)}`;
 
-function wallItem(item) {
+function wallItem(item, active) {
   const code = safeCode(item.code);
-  return `<div class="wall-item" data-code="${esc(code)}">
+  // активный дизайн — тот, что отдаёт постоянный адрес. Кнопка у него прожата,
+  // как «Сохранено» в профиле: нажимать нечего, он уже на обоях
+  const set = active
+    ? '<span class="btn primary done wall-set">На обоях</span>'
+    : `<a class="btn primary wall-set" href="/s/${encodeURIComponent(code)}">Поставить</a>`;
+  return `<div class="wall-item${active ? ' on' : ''}" data-code="${esc(code)}">
     <i style="background:${safeColor(item.color)}"></i>
     <div class="wall-info"><b>${esc(item.title)}</b><span>${esc(item.mode)} · ${esc(item.shape)} · ${esc(code)}</span></div>
-    <a class="btn primary wall-set" href="/s/${encodeURIComponent(code)}">Поставить</a>
+    ${set}
     <div class="wall-acts">
       <a class="icon-btn" href="/?w=${encodeURIComponent(code)}" title="Изменить" aria-label="Изменить обои">${ICON.edit}</a>
       <button class="icon-btn" type="button" data-share="${esc(code)}" title="Поделиться" aria-label="Поделиться обоями">${ICON.share}</button>
@@ -148,9 +169,14 @@ function wallItem(item) {
 
 function renderWalls() {
   const walls = Array.isArray(profile && profile.wallpapers) ? profile.wallpapers : [];
+  const active = safeCode(profile && profile.activeLink);
   $('wallpapersList').innerHTML = walls.length
-    ? walls.map(wallItem).join('')
+    ? walls.map(item => wallItem(item, safeCode(item.code) === active)).join('')
     : '<p class="hint">Пока нет сохранённых обоев. Сделай первые — это минута.</p>';
+  const wallCode = /^[a-z0-9]{8}$/i.test(String(profile && profile.wallCode || ''))
+    ? profile.wallCode : '';
+  $('wallLink').hidden = !(wallCode && walls.length);
+  if (wallCode) $('wallUrl').textContent = `${location.origin}/w/${wallCode}.png`;
 }
 
 function render(data) {
@@ -298,9 +324,50 @@ async function renderAccess() {
   $('accessCard').hidden = false;
 }
 
+function showAdmin(on) {
+  $('adminCard').hidden = !on;
+  if (!on) return;
+  const tag = $('adminTag'), go = $('adminGo'), status = $('adminStatus');
+  go.addEventListener('click', async () => {
+    const value = tag.value.trim();
+    if (!value) { tag.focus(); return; }
+    go.disabled = true; status.className = 'hint prof-status'; status.textContent = 'Выдаю…';
+    try {
+      const response = await fetch('/api/admin/prime', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ownerToken: VitaID.token(), tag: value })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || 'Не получилось');
+      status.className = 'hint prof-status ok';
+      status.textContent = `@${data.tag} — prime навсегда`;
+      tag.value = '';
+    } catch (error) {
+      status.className = 'hint prof-status err';
+      status.textContent = error.message;
+    } finally { go.disabled = false; }
+  });
+}
+
+$('wallCopy').addEventListener('click', async () => {
+  const link = $('wallUrl');
+  try { await navigator.clipboard.writeText(link.textContent.trim()); } catch {}
+  try {
+    const range = document.createRange();
+    range.selectNodeContents(link);
+    const sel = getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  } catch {}
+  $('wallCopy').textContent = 'Скопировано ✓';
+});
+
 (async () => {
-  try { render(await VitaID.ensure()); }
+  let me;
+  try { me = await VitaID.ensure(); render(me); }
   catch (error) { document.querySelector('main').innerHTML = `<p class="err">${esc(error.message)}</p>`; return; }
+  showAdmin(!!me.admin);
   renderAccess();
 })();
 </script>

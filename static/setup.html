@@ -8,7 +8,7 @@
   <link rel="apple-touch-icon" href="/static/img/apple-touch.png">
 <title>Установка — Vita</title>
 <script src="/static/theme.js?v=8"></script>
-<link rel="stylesheet" href="/static/style.css?v=115">
+<link rel="stylesheet" href="/static/style.css?v=116">
 </head>
 <body>
 <header class="head-shrink">
@@ -43,9 +43,12 @@
       {{SHORTCUT_BTN}}
       <p>Ярлык спросит адрес твоих обоев. Вот он:</p>
       <div class="linkbox">
-        <code id="myUrl">{{URL}}</code>
+        <code id="myUrl">{{WALL_URL}}</code>
         <button id="copy">Скопировать</button>
       </div>
+      <p class="hint" id="wallNote" hidden>Адрес постоянный — вписывается один раз.
+        Соберёшь новый дизайн и нажмёшь «Поставить» — ярлык принесёт его сам,
+        перенастраивать ничего не нужно.</p>
     </div>
   </div>
 
@@ -53,7 +56,8 @@
     <div class="step-n">2</div>
     <div class="step-body">
       <h2>Поставь обои</h2>
-      <a class="btn secondary" href="shortcuts://run-shortcut?name=Vita">Поставить обои сейчас</a>
+      <a class="btn secondary" id="runBtn" href="shortcuts://run-shortcut?name=Vita">Поставить обои сейчас</a>
+      <p class="hint" id="activeNote" hidden>Этот дизайн сейчас на твоём адресе — ночью придёт он.</p>
       <p class="hint">Айфон покажет экран обоев: подвинь картинку пальцем,
         размер меняй щипком — и нажми «Готово».</p>
     </div>
@@ -121,6 +125,31 @@
 <script src="/static/tg-login.js?v=4"></script>
 <script>
 const CODE = "{{CODE}}";
+const OWNED = "{{OWNED}}" === "1";
+
+// Постоянный адрес отдаёт тот дизайн, который человек выбрал последним. Он
+// открыл страницу установки этих обоев — значит, ставит их: включаем сразу,
+// чтобы ярлык уже через секунду забрал именно их.
+async function activate(keepalive = false) {
+  // без своего ключа не ходим: ссылку могли открыть на чужом телефоне,
+  // и лишний профиль там заводить незачем
+  if (!OWNED || !(localStorage.getItem('vitaOwnerToken') || '').length) return;
+  let tz = '';
+  try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch {}
+  try {
+    const response = await fetch(`/api/link/${encodeURIComponent(CODE)}/activate`, {
+      method: 'POST', keepalive,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ownerToken: VitaID.token(), tz })
+    });
+    if (!response.ok) return;
+    document.getElementById('wallNote').hidden = false;
+    document.getElementById('activeNote').hidden = false;
+  } catch {}
+}
+activate();
+// повтор на самой кнопке: страницу могли открыть давно и оставить в фоне
+document.getElementById('runBtn').addEventListener('click', () => { activate(true); });
 
 // вход показываем только тем, кто ещё не входил — вошедшим он ни к чему
 (async () => {

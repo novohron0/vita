@@ -3436,7 +3436,8 @@ body.placing #cv.dragging { cursor: grabbing; }
 }
 .place-bar .seg.wide button:disabled { opacity: .38; cursor: default; }
 
-.place-size {
+.place-size,
+.home-size {
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
@@ -3444,9 +3445,10 @@ body.placing #cv.dragging { cursor: grabbing; }
   color: var(--text-2);
   font-size: 14px;
 }
-.place-size b { font-variant-numeric: tabular-nums; font-weight: 600; min-width: 52px; text-align: right; }
+.place-size b, .home-size b { font-variant-numeric: tabular-nums; font-weight: 600; min-width: 52px; text-align: right; }
 
-.place-size input[type="range"] {
+.place-size input[type="range"],
+.home-size input[type="range"] {
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
@@ -3454,13 +3456,15 @@ body.placing #cv.dragging { cursor: grabbing; }
   background: transparent;
   cursor: pointer;
 }
-.place-size input[type="range"]::-webkit-slider-runnable-track {
+.place-size input[type="range"]::-webkit-slider-runnable-track,
+.home-size input[type="range"]::-webkit-slider-runnable-track {
   height: 6px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.16);
   box-shadow: var(--seg-track-inset);
 }
-.place-size input[type="range"]::-webkit-slider-thumb {
+.place-size input[type="range"]::-webkit-slider-thumb,
+.home-size input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   width: 22px;
   height: 22px;
@@ -3470,13 +3474,16 @@ body.placing #cv.dragging { cursor: grabbing; }
   box-shadow: var(--seg-on-shadow);
   transition: scale .16s cubic-bezier(.22, 1, .36, 1);
 }
-.place-size input[type="range"]:active::-webkit-slider-thumb { scale: 1.12; }
-.place-size input[type="range"]::-moz-range-track {
+.place-size input[type="range"]:active::-webkit-slider-thumb,
+.home-size input[type="range"]:active::-webkit-slider-thumb { scale: 1.12; }
+.place-size input[type="range"]::-moz-range-track,
+.home-size input[type="range"]::-moz-range-track {
   height: 6px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.16);
 }
-.place-size input[type="range"]::-moz-range-thumb {
+.place-size input[type="range"]::-moz-range-thumb,
+.home-size input[type="range"]::-moz-range-thumb {
   width: 22px;
   height: 22px;
   border: 0;
@@ -3523,10 +3530,12 @@ body.placing #cv.dragging { cursor: grabbing; }
 }
 .place-bar button:focus-visible,
 .phone-place:focus-visible,
-.place-size input[type="range"]:focus-visible { outline: 2px solid var(--glass-edge); outline-offset: 2px; }
+.place-size input[type="range"]:focus-visible,
+.home-size input[type="range"]:focus-visible { outline: 2px solid var(--glass-edge); outline-offset: 2px; }
 
 @media (prefers-reduced-motion: reduce) {
-  .phone-place, .place-acts button, .place-size input[type="range"]::-webkit-slider-thumb { transition: none; }
+  .phone-place, .place-acts button, .place-size input[type="range"]::-webkit-slider-thumb,
+  .home-size input[type="range"]::-webkit-slider-thumb { transition: none; }
 }
 
 /* ——— Моя Vita: prime, мои обои, выход ————————————————————————————
@@ -3655,3 +3664,45 @@ body.placing #cv.dragging { cursor: grabbing; }
 }
 .prof-walls:hover { background: var(--glass-bg-soft); color: var(--text); border-color: var(--glass-edge); }
 @media (prefers-reduced-motion: reduce) { .prof-walls { transition: none; } }
+
+/* Админка на «Моей Vita»: та же карточка, что у профиля, только для @kam */
+.admin-card .library-head .hint { margin: 0; font-size: 12px; }
+.admin-card .field { margin-bottom: 4px; }
+.admin-card .primary { width: 100%; }
+.admin-card .primary:disabled { cursor: wait; opacity: .5; transform: none; }
+.admin-card .prof-status { margin-top: 10px; }
+
+/* Постоянный адрес обоев в «Моих обоях»: та же коробка, что на установке */
+.wall-link { margin-bottom: 12px; gap: 8px; }
+.wall-link .hint { margin: 0; }
+.wall-item.on { border-color: var(--glass-edge); }
+.wall-item .wall-set.done { text-align: center; }
+
+/* Экран «Домой»: что видно за иконками. Силу размытия айфон не крутит — в iOS
+   только «вкл/выкл», — поэтому картинку рисует сервер, а ярлык её ставит */
+.home-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.home-peek {
+  flex: none;
+  padding: 5px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background .18s ease, color .18s ease, border-color .18s ease;
+}
+.home-peek:hover { color: var(--text-2); border-color: var(--glass-edge); }
+.home-peek[aria-pressed="true"] {
+  background: var(--seg-on-bg);
+  box-shadow: var(--seg-on-shadow);
+  border-color: transparent;
+  color: var(--seg-on-text);
+}
+.home-size { margin-top: 2px; }
+.home-hint { margin: 0; }
+.home-hint[hidden] { display: none; }
+.home-size[hidden], .home-field .color-own[hidden], .home-field .pick-own[hidden] { display: none; }
+.home-field .color-own { margin-top: 2px; }
+@media (prefers-reduced-motion: reduce) { .home-peek { transition: none; } }

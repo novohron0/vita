@@ -25,7 +25,7 @@ from pydantic import BaseModel, Field
 from PIL import Image, ImageOps
 
 from . import billing
-from .render import SHAPES, place_cfg, render_goal, render_wallpaper
+from .render import SHAPES, home_cfg, place_cfg, render_goal, render_home, render_wallpaper
 
 ROOT = Path(__file__).resolve().parent.parent
 # VITA_DATA — переопределение каталога данных (dev/тесты не трогают боевую БД)
@@ -34,14 +34,19 @@ DATA.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA / "vita.db"
 
 CODE_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"
+# Постоянный адрес обоев профиля: 8 знаков, чтобы не пересечься с кодом дизайна (6).
+WALL_CODE_LEN = 8
 HANDLE_RE = re.compile(r"[a-z][a-z0-9_]{1,22}[a-z0-9]")
 HANDLE_RULE = ("Тег: 3–24 знака, только латиница, цифры и _. "
                "Начинается с буквы, кончается буквой или цифрой")
 # Тег (бывший «ник») — уникальный @идентификатор профиля.
 # Профиль с тегом владельца получает плашку «Разработчик Vita».
 DEVELOPER_HANDLE = "vit"
+# Кому видна админка на /me: тег владельца. Он же зарезервирован ниже — иначе
+# при смене тега его занял бы чужой и получил бы выдачу prime.
+ADMIN_HANDLES = {"kam"}
 # Зарезервированные теги выдаются только через /admin/handle.
-RESERVED_HANDLES = {DEVELOPER_HANDLE, "vita", "vitadots", "admin", "support"}
+RESERVED_HANDLES = {DEVELOPER_HANDLE, "vita", "vitadots", "admin", "support", *ADMIN_HANDLES}
 # Тег выбирается один раз при регистрации, потом его можно поменять дважды.
 HANDLE_CHANGE_LIMIT = 1
 
@@ -209,11 +214,18 @@ def _init_schema(conn: sqlite3.Connection) -> None:
         # сколько раз человек менял тег и выбирал ли он его вообще
         "handle_changes INTEGER NOT NULL DEFAULT 0",
         "handle_custom INTEGER NOT NULL DEFAULT 0",
+        # постоянный адрес обоев профиля и дизайн, который он сейчас показывает
+        "wall_code TEXT NOT NULL DEFAULT ''",
+        "active_link TEXT NOT NULL DEFAULT ''",
     ):
         try:
             conn.execute(f"ALTER TABLE profiles ADD COLUMN {col}")
         except sqlite3.OperationalError:
             pass
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_wall ON profiles(wall_code) "
+        "WHERE wall_code != ''"
+    )
     conn.execute(
         "CREATE TABLE IF NOT EXISTS profile_devices("
         "profile_code TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE, "
@@ -451,6 +463,8 @@ class LinkIn(BaseModel):
     # расположение: свои координаты, размер и число точек в ряду у каждого
     # элемента обоев. Пусто — всё стоит как раньше (см. render.place_cfg)
     place: dict = {}
+    # экран «Домой»: размытие с силой, свой цвет или своё фото (render.home_cfg)
+    home: dict = {}
     idea: str = ""
     contact: str = ""
     ownerToken: str = ""
@@ -508,6 +522,11 @@ class GoalEditIn(BaseModel):
 class OwnerIn(BaseModel):
     ownerToken: str = ""
     tz: str = ""  # часовой пояс браузера: по нему обои считают «сегодня»
+
+
+class AdminPrimeIn(BaseModel):
+    ownerToken: str = ""
+    tag: str = ""
 
 
 class FeedPostIn(BaseModel):
@@ -595,6 +614,60 @@ def _profile_tags(conn: sqlite3.Connection, profile_code: str) -> list[dict]:
             (profile_code,),
         )
     ]
+
+
+def _wall_code(conn: sqlite3.Connection, profile_code: str) -> str:
+    """Постоянный адрес обоев профиля. Заводится один раз и больше не меняется."""
+    row = conn.execute("SELECT wall_code FROM profiles WHERE code = ?", (profile_code,)).fetchone()
+    if row is None:
+        return ""
+    if row[0]:
+        return row[0]
+    for _ in range(8):
+        code = "".join(secrets.choice(CODE_ALPHABET) for _ in range(WALL_CODE_LEN))
+        try:
+            conn.execute("UPDATE profiles SET wall_code = ? WHERE code = ?", (code, profile_code))
+        except sqlite3.IntegrityError:
+            continue  # редкое совпадение — берём следующий
+        return code
+    return ""
+
+
+def _active_link(conn: sqlite3.Connection, profile_code: str) -> str | None:
+    """Какой дизайн сейчас на постоянном адресе: выбранный, иначе самый свежий."""
+    row = conn.execute(
+        "SELECT active_link FROM profiles WHERE code = ?", (profile_code,)
+    ).fetchone()
+    chosen = (row[0] or "") if row else ""
+    if chosen and conn.execute(
+        "SELECT 1 FROM links WHERE code = ? AND owner_code = ?", (chosen, profile_code)
+    ).fetchone():
+        return chosen
+    fresh = conn.execute(
+        "SELECT code FROM links WHERE owner_code = ? ORDER BY created DESC LIMIT 1",
+        (profile_code,),
+    ).fetchone()
+    return fresh[0] if fresh else None
+
+
+def _link_for_wall(conn: sqlite3.Connection, code: str):
+    """Строка обоев по адресу: сперва код дизайна, потом постоянный адрес профиля."""
+    row = conn.execute(
+        "SELECT code, config, access_until, owner_code, tz FROM links WHERE code = ?", (code,)
+    ).fetchone()
+    if row is not None:
+        return row
+    owner = conn.execute(
+        "SELECT code FROM profiles WHERE wall_code = ?", (code,)
+    ).fetchone()
+    if owner is None:
+        return None
+    active = _active_link(conn, owner[0])
+    if not active:
+        return None
+    return conn.execute(
+        "SELECT code, config, access_until, owner_code, tz FROM links WHERE code = ?", (active,)
+    ).fetchone()
 
 
 def _avatar_url(avatar_id: str) -> str:
@@ -840,6 +913,9 @@ def _profile_payload(conn: sqlite3.Connection, profile_code: str) -> dict:
         # TODO(достижения): см. _public_profile_payload — плашки спрятаны.
         "tags": [],
         "developer": (row[0] or "").lower() == DEVELOPER_HANDLE,
+        "admin": (row[0] or "").lower() in ADMIN_HANDLES,
+        "wallCode": _wall_code(conn, profile_code),
+        "activeLink": _active_link(conn, profile_code) or "",
         "settings": settings,
         "handleLocked": bool(row[7]) and (row[6] or 0) >= HANDLE_CHANGE_LIMIT,
         "handleLeft": (
@@ -876,6 +952,7 @@ RATE_RULES = {
     "/api/profile/avatar": (25, 3600),
     "/api/feed-post": (15, 3600),
     "/api/review": (10, 3600),
+    "/api/admin/prime": (60, 3600),
     "/api/focus-wait": (10, 3600),
     # вход и пароли: подбирать перебором должно быть скучно
     "/api/auth/register": (8, 900),
@@ -1058,6 +1135,7 @@ def create_link(cfg: LinkIn, request: Request):
     trial_until = (date.today() + timedelta(days=TRIAL_DAYS)).isoformat()
     cfg.title = cfg.title[:200]  # поле в браузере можно обойти, длину режем тут
     cfg.place = place_cfg(cfg.place)  # в базу кладём только разобранное, без мусора
+    cfg.home = home_cfg(cfg.home)
     for field in ("textColor", "textMuted", "textStroke"):
         if not re.fullmatch(r"#[0-9a-fA-F]{6}", getattr(cfg, field) or ""):
             setattr(cfg, field, "")
@@ -1074,8 +1152,26 @@ def create_link(cfg: LinkIn, request: Request):
                 "INSERT INTO ideas(code, idea, contact) VALUES(?, ?, ?)",
                 (code, idea, contact),
             )
+        wall = ""
+        if owner_code:
+            wall = _wall_code(conn, owner_code)
+            # первые обои профиля сразу становятся активными: постоянный адрес
+            # должен работать ещё до того, как человек нажмёт «Поставить»
+            chosen = conn.execute(
+                "SELECT active_link FROM profiles WHERE code = ?", (owner_code,)
+            ).fetchone()
+            if not (chosen and chosen[0]):
+                conn.execute(
+                    "UPDATE profiles SET active_link = ? WHERE code = ?", (code, owner_code)
+                )
     base = str(request.base_url).rstrip("/")
-    return {"code": code, "url": f"{base}/w/{code}.png", "setup": f"{base}/s/{code}", "until": until}
+    return {
+        "code": code,
+        "url": f"{base}/w/{code}.png",
+        "wall": f"{base}/w/{wall}.png" if wall else "",
+        "setup": f"{base}/s/{code}",
+        "until": until,
+    }
 
 
 @app.get("/api/link/{code}")
@@ -1113,7 +1209,35 @@ def drop_link(code: str, ownerToken: str = ""):
         if (row[0] or "") != owner:
             raise HTTPException(403, "Это не твои обои")
         conn.execute("DELETE FROM links WHERE code = ?", (code,))
+        conn.execute(
+            "UPDATE profiles SET active_link = '' WHERE code = ? AND active_link = ?",
+            (owner, code),
+        )
     return {"ok": True}
+
+
+@app.post("/api/link/{code}/activate")
+def activate_link(code: str, owner: OwnerIn):
+    """Сделать эти обои активными: их и будет отдавать постоянный адрес профиля."""
+    if not re.fullmatch(r"[a-z0-9]{6}", code):
+        raise HTTPException(404, "Нет такой ссылки")
+    with db() as conn:
+        profile_code = _profile_for_token(conn, owner.ownerToken)
+        if not profile_code:
+            raise HTTPException(401, "Нет доступа к Vita ID")
+        row = conn.execute("SELECT owner_code FROM links WHERE code = ?", (code,)).fetchone()
+        if row is None:
+            raise HTTPException(404, "Нет такой ссылки")
+        if (row[0] or "") != profile_code:
+            raise HTTPException(403, "Это не твои обои")
+        conn.execute(
+            "UPDATE profiles SET active_link = ? WHERE code = ?", (code, profile_code)
+        )
+        tz = _clean_tz(owner.tz)
+        if tz:
+            conn.execute("UPDATE links SET tz = ? WHERE code = ?", (tz, code))
+        wall = _wall_code(conn, profile_code)
+    return {"code": code, "wall": f"/w/{wall}.png" if wall else ""}
 
 
 @app.get("/api/tag-free")
@@ -2149,6 +2273,34 @@ def access_state(owner: OwnerIn):
         return _profile_access_state(conn, profile_code)
 
 
+@app.post("/api/admin/prime")
+def admin_prime(body: AdminPrimeIn):
+    """Выдать prime навсегда по тегу — с профиля владельца, без токена админки.
+
+    Право проверяем не паролем, а тем, кто пришёл: профиль по его Vita ID,
+    и его тег должен быть в ADMIN_HANDLES. Сам тег зарезервирован, занять
+    его и получить выдачу чужой человек не может.
+    """
+    with db() as conn:
+        me = _profile_for_token(conn, body.ownerToken)
+        if not me:
+            raise HTTPException(401, "Нет доступа к Vita ID")
+        row = conn.execute("SELECT handle FROM profiles WHERE code = ?", (me,)).fetchone()
+        if row is None or (row[0] or "").lower() not in ADMIN_HANDLES:
+            raise HTTPException(403, "Нет доступа")
+        handle = _normalize_handle(body.tag)
+        target = conn.execute(
+            "SELECT code FROM profiles WHERE handle = ? COLLATE NOCASE", (handle,)
+        ).fetchone()
+        if target is None:
+            raise HTTPException(404, "Нет профиля с таким тегом")
+        _grant_forever(conn, target[0])
+        walls = conn.execute(
+            "SELECT COUNT(*) FROM links WHERE owner_code = ?", (target[0],)
+        ).fetchone()[0]
+    return {"tag": handle, "wallpapers": walls, "paid": True}
+
+
 # Робокасса пускает к оплате только активированный магазин. Пока его проверяют,
 # их страница встречает покупателя «Код ошибки 25: оплата счетов недоступна» —
 # человек нажал «Оплатить» и упёрся в чужую ошибку. Поэтому сами открываем ту же
@@ -2342,10 +2494,15 @@ def setup_page(code: str, request: Request):
         effective_until = (
             _effective_access_until(conn, row[0], row[3]) if row is not None else None
         )
+        wall = _wall_code(conn, row[3]) if row is not None and row[3] else ""
     if row is None:
         raise HTTPException(404, "Нет такой ссылки")
-    _, fetches, review_at, _ = row
-    url = str(request.base_url).rstrip("/") + f"/w/{code}.png"
+    _, fetches, review_at, owner_code = row
+    base = str(request.base_url).rstrip("/")
+    url = base + f"/w/{code}.png"
+    # в ярлык отдаём постоянный адрес: сделал новый дизайн — нажал «Поставить»,
+    # и ночная копия ярлыка принесёт его сама, без перенастройки автоматизации
+    wall_url = base + f"/w/{wall}.png" if wall else url
     if SHORTCUT_ICLOUD_URL:
         btn = (f'<a class="btn primary" id="shortcutBtn" href="{SHORTCUT_ICLOUD_URL}">'
                'Добавить ярлык</a>')
@@ -2375,7 +2532,9 @@ def setup_page(code: str, request: Request):
         review = ""
     html = (ROOT / "static" / "setup.html").read_text(encoding="utf-8")
     return HTMLResponse(
-        html.replace("{{URL}}", url)
+        html.replace("{{WALL_URL}}", wall_url)
+        .replace("{{OWNED}}", "1" if wall else "")
+        .replace("{{URL}}", url)
         .replace("{{SHORTCUT_BTN}}", btn)
         .replace("{{ACCESS}}", access)
         .replace("{{BUY}}", buy)
@@ -2389,7 +2548,7 @@ def setup_page(code: str, request: Request):
 WP_CACHE = DATA / "wpcache"
 
 
-def _wallpaper_png(config: str, until: date | None, day: date) -> bytes:
+def _wallpaper_png(config: str, until: date | None, day: date, home: bool = False) -> bytes:
     """PNG обоев с дневным кэшем: за сутки одна картинка рисуется один раз.
 
     day — «сегодня» по часам человека. Проба кончается в его полночь, и
@@ -2401,14 +2560,16 @@ def _wallpaper_png(config: str, until: date | None, day: date) -> bytes:
         day = until
     today = date.today().isoformat()
     digest = hashlib.sha256(
-        f"{config}|{expired}|{until.isoformat() if until else ''}|{day.isoformat()}".encode("utf-8")
+        f"{config}|{expired}|{until.isoformat() if until else ''}|{day.isoformat()}"
+        f"|{'home' if home else 'lock'}".encode("utf-8")
     ).hexdigest()[:20]
     path = WP_CACHE / f"{today}-{digest}.png"
     try:
         return path.read_bytes()
     except OSError:
         pass
-    img = render_wallpaper(json.loads(config), today=day, expired=expired)
+    draw = render_home if home else render_wallpaper
+    img = draw(json.loads(config), today=day, expired=expired)
     buf = io.BytesIO()
     img.save(buf, "PNG")
     data = buf.getvalue()
@@ -2426,24 +2587,27 @@ def _wallpaper_png(config: str, until: date | None, day: date) -> bytes:
 
 
 @app.get("/w/{code}.png")
-def wallpaper(code: str):
+def wallpaper(code: str, home: int = 0):
+    """Картинка обоев. Код дизайна и постоянный адрес профиля — один и тот же путь.
+
+    По постоянному адресу отдаём дизайн, который человек выбрал последним:
+    ссылка в ярлыке настраивается один раз, а «Поставить» на сайте меняет вид.
+    """
     with db() as conn:
-        row = conn.execute(
-            "SELECT config, access_until, owner_code, tz FROM links WHERE code = ?", (code,)
-        ).fetchone()
+        row = _link_for_wall(conn, code)
         effective_until = (
-            _effective_access_until(conn, row[1], row[2]) if row is not None else None
+            _effective_access_until(conn, row[2], row[3]) if row is not None else None
         )
         if row is not None:
             conn.execute(
                 "UPDATE links SET fetches = fetches + 1, last_fetch = datetime('now') WHERE code = ?",
-                (code,),
+                (row[0],),
             )
     if row is None:
         raise HTTPException(404, "Нет такой ссылки")
     _, until = _access_state(effective_until)
     return Response(
-        _wallpaper_png(row[0], until, _local_today(row[3])),
+        _wallpaper_png(row[1], until, _local_today(row[4]), home=bool(home)),
         media_type="image/png",
         headers={"Cache-Control": "no-store"},  # Ярлыки должны тянуть свежую картинку каждый день
     )

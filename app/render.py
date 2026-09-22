@@ -9,7 +9,7 @@ import unicodedata
 from datetime import date, timedelta
 from pathlib import Path
 
-from PIL import Image, ImageChops, ImageDraw, ImageFont, ImageOps
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont, ImageOps
 
 from . import scenes
 
@@ -1019,3 +1019,56 @@ def render_wallpaper(cfg: dict, today: date | None = None, expired: bool = False
     elif cfg.get("footer", True):
         draw.text(foot_xy, _footer(mode, total, done), font=foot_font, fill=text, anchor="mm")
     return img
+
+
+# --- экран «Домой» (где иконки) ---------------------------------------------
+# Айфон сам умеет только «размыть/не размыть», силу не крутит. Поэтому картинку
+# для «Домой» рисуем мы и отдаём вторым адресом: /w/<код>.png?home=1.
+HOME_MODES = ("blur", "color", "photo")
+HOME_BLUR_DEFAULT = 30
+# Радиус на ширину 1179: 100 % — это 90 точек, дальше картинка просто ровный цвет.
+HOME_BLUR_MAX_R = 0.9
+HOME_SHADE = 0.10  # на полной силе картинка темнеет на десятую — как в iOS
+
+
+def home_cfg(raw) -> dict:
+    """Настройки экрана «Домой», разобранные и безопасные. 1:1 с homeCfg в app.js."""
+    raw = raw if isinstance(raw, dict) else {}
+    mode = raw.get("mode")
+    mode = mode if mode in HOME_MODES else "blur"
+    try:
+        blur = int(raw.get("blur", HOME_BLUR_DEFAULT))
+    except (TypeError, ValueError):
+        blur = HOME_BLUR_DEFAULT
+    blur = max(0, min(100, blur))
+    color = str(raw.get("color") or "#101014")
+    if not re.fullmatch(r"#[0-9a-fA-F]{6}", color):
+        color = "#101014"
+    photo = str(raw.get("photo") or "")
+    if not re.fullmatch(r"[a-z0-9]{6}", photo):
+        photo = ""
+    return {"mode": mode, "blur": blur, "color": color, "photo": photo}
+
+
+def home_blur(wall: Image.Image, pct: int) -> Image.Image:
+    """Размытие обоев силой 0…100 %. Тем же путём идёт превью в браузере."""
+    if pct <= 0:
+        return wall
+    img = wall.filter(ImageFilter.GaussianBlur(HOME_BLUR_MAX_R * pct))
+    if HOME_SHADE <= 0:
+        return img
+    shade = Image.new("RGB", img.size, (0, 0, 0))
+    return Image.blend(img, shade, HOME_SHADE * pct / 100)
+
+
+def render_home(cfg: dict, today: date | None = None, expired: bool = False) -> Image.Image:
+    """Картинка под экран «Домой»: размытые обои, ровный цвет или своё фото."""
+    home = home_cfg(cfg.get("home"))
+    if home["mode"] == "color":
+        return Image.new("RGB", (W, H), home["color"])
+    if home["mode"] == "photo":
+        photo = _load_custom_bg(home["photo"]) if home["photo"] else None
+        if photo is not None:
+            return cover_crop(photo, W, H)
+        # фото потерялось — не показываем пустоту, отдаём размытые обои
+    return home_blur(render_wallpaper(cfg, today=today, expired=expired), home["blur"])

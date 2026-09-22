@@ -84,6 +84,8 @@ const state = {
   place: placeDefault(),
   mode: 'month', color: '#f2f2f2', bg: 'black', bgColor: '#101014', bgImageId: null, shape: 'circle', font: 'system',
   glass: false, glow: false, title: TITLES.month, footer: true, brand: true, birth: '2000-01-01',
+  // экран «Домой»: размытие с силой, ровный цвет или своё фото (render.home_cfg)
+  home: { mode: 'blur', blur: 30, color: '#101014', photo: '' },
   // цвета текста задаёт тема; пусто — заголовок цветом точек, подписи серым
   textColor: '', textMuted: '', textStroke: '',
   start: todayISO, end: plus30,
@@ -91,6 +93,8 @@ const state = {
 let customTitle = false;
 let bgAutoTitle = false;
 let customBgImg = null;
+let customHomeImg = null;   // своё фото для «Домой», уже обрезанное под экран
+let homeOn = false;         // телефон показывает «Домой», а не блокировку
 let customColor = false;
 
 // ——— демо-режим для съёмки рилсов: /?demo[&mode=year&color=%2334c759&bg=black&shape=rounded]
@@ -899,6 +903,8 @@ function draw(reveal = 1, pulse = 0, fill = null) {
     ctx.fillText(footerText(total, statDone), g.foot.x, g.foot.y);
   }
 
+  if (homeOn) paintHome(ctx);
+
   // хвост — только на большом телефоне: экранчик сюда заходит вторым кругом
   if (ctx !== ctxMain) return;
 
@@ -921,7 +927,7 @@ function animateReveal(dur = 1150) {
   cancelAnimationFrame(revealRAF);
   cancelAnimationFrame(pulseRAF);
   cancelAnimationFrame(fillRAF);
-  if (reduceMotion || (!DEMO && counts().done <= 0)) { draw(); startPulse(); return; }
+  if (reduceMotion || homeOn || (!DEMO && counts().done <= 0)) { draw(); startPulse(); return; }
   const t0 = performance.now();
   const step = now => {
     const p = Math.min(1, (now - t0) / dur);
@@ -936,7 +942,9 @@ function animateReveal(dur = 1150) {
 let pulseRAF = null, pulseLast = 0;
 function startPulse() {
   cancelAnimationFrame(pulseRAF);
-  if (reduceMotion) return;
+  // на «Домой» кольца «сегодня» не видно: дышать нечему, а размывать кадр
+  // пятнадцать раз в секунду — впустую жечь батарею
+  if (reduceMotion || homeOn) return;
   const loop = now => {
     pulseRAF = requestAnimationFrame(loop);
     if (document.hidden || now - pulseLast < 66) return; // ~15 кадров/с хватает
@@ -960,7 +968,7 @@ function animateFill(limit, dur = FILL_MS) {
   cancelAnimationFrame(fillRAF);
   const { done } = counts();
   const N = Math.min(done, Math.max(1, limit));
-  if (done <= 0) { draw(); startPulse(); return; }
+  if (done <= 0 || homeOn) { draw(); startPulse(); return; }
   if (reduceMotion || N <= 1) { draw(1, 0, N); return; }
   const t0 = performance.now();
   const step = now => {
@@ -1488,7 +1496,7 @@ async function uploadBgFile(file) {
   const r = await fetch('/api/upload-bg', { method: 'POST', body: fd });
   if (!r.ok) throw new Error('upload');
   const j = await r.json();
-  state.bgImageId = j.id;
+  return j.id;
 }
 
 $('bgOwn').addEventListener('click', () => $('bgFile').click());
@@ -1723,6 +1731,74 @@ $('bgColorPick').addEventListener('input', e => {
   draw();
 });
 
+// --- экран «Домой»: что видно за иконками ---
+let homeTipTimer = 0;
+function showHomeTip(text) {
+  const tip = $('homeTip');
+  tip.textContent = text;
+  tip.hidden = !text;
+  clearTimeout(homeTipTimer);
+  if (text) homeTipTimer = setTimeout(() => { tip.hidden = true; }, 5000);
+}
+
+function paintHomeRows() {
+  const mode = state.home.mode;
+  $('homeBlurRow').hidden = mode !== 'blur';
+  $('homeHint').hidden = mode !== 'blur';
+  $('homeColorRow').hidden = mode !== 'color';
+  $('homeOwn').hidden = mode !== 'photo';
+  $('homeOwn').classList.toggle('on', mode === 'photo' && !!customHomeImg);
+}
+paintHomeRows();
+
+// Телефон показывает либо блокировку, либо «Домой». Тронул настройку — показали
+// «Домой» сразу: иначе человек крутит ползунок и не видит, что меняется.
+function setHomeOn(on) {
+  if (homeOn === on) return;
+  homeOn = on;
+  const peek = $('homePeek');
+  peek.setAttribute('aria-pressed', on ? 'true' : 'false');
+  peek.textContent = on ? 'вернуть' : 'смотреть';
+  peek.setAttribute('aria-label',
+    on ? 'Вернуть экран блокировки' : 'Показать экран «Домой» на телефоне');
+  if (on) draw(); else animateReveal(560);
+}
+
+// ползунок бежит быстрее, чем кадр успевает: лишние ходы схлопываем в один
+let homeRAF = 0;
+function homeDraw() {
+  if (homeRAF) return;
+  homeRAF = requestAnimationFrame(() => { homeRAF = 0; draw(); });
+}
+
+bindSeg('home', v => {
+  state.home.mode = ['blur', 'color', 'photo'].includes(v) ? v : 'blur';
+  paintHomeRows();
+  if (state.home.mode === 'photo' && !customHomeImg) showHomeTip('выбери своё фото');
+  setHomeOn(true);
+});
+
+$('homeBlur').addEventListener('input', e => {
+  state.home.blur = Math.max(0, Math.min(100, Number(e.target.value) || 0));
+  $('homeBlurVal').textContent = state.home.blur + ' %';
+  setHomeOn(true);
+  homeDraw();
+});
+
+$('homeColorPick').addEventListener('input', e => {
+  state.home.color = e.target.value;
+  setHomeOn(true);
+  homeDraw();
+});
+
+$('homePeek').addEventListener('click', () => setHomeOn(!homeOn));
+$('homeOwn').addEventListener('click', () => $('homeFile').click());
+$('homeFile').addEventListener('change', e => {
+  const file = e.target.files?.[0];
+  e.target.value = '';
+  if (file) cropOpen(file, 'home');
+});
+
 $('bgFile').addEventListener('change', e => {
   const file = e.target.files?.[0];
   e.target.value = '';
@@ -1785,6 +1861,11 @@ async function makeWallpaper(btn, err) {
     err.hidden = false;
     return;
   }
+  if (state.home.mode === 'photo' && !state.home.photo) {
+    err.textContent = 'Выбери фото для экрана «Домой» или вернись к размытию';
+    err.hidden = false;
+    return;
+  }
   btn.disabled = true;
   const label = btn.textContent;
   btn.textContent = 'Делаю обои…';
@@ -1797,7 +1878,7 @@ async function makeWallpaper(btn, err) {
         bgImage: state.bgImageId || '', shape: state.shape, glass: state.glass, glow: state.glow,
         textColor: state.textColor, textMuted: state.textMuted, textStroke: state.textStroke,
         title: state.title, font: state.font, footer: state.footer, brand: state.brand, birth: state.birth,
-        start: state.start, end: state.end, place: state.place,
+        start: state.start, end: state.end, place: state.place, home: state.home,
         ownerToken: window.VitaID?.token() || '', tz: phoneTZ,
       }),
     });
@@ -2366,6 +2447,11 @@ const CROP_MODES = {
     title: 'Как встанет фото',
     hint: 'Двигай пальцем, меняй размер щипком — на обои попадёт то, что в рамке.',
   },
+  home: {
+    cw: W / 3, ch: H / 3, ow: W, oh: H,
+    title: 'Фото для экрана «Домой»',
+    hint: 'Двигай пальцем, меняй размер щипком — под иконки попадёт то, что в рамке.',
+  },
 };
 let cropMode = 'ava';
 let cropImg = null, cropScale = 1, cropBase = 1, cropX = 0, cropY = 0;
@@ -2391,19 +2477,20 @@ function cropDraw() {
 
 function cropFail(text) {
   if (cropMode === 'bg') showBgTip(text.toLowerCase());
+  else if (cropMode === 'home') showHomeTip(text.toLowerCase());
   else $('profStatus').textContent = text;
 }
 
 function cropOpen(file, mode = 'ava') {
   const m = CROP_MODES[mode] || CROP_MODES.ava;
-  cropMode = m === CROP_MODES.bg ? 'bg' : 'ava';
+  cropMode = CROP_MODES[mode] ? mode : 'ava';
   const url = URL.createObjectURL(file);
   const img = new Image();
   img.onload = () => {
     URL.revokeObjectURL(url);
     cropCanvas.width = m.cw;
     cropCanvas.height = m.ch;
-    cropView.classList.toggle('crop-phone', cropMode === 'bg');
+    cropView.classList.toggle('crop-phone', cropMode !== 'ava');
     $('cropTitle').textContent = m.title;
     $('cropHint').textContent = m.hint;
     cropImg = img;
@@ -2547,10 +2634,30 @@ $('cropDone').addEventListener('click', async () => {
     out.toBlob(async blob => {
       if (!blob) { showBgTip('не получилось обрезать фото, попробуй другое'); return; }
       try {
-        await uploadBgFile(new File([blob], 'bg.jpg', { type: 'image/jpeg' }));
+        state.bgImageId = await uploadBgFile(new File([blob], 'bg.jpg', { type: 'image/jpeg' }));
       } catch {
         state.bgImageId = null;
         showBgTip('фото не загрузилось — нажми «своё фото» ещё раз');
+      }
+    }, 'image/jpeg', 0.92);
+    return;
+  }
+
+  if (mode === 'home') {
+    customHomeImg = out;
+    state.home.mode = 'photo';
+    markOn('home', 'photo');
+    paintHomeRows();
+    showHomeTip('');
+    setHomeOn(true);
+    homeDraw();
+    out.toBlob(async blob => {
+      if (!blob) { showHomeTip('не получилось обрезать фото, попробуй другое'); return; }
+      try {
+        state.home.photo = await uploadBgFile(new File([blob], 'home.jpg', { type: 'image/jpeg' }));
+      } catch {
+        state.home.photo = '';
+        showHomeTip('фото не загрузилось — нажми «своё фото» ещё раз');
       }
     }, 'image/jpeg', 0.92);
     return;
@@ -2705,14 +2812,18 @@ function chromeSave() {
 // Айфон красит свои значки по обоям: на светлых — тёмным. Фоном бывает и фото,
 // и сцена, и градиент, поэтому смотрим на готовый кадр, а не на имя фона.
 let inkCache = { key: '', ink: '' };
-function chromeInk() {
+function chromeInk(c = ctx) {
   const key = [state.bg, state.bgColor,
-    customBgImg ? customBgImg.width + 'x' + customBgImg.height : ''].join('|');
+    customBgImg ? customBgImg.width + 'x' + customBgImg.height : '',
+    // на «Домой» фон другой: цвет, фото или размытые обои — ключ это помнит
+    homeOn ? [state.home.mode, state.home.color, state.home.blur,
+      customHomeImg ? 'photo' : ''].join(',') : ''].join('|');
   if (inkCache.key === key && inkCache.ink) return inkCache.ink;
+  const k = c.canvas.width / W;
   let sum = 0, n = 0;
   for (let i = 1; i <= 5; i++) for (const y of [120, 520, 900, 2070, 2480]) {
     try {
-      const d = ctx.getImageData(Math.round(W * i / 6 * cvScale), Math.round(y * cvScale), 1, 1).data;
+      const d = c.getImageData(Math.round(W * i / 6 * k), Math.round(y * k), 1, 1).data;
       sum += (0.2126 * d[0] + 0.7152 * d[1] + 0.0722 * d[2]) / 255;
       n++;
     } catch {}
@@ -2749,27 +2860,7 @@ function drawChrome() {
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
 
-  // статус-бар: слева имя оператора, справа связь, вай-фай и батарея
-  box(110, 76, 160, 28, 14); ctx.fillStyle = ink(0.5); ctx.fill();
-  for (let i = 0; i < 4; i++) {
-    const h = 10 + i * 6;
-    box(860 + i * 14, 104 - h, 9, h, 3.5);
-    ctx.fillStyle = ink(i < 3 ? 0.9 : 0.35);
-    ctx.fill();
-  }
-  ctx.strokeStyle = ink(0.9);
-  ctx.lineWidth = 7;
-  for (const r of [15, 24]) {
-    ctx.beginPath();
-    ctx.arc(945, 104, r, -Math.PI * 0.78, -Math.PI * 0.22);
-    ctx.stroke();
-  }
-  ctx.beginPath(); ctx.arc(945, 100, 4.5, 0, 7); ctx.fillStyle = ink(0.9); ctx.fill();
-  ctx.lineWidth = 5;
-  ctx.strokeStyle = ink(0.42);
-  box(990, 73, 70, 34, 11); ctx.stroke();
-  box(996, 79, 40, 22, 7); ctx.fillStyle = ink(0.9); ctx.fill();
-  box(1064, 83, 6, 14, 3); ctx.fillStyle = ink(0.42); ctx.fill();
+  drawStatusBar(ctx, ink, '');
 
   // дата с погодой одной строкой, как на экране блокировки
   const day = new Date().toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric' });
@@ -2832,6 +2923,140 @@ function drawChrome() {
   box(W / 2 - 140, 2478, 280, 10, 5);   // полоска «домой»
   ctx.fillStyle = ink(0.55); ctx.fill();
   ctx.restore();
+}
+
+// Статус-бар одинаков на блокировке и на «Домой»: слева имя оператора (или
+// часы, как на экране с иконками), справа связь, вай-фай и батарея.
+function drawStatusBar(c, ink, time) {
+  const box = (x, y, w, h, r) => { c.beginPath(); c.roundRect(x, y, w, h, r); };
+  if (time) {
+    c.save();
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.font = chromeFont(46, 600);
+    c.fillStyle = ink(0.95);
+    c.fillText(time, 190, 92);
+    c.restore();
+  } else {
+    box(110, 76, 160, 28, 14); c.fillStyle = ink(0.5); c.fill();
+  }
+  for (let i = 0; i < 4; i++) {
+    const h = 10 + i * 6;
+    box(860 + i * 14, 104 - h, 9, h, 3.5);
+    c.fillStyle = ink(i < 3 ? 0.9 : 0.35);
+    c.fill();
+  }
+  c.strokeStyle = ink(0.9);
+  c.lineWidth = 7;
+  for (const r of [15, 24]) {
+    c.beginPath();
+    c.arc(945, 104, r, -Math.PI * 0.78, -Math.PI * 0.22);
+    c.stroke();
+  }
+  c.beginPath(); c.arc(945, 100, 4.5, 0, 7); c.fillStyle = ink(0.9); c.fill();
+  c.lineWidth = 5;
+  c.strokeStyle = ink(0.42);
+  box(990, 73, 70, 34, 11); c.stroke();
+  box(996, 79, 40, 22, 7); c.fillStyle = ink(0.9); c.fill();
+  box(1064, 83, 6, 14, 3); c.fillStyle = ink(0.42); c.fill();
+}
+
+// --- экран «Домой» (там, где иконки) ---------------------------------------
+// Силу размытия айфон не крутит: в действии «Установить фото как обои» есть
+// только «Размытие для удобочитаемости» вкл/выкл. Поэтому картинку для «Домой»
+// рисует сервер и отдаёт вторым адресом /w/<код>.png?home=1. Числа ниже обязаны
+// совпадать с render.render_home, иначе превью соврёт.
+const HOME_BLUR_R = 0.9;   // 100 % — радиус 90 точек на ширину 1179
+const HOME_SHADE = 0.10;   // и картинка темнеет на десятую, как в iOS
+const HOME_ICON = 190, HOME_COLS = 4, HOME_ROWS = 5;
+const HOME_PAD = 110, HOME_TOP = 330, HOME_STEP_Y = 300;
+const HOME_NAMES = ['Фото', 'Камера', 'Почта', 'Заметки', 'Карты', 'Погода', 'Часы',
+  'Музыка', 'Команды', 'Настройки', 'Календарь', 'Файлы', 'Здоровье', 'Кошелёк',
+  'Браузер', 'Телефон', 'Сообщения', 'Подкасты', 'Книги', 'Дом'];
+const homeBuf = document.createElement('canvas');
+
+// Размытие канвы уменьшением и растяжкой. ctx.filter есть не в каждом сафари, а
+// где есть — тянет с краёв прозрачность и оставляет светлую кайму, которой у
+// Pillow нет. Уменьшение краёв не трогает и одинаково работает везде.
+function blurCanvas(c, cw, ch, sigma) {
+  if (sigma < 0.6) return;
+  // Шаг в 1,8 сигмы: уменьшение усредняет квадрат, растяжка добавляет свой
+  // треугольник. Множитель подобран сверкой с сервером по точкам — на силе
+  // 40 % средняя разница 5 единиц из 255, глазом не видно.
+  const f = Math.min(400, Math.max(2, sigma * 1.8));
+  const sw = Math.max(1, Math.round(cw / f)), sh = Math.max(1, Math.round(ch / f));
+  if (homeBuf.width !== sw || homeBuf.height !== sh) { homeBuf.width = sw; homeBuf.height = sh; }
+  const b = homeBuf.getContext('2d');
+  b.imageSmoothingQuality = 'high';
+  b.clearRect(0, 0, sw, sh);
+  b.drawImage(c.canvas, 0, 0, cw, ch, 0, 0, sw, sh);
+  c.imageSmoothingQuality = 'high';
+  c.clearRect(0, 0, cw, ch);
+  c.drawImage(homeBuf, 0, 0, sw, sh, 0, 0, cw, ch);
+}
+
+// Иконки, поиск и док — только превью: на обоях их нет, их рисует сам айфон.
+function drawHomeChrome(c) {
+  const rgb = chromeInk(c);
+  const ink = a => `rgba(${rgb}, ${a})`;
+  const box = (x, y, w, h, r) => { c.beginPath(); c.roundRect(x, y, w, h, r); };
+  const icon = (x, y) => {
+    box(x, y, HOME_ICON, HOME_ICON, 52);
+    c.fillStyle = ink(0.23); c.fill();
+    c.strokeStyle = ink(0.36); c.lineWidth = 3; c.stroke();
+    box(x + 10, y + 8, HOME_ICON - 20, 36, 22);   // блик по верхней кромке
+    c.fillStyle = ink(0.10); c.fill();
+  };
+  c.save();
+  c.textAlign = 'center';
+  c.textBaseline = 'middle';
+  const stepX = (W - 2 * HOME_PAD - HOME_ICON) / (HOME_COLS - 1);
+  c.font = chromeFont(34, 500);
+  for (let i = 0; i < HOME_COLS * HOME_ROWS; i++) {
+    const x = HOME_PAD + (i % HOME_COLS) * stepX;
+    const y = HOME_TOP + Math.floor(i / HOME_COLS) * HOME_STEP_Y;
+    icon(x, y);
+    c.fillStyle = ink(0.92);
+    c.fillText(HOME_NAMES[i], x + HOME_ICON / 2, y + HOME_ICON + 38);
+  }
+  box(W / 2 - 120, 1930, 240, 60, 30); c.fillStyle = ink(0.18); c.fill();
+  c.font = chromeFont(32, 500);
+  c.fillStyle = ink(0.88);
+  c.fillText('Поиск', W / 2, 1962);
+  box(44, 2080, W - 88, 320, 110);               // док
+  c.fillStyle = ink(0.16); c.fill();
+  c.strokeStyle = ink(0.28); c.lineWidth = 3; c.stroke();
+  for (let i = 0; i < HOME_COLS; i++) icon(HOME_PAD + i * stepX, 2145);
+  drawStatusBar(c, ink, new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }));
+  box(W / 2 - 140, 2478, 280, 10, 5);            // полоска «домой»
+  c.fillStyle = ink(0.55); c.fill();
+  c.restore();
+}
+
+function paintHome(c) {
+  const cw = c.canvas.width, ch = c.canvas.height, k = cw / W;
+  const h = state.home;
+  c.save();
+  c.setTransform(1, 0, 0, 1, 0, 0);
+  if (h.mode === 'color') {
+    c.fillStyle = h.color;
+    c.fillRect(0, 0, cw, ch);
+  } else if (h.mode === 'photo' && customHomeImg) {
+    const iw = customHomeImg.width, ih = customHomeImg.height;
+    const scale = Math.max(cw / iw, ch / ih);
+    const sw = cw / scale, sh = ch / scale;
+    c.drawImage(customHomeImg, (iw - sw) / 2, (ih - sh) / 2, sw, sh, 0, 0, cw, ch);
+  } else {
+    // фото ещё не выбрали — показываем размытые обои, ровно как сервер
+    blurCanvas(c, cw, ch, HOME_BLUR_R * h.blur * k);
+    if (h.blur > 0) {
+      c.fillStyle = `rgba(0, 0, 0, ${HOME_SHADE * h.blur / 100})`;
+      c.fillRect(0, 0, cw, ch);
+    }
+  }
+  c.setTransform(k, 0, 0, k, 0, 0);
+  drawHomeChrome(c);
+  c.restore();
 }
 
 function placeAlive(key) {
@@ -3282,6 +3507,28 @@ async function loadShared(code) {
       state.bgColor = cfg.bgColor;
       $('bgColorPick').value = cfg.bgColor;
     }
+  }
+  if (cfg.home && typeof cfg.home === 'object') {
+    const home = cfg.home;
+    state.home.blur = Math.max(0, Math.min(100, Number(home.blur) || 0));
+    $('homeBlur').value = state.home.blur;
+    $('homeBlurVal').textContent = state.home.blur + ' %';
+    if (hex(home.color)) {
+      state.home.color = home.color;
+      $('homeColorPick').value = home.color;
+    }
+    if (/^[a-z0-9]{6}$/.test(home.photo || '')) {
+      state.home.photo = home.photo;
+      await new Promise(done => {          // фото для «Домой» лежит там же, где фоны
+        const img = new Image();
+        img.onload = () => { customHomeImg = img; done(); };
+        img.onerror = done;
+        img.src = '/bg/' + home.photo + '.jpg';
+      });
+    }
+    state.home.mode = ['blur', 'color', 'photo'].includes(home.mode) ? home.mode : 'blur';
+    markOn('home', state.home.mode);
+    paintHomeRows();
   }
   if (cfg.shape) hit('shape', cfg.shape);
   hit('glass', cfg.glow ? '2' : cfg.glass ? '1' : '0');
