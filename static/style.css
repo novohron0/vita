@@ -3706,3 +3706,11 @@ body.placing #cv.dragging { cursor: grabbing; }
 .home-size[hidden], .home-field .color-own[hidden], .home-field .pick-own[hidden] { display: none; }
 .home-field .color-own { margin-top: 2px; }
 @media (prefers-reduced-motion: reduce) { .home-peek { transition: none; } }
+
+/* Телефон уехал с экрана (тогда же выезжает экранчик) — качать и подсвечивать
+   его незачем. Каждая вечная анимация держит композитор телефона в работе,
+   даже когда смотреть не на что. Вернулся в кадр — всё продолжится с того же
+   места. Свет за корпусом гасим совсем: его всё равно не видно. */
+body.dim .phone,
+body.dim .phone-glow { animation-play-state: paused; }
+body.dim .phone-glow { opacity: 0; }

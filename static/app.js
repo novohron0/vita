@@ -645,6 +645,34 @@ function drawDot(c, x, y, d, color, mode, pulse = 0, isLead = false, i = 0) {
   VitaScenes.flowerCenter(c, state.shape, x, y, d, color, mode, bgHex, VitaScenes.EMPTY_ALPHA[state.bg]);
 }
 
+// Надписи обоев: заголовок, значок vita и счётчик. Вынесены, потому что кадр
+// анимации берёт сетку из слоёв, а надписи рисует сам — они стоят сотые доли
+// миллисекунды, зато не надо держать их в слое и стирать под кольцом.
+// Два числа под телефоном: «дней позади» и «впереди».
+function drawStats(statDone, total) {
+  const fmt = n => n.toLocaleString('ru-RU');
+  const [l1, l2] = STAT_LABELS[state.mode];
+  $('stat1').textContent = fmt(statDone);
+  $('stat1l').textContent = l1;
+  $('stat2').textContent = fmt(total - statDone);
+  $('stat2l').textContent = l2;
+}
+
+function drawWallText(g, text, total, statDone) {
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  if (state.title.trim()) {
+    ctx.fillStyle = state.textColor || state.color;
+    drawTitle(state.title.trim(), g.title.y, g.title.x, g.title.px);
+  }
+  if (state.brand) drawWatermark(g.vita.x, g.vita.y, text, g.vita.px);
+  if (state.footer) {
+    ctx.fillStyle = text;
+    ctx.font = wallFont(g.foot.px, 400);
+    ctx.fillText(footerText(total, statDone), g.foot.x, g.foot.y);
+  }
+}
+
 function effectiveBgHex() {
   if (state.bg === 'custom') return '#1a1a1a';
   if (state.bg === 'owncolor') return state.bgColor;
@@ -859,14 +887,73 @@ function draw(reveal = 1, pulse = 0, fill = null) {
   // fill — закрашивание по тапу: залито ровно столько точек, сколько сказано,
   // кольцо «сегодня» не рисуется, а счётчики и подпись показывают настоящий
   // день, а не место, где счёт остановился
-  const done = fill !== null ? Math.min(fullDone, Math.floor(fill))
+  const done = layerDone !== null ? layerDone
+    : fill !== null ? Math.min(fullDone, Math.floor(fill))
     : reveal >= 1 ? fullDone : Math.round(fullDone * reveal);
   const statDone = fill !== null ? fullDone : done;
-  const current = fill !== null ? null : reveal >= 1 ? fullCurrent : (done < total ? done : null);
+  const current = layerDone !== null ? null
+    : fill !== null ? null : reveal >= 1 ? fullCurrent : (done < total ? done : null);
   const lead = fill !== null || reveal >= 1 ? -2 : current; // ведущая точка при анимации ярче
 
   // множитель берём от самой канвы: у телефона он свой, у экранчика свой
   const k = ctx === ctxMain ? cvScale : ctx.canvas.width / W;
+
+  // Дыхание «сегодняшней» точки: весь кадр под ней не изменился, поэтому
+  // возвращаем из запаса квадратик и рисуем заново одну точку.
+  if (pulse > 0 && fill === null && reveal >= 1 && !homeOn && !placing
+      && ctx === ctxMain && pulseSpot && pulseSpot.k === k) {
+    const p = pulseSpot;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(pulseBuf, 0, 0, p.rw, p.rh, p.rx, p.ry, p.rw, p.rh);
+    ctx.setTransform(k, 0, 0, k, 0, 0);
+    drawDot(ctx, p.x, p.y, p.d, state.color, 'ring', pulse, false, p.i);
+    for (const n of p.after) drawDot(ctx, n[0], n[1], p.d, state.color, 'empty', 0, false, n[2]);
+    copyToMini();
+    return;
+  }
+
+  // Кадр анимации закраски: сетку берём готовой из двух слоёв — закрашенные
+  // точки лежат подряд, поэтому это два прямоугольника. Дорисовываем только
+  // «сегодняшнее» кольцо и надписи.
+  if (animOn && layerDone === null && (reveal < 1 || fill !== null)
+      && ctx === ctxMain && !placing && !homeOn && animGeom) {
+    const a = animGeom;
+    const pad = a.gap * 0.5;
+    const blit = (ux, uy, uw, uh) => {
+      const sx = Math.max(0, Math.floor(ux * k)), sy = Math.max(0, Math.floor(uy * k));
+      const sw = Math.min(cv.width - sx, Math.ceil(uw * k));
+      const sh = Math.min(cv.height - sy, Math.ceil(uh * k));
+      if (sw > 0 && sh > 0) ctx.drawImage(animFull, sx, sy, sw, sh, sx, sy, sw, sh);
+    };
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(animEmpty, 0, 0);
+    if (done > 0) {
+      const rows = Math.floor(done / a.cols), rem = done % a.cols;
+      const step = a.dot + a.gap;
+      if (rows > 0) blit(a.x0 - pad, a.y0 - pad, a.gw + 2 * pad, rows * step - a.gap + 2 * pad);
+      if (rem > 0) blit(a.x0 - pad, a.y0 + rows * step - pad, rem * step - a.gap + 2 * pad, a.dot + 2 * pad);
+    }
+    ctx.setTransform(k, 0, 0, k, 0, 0);
+    if (current !== null) {
+      const rx = a.x0 + (current % a.cols) * (a.dot + a.gap);
+      const ry = a.y0 + Math.floor(current / a.cols) * (a.dot + a.gap);
+      // под кольцом должен быть чистый фон, а в слое там пустая точка
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(rx - pad, ry - pad, a.dot + 2 * pad, a.dot + 2 * pad);
+      ctx.clip();
+      paintBG(ctx);
+      ctx.restore();
+      drawDot(ctx, rx, ry, a.dot, state.color, 'ring', pulse, current === lead, current);
+    }
+    drawWallText(a, text, total, statDone);
+    drawStats(statDone, total);
+    copyToMini();
+    return;
+  }
+
+  // сюда дошли — значит кадр рисуется целиком, и слои больше не в ходу
+  animOn = false;
   ctx.setTransform(k, 0, 0, k, 0, 0);
   paintBG(ctx);
 
@@ -876,6 +963,7 @@ function draw(reveal = 1, pulse = 0, fill = null) {
   // свечение — ореол под закрашенными точками; на крошечных точках «Жизни»
   // его не видно, а превью бы на нём захлебнулось (так же в render.py)
   const glowOn = state.glow && dot >= 14;
+  if (ctx === ctxMain) pulseSpot = null;
   for (let i = 0; i < total; i++) {
     const x = x0 + (i % cols) * (dot + gap), y = y0 + Math.floor(i / cols) * (dot + gap);
     const dd = dot;
@@ -884,40 +972,113 @@ function draw(reveal = 1, pulse = 0, fill = null) {
       if (glowOn) VitaScenes.glow(ctx, dx, dy, dd, state.color);
       drawDot(ctx, dx, dy, dd, state.color, 'filled', 0, false, i);
     } else if (current !== null && i === current) {
+      // перед дышащей точкой запоминаем квадратик под ней: дальше каждый вдох
+      // стоит один маленький drawImage вместо целого кадра
+      if (ctx === ctxMain && !placing && pulse === 0 && fill === null && reveal >= 1) {
+        keepPulseSpot(x, y, dot, i, k, g, total);
+      }
       drawDot(ctx, x, y, dot, state.color, 'ring', pulse, i === lead, i);
     } else {
       drawDot(ctx, x, y, dot, state.color, 'empty', 0, false, i);
     }
   }
 
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  if (state.title.trim()) {
-    ctx.fillStyle = state.textColor || state.color;
-    drawTitle(state.title.trim(), g.title.y, g.title.x, g.title.px);
-  }
-  if (state.brand) drawWatermark(g.vita.x, g.vita.y, text, g.vita.px);
-  if (state.footer) {
-    ctx.fillStyle = text;
-    ctx.font = wallFont(g.foot.px, 400);
-    ctx.fillText(footerText(total, statDone), g.foot.x, g.foot.y);
-  }
+  if (layerDone === null) drawWallText(g, text, total, statDone);
 
   if (homeOn) paintHome(ctx);
 
   // хвост — только на большом телефоне: экранчик сюда заходит вторым кругом
   if (ctx !== ctxMain) return;
 
-  const fmt = n => n.toLocaleString('ru-RU');
-  const [l1, l2] = STAT_LABELS[state.mode];
-  $('stat1').textContent = fmt(statDone);
-  $('stat1l').textContent = l1;
-  $('stat2').textContent = fmt(total - statDone);
-  $('stat2l').textContent = l2;
+  drawStats(statDone, total);
 
   if (pulse === 0 && reveal >= 1 && fill === null) drawMini();
   else copyToMini();
   if (placing) drawPlaceHints();
+}
+
+// --- слои для анимации закраски -------------------------------------------
+// Соседние кадры анимации отличаются только числом закрашенных точек. Поэтому
+// сетку рисуем дважды — пустую и закрашенную целиком, — а каждый кадр собираем
+// из них двумя прямоугольниками. В «Жизни» со стеклом кадр падает с 36 мс до
+// сотых: там 4680 точек, и каждая стеклянная стоит четырёх градиентов.
+const animEmpty = document.createElement('canvas');
+const animFull = document.createElement('canvas');
+let animKey = '', animGeom = null, animOn = false;
+let layerDone = null;   // рисуем слой: столько точек закрашено, кольца и текста нет
+
+function animStateKey() {
+  return [state.mode, state.color, state.bg, state.bgColor, state.shape, state.glass,
+    state.glow, state.birth, state.start, state.end, JSON.stringify(state.place),
+    customBgImg ? customBgImg.width + 'x' + customBgImg.height : '', cv.width].join('|');
+}
+
+// Слои нужны не всегда: мелкая сетка рисуется мгновенно и без них, а ореол
+// «Светятся» вылезает за клетку — прямоугольником его не вырезать.
+function animLayersReady() {
+  const total = counts().total;
+  const g = placeGeom(total);
+  if (total < 600 || (state.glow && g.dot >= 14) || cv.width > 1600) return false;
+  const key = animStateKey();
+  if (animKey === key && animEmpty.width === cv.width) { animGeom = g; return true; }
+  for (const c of [animEmpty, animFull]) {
+    if (c.width !== cv.width) { c.width = cv.width; c.height = cv.height; }
+  }
+  const was = ctx;
+  try {
+    layerDone = 0;
+    ctx = animEmpty.getContext('2d');
+    draw();
+    layerDone = total;
+    ctx = animFull.getContext('2d');
+    draw();
+  } finally {
+    layerDone = null;
+    ctx = was;
+  }
+  animKey = key;
+  animGeom = g;
+  return true;
+}
+
+// Запас под дышащей точкой: кадр целиком стоит до 38 мс, а меняется в нём одна
+// точка. Храним не весь кадр (на зуме это 64 МБ), а квадратик вокруг неё —
+// с запасом на свечение и тень кольца.
+const pulseBuf = document.createElement('canvas');
+let pulseSpot = null;
+
+function keepPulseSpot(x, y, d, i, k, g, total) {
+  const m = d;                        // запас под свечение и тень кольца
+  const cw = ctx.canvas.width, ch = ctx.canvas.height;
+  const bx = x - m, by = y - m, bs = d + 2 * m;
+  // Надпись задевает квадратик (так бывает, если её двигали в «Расположении») —
+  // тогда дыхание рисуем целиком: второй проход по тексту сгустил бы его края.
+  const hits = (cx, cy, hw, hh) =>
+    cx + hw > bx && cx - hw < bx + bs && cy + hh > by && cy - hh < by + bs;
+  if ((state.title.trim() && hits(g.title.x, g.title.y, W * 0.45, g.title.px * 2.4))
+      || (state.brand && hits(g.vita.x, g.vita.y, g.vita.px * 4, g.vita.px * 1.6))
+      || (state.footer && hits(g.foot.x, g.foot.y, W * 0.3, g.foot.px * 1.6))) {
+    pulseSpot = null;
+    return;
+  }
+  const rx = Math.max(0, Math.floor(bx * k)), ry = Math.max(0, Math.floor(by * k));
+  const rw = Math.min(cw - rx, Math.ceil(bs * k));
+  const rh = Math.min(ch - ry, Math.ceil(bs * k));
+  if (rw <= 0 || rh <= 0) { pulseSpot = null; return; }
+  if (pulseBuf.width !== rw || pulseBuf.height !== rh) { pulseBuf.width = rw; pulseBuf.height = rh; }
+  const b = pulseBuf.getContext('2d');
+  b.clearRect(0, 0, rw, rh);
+  b.drawImage(ctx.canvas, rx, ry, rw, rh, 0, 0, rw, rh);
+  // Соседи, которые рисуются позже неё и задевают квадратик: у ромашки и
+  // растра точка вылезает за свою клетку, и порядок отрисовки виден глазом.
+  // Повторяем его точь-в-точь, иначе превью разойдётся с сервером.
+  const after = [];
+  const step = g.dot + g.gap;
+  for (let j = i + 1; j < total && j <= i + 2 * g.cols + 2; j++) {
+    const nx = g.x0 + (j % g.cols) * step, ny = g.y0 + Math.floor(j / g.cols) * step;
+    if (nx + g.dot > bx && nx < bx + bs && ny + g.dot > by && ny < by + bs) after.push([nx, ny, j]);
+  }
+  pulseSpot = { rx, ry, rw, rh, x, y, d, i, k, after };
 }
 
 // точки закрашиваются по одной при загрузке и смене режима — «оживает» на глазах
@@ -928,9 +1089,11 @@ function animateReveal(dur = 1150) {
   cancelAnimationFrame(pulseRAF);
   cancelAnimationFrame(fillRAF);
   if (reduceMotion || homeOn || (!DEMO && counts().done <= 0)) { draw(); startPulse(); return; }
+  const fast = animLayersReady();
   const t0 = performance.now();
   const step = now => {
     const p = Math.min(1, (now - t0) / dur);
+    animOn = fast && p < 1;
     draw(1 - Math.pow(1 - p, 3)); // easeOutCubic
     if (p < 1) revealRAF = requestAnimationFrame(step);
     else startPulse();
@@ -948,9 +1111,10 @@ function startPulse() {
   const loop = now => {
     pulseRAF = requestAnimationFrame(loop);
     if (document.hidden || now - pulseLast < 66) return; // ~15 кадров/с хватает
-    const r = phoneEl.getBoundingClientRect();
-    // телефон не виден и мини-превью скрыто — не жжём батарею
-    if (!$('miniWrap').classList.contains('show') && (r.bottom < 0 || r.top > innerHeight)) return;
+    // телефон не виден и мини-превью скрыто — не жжём батарею. Видимость
+    // считает прокрутка (updateMini), а не сам кадр: getBoundingClientRect
+    // заставляет браузер пересчитать раскладку, и делать это по кадрам вредно
+    if (!phoneOnScreen && !miniShown) return;
     pulseLast = now;
     draw(1, 0.5 + 0.5 * Math.sin(now / 620));
   };
@@ -970,9 +1134,11 @@ function animateFill(limit, dur = FILL_MS) {
   const N = Math.min(done, Math.max(1, limit));
   if (done <= 0 || homeOn) { draw(); startPulse(); return; }
   if (reduceMotion || N <= 1) { draw(1, 0, N); return; }
+  const fast = animLayersReady();
   const t0 = performance.now();
   const step = now => {
     const k = Math.min(1, (now - t0) / dur);
+    animOn = fast;
     draw(1, 0, 1 + (1 - Math.pow(1 - k, 3)) * (N - 1)); // easeOutCubic, как reveal
     if (k < 1) fillRAF = requestAnimationFrame(step);
   };
@@ -1047,11 +1213,13 @@ addEventListener('orientationchange', () => setTimeout(() => miniPlace(false), 2
 // чем наполовину. Считаем на скролле — это работает в любом браузере, в отличие
 // от наблюдателя пересечений, который в некоторых обёртках молчит.
 let miniTick = 0, miniTipTimer = 0, miniTipSeen = false;
+let phoneOnScreen = true;
 function updateMini() {
   const r = phoneEl.getBoundingClientRect();
   const vh = viewport().h;
   const visible = Math.max(0, Math.min(r.bottom, vh) - Math.max(r.top, 0));
   const show = r.height > 0 && visible / r.height < 0.5;
+  phoneOnScreen = visible > 0;
   // свет за телефоном горит, пока сам телефон в кадре: на прокрутке он не нужен
   document.body.classList.toggle('dim', show);
   if (show === miniWrap.classList.contains('show')) return;
@@ -2811,25 +2979,42 @@ function chromeSave() {
 
 // Айфон красит свои значки по обоям: на светлых — тёмным. Фоном бывает и фото,
 // и сцена, и градиент, поэтому смотрим на готовый кадр, а не на имя фона.
-let inkCache = { key: '', ink: '' };
+// Цвет значков помним по каждому фону, а не только по последнему: человек
+// щёлкает фоны туда-сюда, и каждый возврат стоил бы нового чтения пикселей.
+const inkCache = new Map();
+const inkPick = document.createElement('canvas');
 function chromeInk(c = ctx) {
   const key = [state.bg, state.bgColor,
     customBgImg ? customBgImg.width + 'x' + customBgImg.height : '',
     // на «Домой» фон другой: цвет, фото или размытые обои — ключ это помнит
     homeOn ? [state.home.mode, state.home.color, state.home.blur,
       customHomeImg ? 'photo' : ''].join(',') : ''].join('|');
-  if (inkCache.key === key && inkCache.ink) return inkCache.ink;
+  const known = inkCache.get(key);
+  if (known) return known;
   const k = c.canvas.width / W;
   let sum = 0, n = 0;
-  for (let i = 1; i <= 5; i++) for (const y of [120, 520, 900, 2070, 2480]) {
-    try {
-      const d = c.getImageData(Math.round(W * i / 6 * k), Math.round(y * k), 1, 1).data;
-      sum += (0.2126 * d[0] + 0.7152 * d[1] + 0.0722 * d[2]) / 255;
+  try {
+    // Двадцать пять точек забираем одним чтением: каждый getImageData тормозит
+    // кадр на своём месте (видеопамять отдаёт пиксели не сразу), и двадцать
+    // пять таких чтений стоили полсотни миллисекунд. Пиксели те же самые —
+    // просто сперва собираем их в крошечную канву.
+    if (inkPick.width !== 5) { inkPick.width = 5; inkPick.height = 5; }
+    const ip = inkPick.getContext('2d', { willReadFrequently: true });
+    for (let i = 1; i <= 5; i++) {
+      const ys = [120, 520, 900, 2070, 2480];
+      for (let j = 0; j < 5; j++) {
+        ip.drawImage(c.canvas, Math.round(W * i / 6 * k), Math.round(ys[j] * k), 1, 1, i - 1, j, 1, 1);
+      }
+    }
+    const px = ip.getImageData(0, 0, 5, 5).data;
+    for (let i = 0; i < px.length; i += 4) {
+      sum += (0.2126 * px[i] + 0.7152 * px[i + 1] + 0.0722 * px[i + 2]) / 255;
       n++;
-    } catch {}
-  }
-  inkCache = { key, ink: n && sum / n > 0.62 ? '17, 17, 19' : '255, 255, 255' };
-  return inkCache.ink;
+    }
+  } catch {}
+  const ink = n && sum / n > 0.62 ? '17, 17, 19' : '255, 255, 255';
+  if (n) inkCache.set(key, ink);
+  return ink;
 }
 
 // Часы: ползунок тянет их вверх ровно так, как это делает айфон — цифры
@@ -3270,6 +3455,9 @@ function chromeBtnSync() {
 }
 
 function placeOpen(on) {
+  // в «Расположении» двигают точки и надписи — за размытием «Домой» их не
+  // видно, поэтому телефон возвращаем на экран блокировки
+  if (on && homeOn) setHomeOn(false);
   placing = on;
   document.body.classList.toggle('placing', on);
   $('placeBar').hidden = !on;
