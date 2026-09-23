@@ -20,7 +20,7 @@
   try { if (!localStorage.getItem('vitaSignedIn')) document.documentElement.classList.add('gate'); } catch (e) {}
 </script>
 <script src="/static/theme.js?v=8"></script>
-<link rel="stylesheet" href="/static/style.css?v=117">
+<link rel="stylesheet" href="/static/style.css?v=118">
 <style>
   .home-hero { animation: fadeUp .7s cubic-bezier(.22,1,.36,1) both; }
   .phone { animation: phoneReveal .85s cubic-bezier(.22,1,.36,1) both, phoneFloat 7s ease-in-out 1.1s infinite; }
@@ -224,32 +224,6 @@
       </div>
     </div>
 
-    <div class="field home-field">
-      <span class="home-head">Экран «Домой»
-        <button type="button" class="home-peek" id="homePeek" aria-pressed="false"
-          aria-label="Показать экран «Домой» на телефоне">смотреть</button>
-      </span>
-      <div class="seg" id="home">
-        <button data-v="blur" class="on">Размытие</button>
-        <button data-v="color">Цвет</button>
-        <button data-v="photo">Фото</button>
-      </div>
-      <div class="place-size home-size" id="homeBlurRow">
-        <span>Сила</span>
-        <input type="range" id="homeBlur" min="0" max="100" step="1" value="30"
-          aria-label="Сила размытия">
-        <b id="homeBlurVal">30 %</b>
-      </div>
-      <p class="hint home-hint" id="homeHint">0 % — чётко, как на блокировке</p>
-      <label class="color-own" id="homeColorRow" hidden>
-        <input type="color" id="homeColorPick" value="#101014">
-        <span>Свой цвет</span>
-      </label>
-      <button class="pick-own" id="homeOwn" type="button" hidden>Своё фото</button>
-      <input type="file" id="homeFile" accept="image/*" hidden>
-      <p class="pick-tip" id="homeTip" role="status" aria-live="polite" hidden></p>
-    </div>
-
     <div class="field">Форма точек
       <div class="seg roll shapes" id="shape">
         <button data-v="circle" class="on" aria-label="Круг" title="Круг">Круг</button>
@@ -283,6 +257,32 @@
         <button data-v="1" class="on">Показать</button>
         <button data-v="0">Скрыть</button>
       </div>
+    </div>
+
+    <div class="field home-field">
+      <span class="home-head">Экран «Домой»
+        <button type="button" class="home-peek" id="homePeek" aria-pressed="false"
+          aria-label="Показать экран «Домой» на телефоне">смотреть</button>
+      </span>
+      <div class="seg" id="home">
+        <button data-v="blur" class="on">Размытие</button>
+        <button data-v="color">Цвет</button>
+        <button data-v="photo">Фото</button>
+      </div>
+      <div class="place-size home-size" id="homeBlurRow">
+        <span>Сила</span>
+        <input type="range" id="homeBlur" min="0" max="100" step="1" value="30"
+          aria-label="Сила размытия">
+        <b id="homeBlurVal">30 %</b>
+      </div>
+      <p class="hint home-hint" id="homeHint">0 % — чётко, как на блокировке</p>
+      <label class="color-own" id="homeColorRow" hidden>
+        <input type="color" id="homeColorPick" value="#101014">
+        <span>Свой цвет</span>
+      </label>
+      <button class="pick-own" id="homeOwn" type="button" hidden>Своё фото</button>
+      <input type="file" id="homeFile" accept="image/*" hidden>
+      <p class="pick-tip" id="homeTip" role="status" aria-live="polite" hidden></p>
     </div>
 
     <div class="field">Логотип vita на обоях
@@ -437,6 +437,6 @@
 <script src="/static/vita-id.js?v=9"></script>
 <script src="/static/tg-login.js?v=4"></script>
 <script src="/static/scenes.js?v=3"></script>
-<script src="/static/app.js?v=78"></script>
+<script src="/static/app.js?v=79"></script>
 </body>
 </html>
