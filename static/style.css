@@ -3714,3 +3714,121 @@ body.placing #cv.dragging { cursor: grabbing; }
 body.dim .phone,
 body.dim .phone-glow { animation-play-state: paused; }
 body.dim .phone-glow { opacity: 0; }
+
+/* ——— Тег, коронка, prime в буквах, список выданных ————————————————————
+   Кнопки «Изменить тег» и «Активировать prime» — тише главной: белая заливка
+   на них перетягивала взгляд с тега, а нажимают их раз в жизни. */
+.tag-edit {
+  width: auto;
+  justify-self: start;
+  margin: 0;
+  padding: 11px 20px;
+  border-radius: 999px;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg-lift);
+  box-shadow: var(--glass-inset);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  transition: background .2s ease, scale .18s cubic-bezier(.22, 1, .36, 1);
+}
+.tag-edit:active { scale: .97; }
+.tag-edit:disabled { opacity: .5; cursor: default; }
+.tag-edit:focus-visible { outline: 2px solid var(--glass-edge); outline-offset: 2px; }
+.profile-editor-card > .tag-edit { display: block; }
+.profile-fields .tag-edit { margin-top: 2px; }
+.admin-card .tag-edit { margin-top: 4px; }
+
+/* коронка у тега — знак prime; цвет тот же, что у тега */
+.crown {
+  display: inline-block;
+  width: .92em;
+  height: .92em;
+  margin-left: .26em;
+  vertical-align: -.1em;
+  fill: currentColor;
+}
+
+/* prime открыт: слово залито той же картинкой, что была в кнопке покупки */
+.prime-card.on .prime-word {
+  color: transparent;
+  background: url(/static/img/prime-fill-dark.webp) center / cover no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  /* заливка красит только коробку слова, а буквы выше и ниже строки (.86):
+     даём ей запас, иначе у «p» пропадает хвост */
+  padding: .1em .04em .26em 0;
+  margin: -.1em 0 calc(6px - .26em);
+}
+[data-theme="light"] .prime-card.on .prime-word {
+  background-image: url(/static/img/prime-fill-light.webp);
+}
+
+/* админка: кому prime выдан руками */
+.admin-list { display: grid; gap: 8px; margin-top: 16px; }
+.admin-list ul { display: grid; margin: 0; padding: 0; list-style: none; }
+.admin-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 2px;
+  border-top: 1px solid var(--glass-border);
+  font-size: 15px;
+}
+.admin-list li a { color: var(--text); font-weight: 600; text-decoration: none; }
+.admin-list li span { color: var(--text-muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.wall-set.busy { opacity: .7; pointer-events: none; }
+
+/* Тег на двери: «@» стоит в поле, как у пароля глаз; под полем — живая
+   подсказка: правило, «свободен» или «занят» */
+.tag-wrap { position: relative; display: block; }
+.tag-wrap i {
+  position: absolute;
+  top: 50%;
+  left: 16px;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  font-style: normal;
+  font-size: 16px;
+  letter-spacing: normal;
+  text-transform: none;
+  pointer-events: none;
+}
+.tag-wrap input { width: 100%; padding-left: 34px; }
+.tag-hint {
+  margin-top: -2px;
+  color: var(--text-muted);
+  font-size: 12px;
+  letter-spacing: normal;
+  text-transform: none;
+}
+.tag-hint.ok { color: var(--accent-soft); }
+.tag-hint.err { color: #ff6b81; }
+.login-lead { margin: 0; color: var(--text-2); font-size: 15px; line-height: 1.45; text-align: center; }
+
+/* Установка: поверх картинки — экран блокировки (дата, часы, фонарик, камера) */
+.phone-still .lock-ui {
+  position: absolute;
+  inset: 9px;
+  width: calc(100% - 18px);
+  height: calc(100% - 18px);
+  border-radius: 45px;
+  pointer-events: none;
+}
+.setup .access:empty { display: none; }
+.auto-path { line-height: 1.6; }
+.prof-tag > i { display: inline-flex; align-items: center; color: var(--text); font-size: 15px; }
+.prof-tag > i[hidden] { display: none; }
+.prof-tag > i .crown { margin-left: 0; }
+/* «Сохранить» в окне профиля — тише главной кнопки: в окне и так всё про тебя */
+.primary.soft:not(.done) {
+  background: var(--glass-bg-lift);
+  color: var(--text);
+  box-shadow: var(--glass-inset);
+  border: 1px solid var(--glass-border);
+}
+.tag-once { display: flex; align-items: center; gap: 12px; }
+.tag-once[hidden] { display: none; }
+.tag-once .hint { margin: 0; font-size: 13px; }
+.profile-editor-card .profile-status:empty { min-height: 0; margin: 0; }
+.admin-card .prof-status:empty { display: none; }

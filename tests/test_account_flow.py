@@ -243,7 +243,7 @@ with tempfile.TemporaryDirectory(prefix="vita-account-") as data_dir:
     assert library["avatar"] == with_avatar["avatar"]
 
     public = main.public_profile("KAMIL_VITA")
-    assert set(public) == {"handle", "name", "bio", "avatar", "tags", "developer"}
+    assert set(public) == {"handle", "name", "bio", "avatar", "tags", "developer", "prime"}
     assert public["handle"] == "kamil_vita"
     assert public["avatar"] == with_avatar["avatar"]
     assert public["developer"] is False

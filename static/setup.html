@@ -8,7 +8,7 @@
   <link rel="apple-touch-icon" href="/static/img/apple-touch.png">
 <title>Установка — Vita</title>
 <script src="/static/theme.js?v=8"></script>
-<link rel="stylesheet" href="/static/style.css?v=118">
+<link rel="stylesheet" href="/static/style.css?v=119">
 </head>
 <body>
 <header class="head-shrink">
@@ -25,12 +25,12 @@
 </header>
 
 <main class="setup">
-  <div class="phone phone-still"><span class="phone-glow" aria-hidden="true"></span><img class="wp-preview" src="{{URL}}" alt="Твои обои"></div>
-  <h1>Твои обои готовы</h1>
+  <div class="phone phone-still"><span class="phone-glow" aria-hidden="true"></span><img class="wp-preview" src="{{URL}}" alt="Твои обои">
+    <canvas class="lock-ui" id="lockUI" aria-hidden="true"></canvas>
+  </div>
+  <h1>Твои живые обои готовы</h1>
   <p class="access">{{ACCESS}}</p>
-  <p class="sub">Картинка живёт по своему адресу и меняется каждую ночь:
-    закрашивается ещё одна точка. Ярлык Vita забирает свежую картинку и ставит
-    её на экран блокировки.</p>
+  <p class="sub">Точки на картинке закрашиваются каждую ночь.</p>
 
   {{BUY}}
 
@@ -40,15 +40,12 @@
     <div class="step-n">1</div>
     <div class="step-body">
       <h2>Добавь ярлык Vita</h2>
-      {{SHORTCUT_BTN}}
-      <p>Ярлык спросит адрес твоих обоев. Вот он:</p>
+      <p>Скопируй адрес своих обоев — ярлык спросит его при добавлении:</p>
       <div class="linkbox">
         <code id="myUrl">{{WALL_URL}}</code>
         <button id="copy">Скопировать</button>
       </div>
-      <p class="hint" id="wallNote" hidden>Адрес постоянный — вписывается один раз.
-        Соберёшь новый дизайн и нажмёшь «Поставить» — ярлык принесёт его сам,
-        перенастраивать ничего не нужно.</p>
+      {{SHORTCUT_BTN}}
     </div>
   </div>
 
@@ -57,9 +54,6 @@
     <div class="step-body">
       <h2>Поставь обои</h2>
       <a class="btn secondary" id="runBtn" href="shortcuts://run-shortcut?name=Vita">Поставить обои сейчас</a>
-      <p class="hint" id="activeNote" hidden>Этот дизайн сейчас на твоём адресе — ночью придёт он.</p>
-      <p class="hint">Айфон покажет экран обоев: подвинь картинку пальцем,
-        размер меняй щипком — и нажми «Готово».</p>
     </div>
   </div>
 
@@ -67,37 +61,11 @@
     <div class="step-n">3</div>
     <div class="step-body">
       <h2>Чтобы точки закрашивались сами</h2>
-      <p>Раз в сутки ярлык нужно запускать. В «Командах» для этого есть
-        расписание — Apple включает его только руками.</p>
-      <details class="more">
-        <summary>Как настроить расписание</summary>
-        <div class="more-body">
-          <p>Сделай копию ярлыка: в <b>Командах</b> задержи палец на <b>Vita</b> →
-            <b>«Дублировать»</b>. В копии открой действие <b>«Установить фото как
-            обои»</b> → <b>«Показать ещё»</b> → выключи <b>«Показать окно
-            просмотра»</b>: иначе ночью ярлык откроет окно и остановится на нём.</p>
-          <p>Дальше <b>Команды</b> → вкладка <b>«Автоматизация»</b> → <b>+</b> →
-            <b>«Время суток»</b> → <b>00:05</b>, каждый день →
-            <b>«Выполнять сразу»</b> → выбери <b>копию</b>.</p>
-        </div>
-      </details>
+      <p class="auto-path"><b>Команды</b> → <b>Автоматизация</b> → <b>+</b> →
+        <b>Время суток</b> → <b>00:05</b>, ежедневно → <b>Выполнять сразу</b> →
+        ярлык <b>Vita</b>.</p>
     </div>
   </div>
-
-  <div class="tg-login" id="tgBox" hidden>
-    <p class="tg-note"><b>Сохрани доступ.</b> Войди через телеграм — и эти обои вернутся
-      на любом телефоне, даже если очистишь браузер или сменишь устройство.</p>
-    <div class="tg-widget"></div>
-    <p class="tg-status"></p>
-  </div>
-
-  <p class="hint fallback">Не дружишь с Ярлыками? Просто <a href="{{URL}}">открой картинку</a>,
-    сохрани в Фото и поставь как обои. Но обновлять придётся руками —
-    с ярлыком точки закрашиваются сами.</p>
-
-  <p class="hint fallback">Эффект «часы прячутся за объект» тут не появится — iOS включает его
-    только для фото с распознанным объектом (горы, человек) и только при ручной установке из Фото.
-    К обоям, которые ставит автоматика, Apple его не применяет.</p>
 </main>
 
 <div class="modal-back center" id="rvModal" hidden>
@@ -119,10 +87,9 @@
   </div>
 </div>
 
-<footer class="page-foot"><a href="/buy" style="color:inherit">Открыть навсегда</a> · <a href="/offer" style="color:inherit">Оферта</a> · <a href="/privacy" style="color:inherit">Конфиденциальность</a></footer>
+<footer class="page-foot">{{FOOT_BUY}}<a href="/offer" style="color:inherit">Оферта</a> · <a href="/privacy" style="color:inherit">Конфиденциальность</a></footer>
 
-<script src="/static/vita-id.js?v=9"></script>
-<script src="/static/tg-login.js?v=4"></script>
+<script src="/static/vita-id.js?v=10"></script>
 <script>
 const CODE = "{{CODE}}";
 const OWNED = "{{OWNED}}" === "1";
@@ -142,27 +109,103 @@ async function activate(keepalive = false) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ownerToken: VitaID.token(), tz })
     });
-    if (!response.ok) return;
-    document.getElementById('wallNote').hidden = false;
-    document.getElementById('activeNote').hidden = false;
   } catch {}
 }
 activate();
 // повтор на самой кнопке: страницу могли открыть давно и оставить в фоне
 document.getElementById('runBtn').addEventListener('click', () => { activate(true); });
 
-// вход показываем только тем, кто ещё не входил — вошедшим он ни к чему
-(async () => {
+// Ярлык живёт на телефоне: раз по этой странице его добавили или запустили,
+// «Поставить» в «Моих обоях» дальше запускает его сразу, без этой страницы.
+const markShortcut = () => { try { localStorage.setItem('vitaShortcut', '1'); } catch {} };
+document.getElementById('runBtn').addEventListener('click', markShortcut);
+
+// Экран блокировки поверх картинки: дата, часы, фонарик и камера — чтобы
+// человек сразу видел, как обои уживутся с тем, что айфон рисует сам. Мерки
+// те же, что у слоя айфона в конструкторе (drawChrome в app.js): меняешь
+// там — поменяй и тут. Растяжку часов берём ту, что выставил человек.
+const LOCK = { W: 1179, H: 2556, CLOCK_TOP: 352, CLOCK_PX: 300, CLOCK_WIDE: 0.22, CLOCK_TALL: 2.85 };
+const LOCK_FACE = '-apple-system, "SF Pro Display", system-ui, sans-serif';
+const TORCH = new Path2D('M8.6 3h6.8v3.4l-1.6 2.4V20a1 1 0 0 1-1 1h-1.6a1 1 0 0 1-1-1V8.8L8.6 6.4z');
+const CAMERA = new Path2D('M4 8.2a1.6 1.6 0 0 1 1.6-1.6h2.2L9.3 4.8h5.4l1.5 1.8h2.2A1.6 1.6 0 0 1 20 8.2v9.2a1.6 1.6 0 0 1-1.6 1.6H5.6A1.6 1.6 0 0 1 4 17.4zM15.4 12.8a3.4 3.4 0 1 1-6.8 0a3.4 3.4 0 1 1 6.8 0z');
+
+function lockInk(img) {
+  // айфон красит значки по обоям: на светлых — тёмным
   try {
-    const state = await VitaID.access();
-    if (state.tgBot && !state.telegram) {
-      VitaTG.mount(document.getElementById('tgBox'), state, () => {
-        document.getElementById('tgBox').innerHTML =
-          '<p class="tg-note">Готово — доступ привязан к твоему телеграму.</p>';
-      });
-    }
+    const c = document.createElement('canvas');
+    c.width = 6; c.height = 13;
+    const x = c.getContext('2d', { willReadFrequently: true });
+    x.drawImage(img, 0, 0, 6, 13);
+    const px = x.getImageData(0, 0, 6, 13).data;
+    let sum = 0;
+    for (let i = 0; i < px.length; i += 4) sum += (0.2126 * px[i] + 0.7152 * px[i + 1] + 0.0722 * px[i + 2]) / 255;
+    return sum / (px.length / 4) > 0.62 ? '17, 17, 19' : '255, 255, 255';
+  } catch { return '255, 255, 255'; }
+}
+
+function paintLock() {
+  const img = document.querySelector('.wp-preview');
+  const cv = document.getElementById('lockUI');
+  let off = false, tall = 1;
+  try {
+    off = localStorage.getItem('vitaChrome') === '0';
+    tall = Math.min(1 + LOCK.CLOCK_TALL, Math.max(1, parseFloat(localStorage.getItem('vitaClockH')) || 1));
   } catch {}
+  cv.hidden = off;
+  if (off || !img.complete || !img.clientWidth) return;
+  const k = Math.min(1, img.clientWidth * (window.devicePixelRatio || 1) / LOCK.W);
+  cv.width = Math.round(LOCK.W * k);
+  cv.height = Math.round(LOCK.H * k);
+  const c = cv.getContext('2d');
+  c.setTransform(k, 0, 0, k, 0, 0);
+  const rgb = lockInk(img), ink = a => `rgba(${rgb}, ${a})`;
+  const font = (px, w = 500) => `${w} ${Math.round(px)}px ${LOCK_FACE}`;
+  const now = new Date();
+
+  // дата одной строкой
+  const day = now.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
+  c.font = font(46);
+  c.textAlign = 'center';
+  c.textBaseline = 'middle';
+  c.fillStyle = ink(0.88);
+  c.fillText(day.charAt(0).toUpperCase() + day.slice(1), LOCK.W / 2, 282);
+
+  // часы: тянутся вниз, верх стоит на месте — как clockGeom в конструкторе
+  const time = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  const t = (tall - 1) / LOCK.CLOCK_TALL;
+  const px = LOCK.CLOCK_PX * (1 + LOCK.CLOCK_WIDE * t), w8 = Math.round(500 + 260 * t);
+  c.textBaseline = 'alphabetic';
+  c.font = font(LOCK.CLOCK_PX, 500);
+  const asc0 = c.measureText('00:00').actualBoundingBoxAscent || LOCK.CLOCK_PX * 0.72;
+  c.font = font(px, w8);
+  const asc = c.measureText('00:00').actualBoundingBoxAscent || px * 0.72;
+  c.save();
+  c.translate(LOCK.W / 2, LOCK.CLOCK_TOP);
+  c.scale(1, asc0 * tall / asc);
+  c.fillStyle = ink(0.62);
+  c.fillText(time, 0, asc);
+  c.restore();
+
+  // фонарик и камера в нижних углах, полоска «домой» между ними
+  for (const [cx, glyph, rule] of [[215, TORCH, 'nonzero'], [964, CAMERA, 'evenodd']]) {
+    c.beginPath(); c.arc(cx, 2365, 75, 0, 7);
+    c.fillStyle = ink(0.16); c.fill();
+    c.save();
+    c.translate(cx - 33, 2365 - 33);
+    c.scale(2.75, 2.75);
+    c.fillStyle = ink(0.92);
+    c.fill(glyph, rule);
+    c.restore();
+  }
+  c.beginPath(); c.roundRect(LOCK.W / 2 - 201, 2517, 402, 15, 7.5);
+  c.fillStyle = ink(0.55); c.fill();
+}
+(function lockLoop() {
+  const img = document.querySelector('.wp-preview');
+  if (img.complete) paintLock(); else img.addEventListener('load', paintLock, { once: true });
+  setTimeout(lockLoop, 60000 - new Date().getSeconds() * 1000);   // часы идут
 })();
+addEventListener('resize', paintLock);
 
 document.getElementById('copy').addEventListener('click', async () => {
   const link = document.getElementById('myUrl');
@@ -204,6 +247,7 @@ function closeRv() { rvModal.hidden = true; }
 rvModal.addEventListener('click', e => { if (e.target === rvModal) closeRv(); });
 
 if (shortcutBtn) {
+  shortcutBtn.addEventListener('click', markShortcut);
   shortcutBtn.addEventListener('click', e => {
     if (!CAN_REVIEW || rvDone) return;   // неделю уже дарили или доступ бессрочный
     e.preventDefault();

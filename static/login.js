@@ -10,7 +10,7 @@ const $ = id => document.getElementById(id);
 // /login — вход. Сторож с главной приводит новых людей на /register: без
 // аккаунта входить некуда.
 let mode = location.pathname === '/login' ? 'login' : 'register';
-                                          // login | register | forgot | reset
+                                          // login | register | forgot | reset | tag
 
 // Возвращаемся туда, откуда человека сюда отправили. Берём только свой путь:
 // «//чужой.сайт» и абсолютные адреса игнорируем, иначе это открытый редирект.
@@ -27,11 +27,13 @@ function paint() {
 
   $('authTabs').hidden = !entry;
   $('stepEntry').hidden = !entry;
+  $('tagRow').hidden = !reg;
+  $('stepTag').hidden = mode !== 'tag';
   $('stepForgot').hidden = mode !== 'forgot';
   $('stepReset').hidden = mode !== 'reset';
   $('tgBox').hidden = !entry || !tgReady;
   $('authForgotLink').hidden = mode !== 'login';
-  $('authBack').hidden = entry;
+  $('authBack').hidden = entry || mode === 'tag';
 
   $('authTabs').querySelectorAll('button')
     .forEach(b => b.classList.toggle('on', b.dataset.v === mode));
@@ -41,6 +43,7 @@ function paint() {
 
   const label = mode === 'forgot' ? 'Отправить код'
     : mode === 'reset' ? 'Сменить пароль'
+    : mode === 'tag' ? 'Готово'
     : reg ? 'Создать аккаунт' : 'Войти';
   $('authGo').textContent = label;
   // Оферту принимают, когда входят или заводят аккаунт. На шагах смены пароля
@@ -57,6 +60,57 @@ function fail(message) {
   const box = $('authErr');
   box.textContent = message;
   box.hidden = false;
+}
+
+/* ---------- тег: выбирают при регистрации, один на человека ---------- */
+
+const TAG_RE = /^[a-z][a-z0-9_]{1,22}[a-z0-9]$/;
+const TAG_RULE = 'Тег: 3–24 знака, латиница, цифры и _, начинается с буквы';
+const cleanTag = v => String(v || '').trim().replace(/^@+/, '').toLowerCase();
+const tagOk = t => TAG_RE.test(t) && !t.includes('__');
+
+function watchTag(input, hint, idle) {
+  let timer = 0;
+  const say = (text, cls = '') => { hint.textContent = text; hint.className = 'tag-hint ' + cls; };
+  input.addEventListener('input', () => {
+    clearTimeout(timer);
+    const tag = cleanTag(input.value);
+    if (!tag) { say(idle); return; }
+    if (!tagOk(tag)) { say(TAG_RULE, 'err'); return; }
+    timer = setTimeout(async () => {
+      try {
+        const data = await (await fetch('/api/tag-free?tag=' + encodeURIComponent(tag))).json();
+        if (cleanTag(input.value) !== tag) return;
+        if (!data.ok) say(data.why, 'err');
+        else if (!data.free) say('@' + tag + ' уже занят — придумай другой', 'err');
+        else say('@' + tag + ' свободен', 'ok');
+      } catch {}
+    }, 320);
+  });
+}
+watchTag($('authTag'), $('tagHint'), 'латиница, цифры и _ — по нему тебя найдут');
+watchTag($('authTag2'), $('tagHint2'), 'латиница, цифры и _');
+
+function needTag(value) {
+  const tag = cleanTag(value);
+  if (!tag) throw new Error('Придумай тег — по нему тебя найдут в Vita');
+  if (!tagOk(tag)) throw new Error(TAG_RULE);
+  return tag;
+}
+
+// Вошёл, а тега у аккаунта ещё нет (телеграм, старый аккаунт) — дверь не
+// открываем, пока не выберет. Ник из телеграма подставляем, если подходит.
+function afterAuth(data) {
+  const profile = data && data.profile;
+  if (profile && profile.handleChosen === false) {
+    const tg = cleanTag(data.telegram);
+    if (tagOk(tg)) $('authTag2').value = tg;
+    mode = 'tag';
+    paint();
+    $('authTag2').focus();
+    return;
+  }
+  done();
 }
 
 /* ---------- четыре клетки кода ведут себя как одно поле ---------- */
@@ -131,9 +185,14 @@ $('authForm').addEventListener('submit', async e => {
 
   try {
     if (mode === 'register') {
-      await VitaID.register($('authEmail').value.trim(), $('authPass').value);
+      const tag = needTag($('authTag').value);
+      await VitaID.register($('authEmail').value.trim(), $('authPass').value, tag);
     } else if (mode === 'login') {
-      await VitaID.login($('authEmail').value.trim(), $('authPass').value);
+      afterAuth(await VitaID.login($('authEmail').value.trim(), $('authPass').value));
+      if (mode === 'tag') { btn.disabled = false; return; }
+      return;
+    } else if (mode === 'tag') {
+      await VitaID.updateProfile({ handle: needTag($('authTag2').value) });
     } else if (mode === 'forgot') {
       const email = $('authForgotEmail').value.trim();
       if (!email) throw new Error('Впиши почту, на которую регистрировался');
@@ -179,11 +238,15 @@ let tgReady = false;
   let access = null;
   try { access = await VitaID.access(); } catch { paint(); return; }
 
-  // Уже вошёл — держать его перед формой незачем
-  if (access.email || access.telegram) { done(); return; }
+  // Уже вошёл — держать его перед формой незачем, если тег уже выбран
+  if (access.email || access.telegram) {
+    try { afterAuth({ profile: await VitaID.ensure(), telegram: access.telegram }); }
+    catch { done(); }
+    return;
+  }
 
   if (access.tgBot && window.VitaTG) {
-    tgReady = VitaTG.mount($('tgBox'), access, done) !== false;
+    tgReady = VitaTG.mount($('tgBox'), access, afterAuth) !== false;
   }
   paint();
 })();

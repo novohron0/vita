@@ -681,6 +681,22 @@ def _normalize_handle(raw: str) -> str:
     return handle
 
 
+def _choose_handle(conn: sqlite3.Connection, code: str, handle: str) -> None:
+    """Первый выбор тега. В лимит замен он не идёт: сменить потом можно ещё раз."""
+    if handle in RESERVED_HANDLES:
+        raise HTTPException(409, "Этот тег зарезервирован")
+    if conn.execute(
+        "SELECT 1 FROM profiles WHERE handle = ? COLLATE NOCASE AND code != ?", (handle, code)
+    ).fetchone():
+        raise HTTPException(409, "Этот тег уже занят — придумай другой")
+    try:
+        conn.execute(
+            "UPDATE profiles SET handle = ?, handle_custom = 1 WHERE code = ?", (handle, code)
+        )
+    except sqlite3.IntegrityError as error:
+        raise HTTPException(409, "Этот тег уже занят — придумай другой") from error
+
+
 def _normalize_profile_name(raw: str) -> str:
     name = " ".join(raw.strip().split())
     if not (2 <= len(name) <= 40):
@@ -849,6 +865,7 @@ def _public_profile_payload(
         # данные копятся в profile_tags, наружу пока не отдаём.
         "tags": [],
         "developer": (public_handle or "").lower() == DEVELOPER_HANDLE,
+        "prime": _is_prime(conn, code),  # коронка у тега
     }
 
 
@@ -917,6 +934,8 @@ def _profile_payload(conn: sqlite3.Connection, profile_code: str) -> dict:
         "wallCode": _wall_code(conn, profile_code),
         "activeLink": _active_link(conn, profile_code) or "",
         "settings": settings,
+        "handleChosen": bool(row[7]),
+        "prime": _is_prime(conn, profile_code),
         "handleLocked": bool(row[7]) and (row[6] or 0) >= HANDLE_CHANGE_LIMIT,
         "handleLeft": (
             HANDLE_CHANGE_LIMIT if not row[7] else max(0, HANDLE_CHANGE_LIMIT - (row[6] or 0))
@@ -953,6 +972,7 @@ RATE_RULES = {
     "/api/feed-post": (15, 3600),
     "/api/review": (10, 3600),
     "/api/admin/prime": (60, 3600),
+    "/api/admin/primes": (120, 3600),
     "/api/focus-wait": (10, 3600),
     # вход и пароли: подбирать перебором должно быть скучно
     "/api/auth/register": (8, 900),
@@ -1391,6 +1411,16 @@ def _extend(conn: sqlite3.Connection, code: str, days: int, current: str | None)
 
 
 EMAIL_RE = re.compile(r"[^@\s]+@[^@\s.]+\.[a-zA-Z]{2,}")
+
+
+def _is_prime(conn: sqlite3.Connection, profile_code: str | None) -> bool:
+    """prime = доступ навсегда: куплен или выдан руками."""
+    if not profile_code:
+        return False
+    row = conn.execute(
+        "SELECT access_until FROM profile_access WHERE profile_code = ?", (profile_code,)
+    ).fetchone()
+    return row is not None and row[0] is None
 
 
 def _grant_forever(conn: sqlite3.Connection, profile_code: str) -> None:
@@ -1873,6 +1903,7 @@ class AuthIn(BaseModel):
     email: str = ""
     password: str = ""
     ownerToken: str = ""
+    handle: str = ""  # тег выбирают при регистрации; вход его не присылает
 
 
 class ResetIn(BaseModel):
@@ -1945,6 +1976,9 @@ def auth_register(data: AuthIn):
     """Почта и пароль закрепляют за человеком тот профиль, что уже есть в браузере."""
     email = _clean_email(data.email)
     password = _clean_password(data.password)
+    if not data.handle.strip().removeprefix("@"):
+        raise HTTPException(422, "Придумай тег — по нему тебя найдут в Vita")
+    handle = _normalize_handle(data.handle)
     with db() as conn:
         busy = conn.execute(
             "SELECT profile_code FROM profile_auth WHERE email = ?", (email,)
@@ -1952,6 +1986,7 @@ def auth_register(data: AuthIn):
         if busy:
             raise HTTPException(409, "На эту почту уже есть аккаунт — войди вместо регистрации")
         profile_code = _profile_for_token(conn, data.ownerToken, create=True)
+        _choose_handle(conn, profile_code, handle)
         already = conn.execute(
             "SELECT email FROM profile_auth WHERE profile_code = ?", (profile_code,)
         ).fetchone()
@@ -2301,6 +2336,28 @@ def admin_prime(body: AdminPrimeIn):
     return {"tag": handle, "wallpapers": walls, "paid": True}
 
 
+@app.post("/api/admin/primes")
+def admin_primes(body: AdminPrimeIn):
+    """Кому prime выдан руками: доступ навсегда, а оплаченного счёта нет."""
+    with db() as conn:
+        me = _profile_for_token(conn, body.ownerToken)
+        if not me:
+            raise HTTPException(401, "Нет доступа к Vita ID")
+        row = conn.execute("SELECT handle FROM profiles WHERE code = ?", (me,)).fetchone()
+        if row is None or (row[0] or "").lower() not in ADMIN_HANDLES:
+            raise HTTPException(403, "Нет доступа")
+        rows = conn.execute(
+            "SELECT p.handle, a.updated FROM profile_access a "
+            "JOIN profiles p ON p.code = a.profile_code "
+            "WHERE a.access_until IS NULL AND a.profile_code != ? "
+            "AND NOT EXISTS (SELECT 1 FROM orders o "
+            "  WHERE o.profile_code = a.profile_code AND o.status = 'paid') "
+            "ORDER BY a.updated DESC LIMIT 200",
+            (me,),
+        ).fetchall()
+    return {"items": [{"tag": handle, "at": (at or "")[:10]} for handle, at in rows]}
+
+
 # Робокасса пускает к оплате только активированный магазин. Пока его проверяют,
 # их страница встречает покупателя «Код ошибки 25: оплата счетов недоступна» —
 # человек нажал «Оплатить» и упёрся в чужую ошибку. Поэтому сами открываем ту же
@@ -2511,7 +2568,7 @@ def setup_page(code: str, request: Request):
     expired, until = _access_state(effective_until)
     buy = ""
     if until is None:
-        access = "Доступ навсегда — точки не остановятся."
+        access = ""  # prime: про сроки и оплату человеку говорить нечего
     elif expired:
         access = f"Точки замерли {until.strftime('%d.%m')} — пробные дни кончились."
         buy = (f'<a class="btn primary" href="/buy">Оживить обои — {billing.PRICE} ₽ навсегда</a>'
@@ -2540,6 +2597,8 @@ def setup_page(code: str, request: Request):
         .replace("{{BUY}}", buy)
         .replace("{{REVIEW}}", review)
         .replace("{{CAN_REVIEW}}", "1" if (until is not None and not review_at) else "")
+        .replace("{{FOOT_BUY}}", "" if until is None else
+                 '<a href="/buy" style="color:inherit">Открыть навсегда</a> · ')
         .replace("{{CODE}}", code),
         headers={"Cache-Control": "no-cache"},
     )

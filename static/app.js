@@ -147,6 +147,9 @@ function copyToMini() {
     c.drawImage(src, 0, 0, sw, sh, 0, 0, w, h);
     src = step; sw = w; sh = h;
   }
+  // drawMini рисует в экранчик в масштабе обоев и оставляет его на ctx2 —
+  // копию кладём в чистых пикселях, иначе она ложится крошечной в угол
+  ctx2.setTransform(1, 0, 0, 1, 0, 0);
   ctx2.imageSmoothingQuality = 'high';
   ctx2.clearRect(0, 0, cv2.width, cv2.height);
   ctx2.drawImage(src, 0, 0, sw, sh, 0, 0, cv2.width, cv2.height);
@@ -2367,9 +2370,8 @@ function paintTagNote(profile, extra) {
   note.className = 'tag-note';
   const left = profile.handleLeft ?? 1;
   input.disabled = !!profile.handleLocked;
-  if (profile.handleLocked) note.textContent = 'Тег закреплён навсегда';
-  else if (left >= 1) note.textContent = 'Тег выбирается один раз, потом его можно поменять один раз';
-  else note.textContent = 'Замены тега закончились';
+  if (profile.handleLocked || left < 1) note.textContent = 'Тег закреплён навсегда';
+  else note.textContent = 'Изменить тег можно один раз';
 }
 
 // Занятый тег показываем прямо под полем, пока человек печатает, —
@@ -2407,6 +2409,7 @@ function paintPrime(access) {
   const row = $('primeRow'), state = $('primeState'), buy = $('primeBuy');
   const paid = !!access?.paid;
   row.classList.toggle('on', paid);
+  $('profCrown').hidden = !paid;
   buy.hidden = paid || !access?.payable;
   // строка молчит, когда рядом стоит кнопка покупки: она и так всё говорит
   let text = '';
@@ -2963,6 +2966,9 @@ const CLOCK_TOP = 352;      // верх цифр у обычных часов
 const CLOCK_PX = 300;       // их кегль
 const CLOCK_WIDE = 0.22;    // растянутые часы ещё и шире
 const CLOCK_TALL = 2.85;    // предел растяжки по высоте, как в iOS 26
+// значки фонарика и камеры внизу экрана блокировки (поле 24×24)
+const TORCH = new Path2D('M8.6 3h6.8v3.4l-1.6 2.4V20a1 1 0 0 1-1 1h-1.6a1 1 0 0 1-1-1V8.8L8.6 6.4z');
+const CAMERA = new Path2D('M4 8.2a1.6 1.6 0 0 1 1.6-1.6h2.2L9.3 4.8h5.4l1.5 1.8h2.2A1.6 1.6 0 0 1 20 8.2v9.2a1.6 1.6 0 0 1-1.6 1.6H5.6A1.6 1.6 0 0 1 4 17.4zM15.4 12.8a3.4 3.4 0 1 1-6.8 0a3.4 3.4 0 1 1 6.8 0z');
 
 let chromeOn = true, clockH = 1;
 try {
@@ -3105,7 +3111,20 @@ function drawChrome() {
   ctx.closePath();
   ctx.fillStyle = ink(0.72); ctx.fill();
 
-  box(W / 2 - 140, 2478, 280, 10, 5);   // полоска «домой»
+  // фонарик и камера в нижних углах — они стоят на любом экране блокировки,
+  // и точки под ними не видно. Те же мерки у setup.html (страница установки).
+  for (const [cx, glyph, rule] of [[215, TORCH, 'nonzero'], [964, CAMERA, 'evenodd']]) {
+    ctx.beginPath(); ctx.arc(cx, 2365, 75, 0, 7);
+    ctx.fillStyle = ink(0.16); ctx.fill();
+    ctx.save();
+    ctx.translate(cx - 33, 2365 - 33);
+    ctx.scale(2.75, 2.75);
+    ctx.fillStyle = ink(0.92);
+    ctx.fill(glyph, rule);
+    ctx.restore();
+  }
+
+  box(W / 2 - 201, 2517, 402, 15, 7.5);   // полоска «домой»
   ctx.fillStyle = ink(0.55); ctx.fill();
   ctx.restore();
 }

@@ -24,7 +24,7 @@
     document.head.appendChild(meta);
   })();
 </script>
-<link rel="stylesheet" href="/static/style.css?v=118">
+<link rel="stylesheet" href="/static/style.css?v=119">
 </head>
 <body class="login-page">
 
@@ -53,6 +53,12 @@
 
   <form class="login-form" id="authForm" novalidate>
     <div class="login-step" id="stepEntry">
+      <label class="field" id="tagRow">Тег
+        <span class="tag-wrap"><i aria-hidden="true">@</i><input id="authTag" maxlength="24"
+          autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false"
+          placeholder="твой_ник"></span>
+        <span class="tag-hint" id="tagHint">латиница, цифры и _ — по нему тебя найдут</span>
+      </label>
       <label class="field">Почта
         <input id="authEmail" type="email" inputmode="email" autocomplete="email"
           spellcheck="false" placeholder="you@mail.ru">
@@ -69,6 +75,16 @@
             </svg>
           </button>
         </span>
+      </label>
+    </div>
+
+    <div class="login-step" id="stepTag" hidden>
+      <p class="login-lead">Последний шаг — придумай тег. По нему тебя найдут в Vita.</p>
+      <label class="field">Тег
+        <span class="tag-wrap"><i aria-hidden="true">@</i><input id="authTag2" maxlength="24"
+          autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false"
+          placeholder="твой_ник"></span>
+        <span class="tag-hint" id="tagHint2">латиница, цифры и _</span>
       </label>
     </div>
 
@@ -117,8 +133,8 @@
   <a class="login-help" href="mailto:{{SUPPORT}}">Помощь</a>
 </footer>
 
-<script src="/static/vita-id.js?v=9"></script>
-<script src="/static/tg-login.js?v=4"></script>
-<script src="/static/login.js?v=4"></script>
+<script src="/static/vita-id.js?v=10"></script>
+<script src="/static/tg-login.js?v=5"></script>
+<script src="/static/login.js?v=5"></script>
 </body>
 </html>

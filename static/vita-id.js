@@ -168,8 +168,8 @@
     return data;
   }
 
-  const register = (email, password) =>
-    authPost('register', { email, password }, 'Не получилось зарегистрироваться');
+  const register = (email, password, handle) =>
+    authPost('register', { email, password, handle }, 'Не получилось зарегистрироваться');
   const login = (email, password) =>
     authPost('login', { email, password }, 'Не получилось войти');
   const forgot = email =>

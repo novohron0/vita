@@ -26,10 +26,38 @@ with tempfile.TemporaryDirectory(prefix="vita-auth-") as data_dir:
 
     # --- регистрация закрепляет за почтой тот профиль, что уже есть в браузере ---
     before = main.ensure_profile(main.ProfileIn(ownerToken=browser))
+
+    # --- без тега аккаунт не заводится: тег выбирают при регистрации ---
+    for tag, code in (("", 422), ("@", 422), ("12kot", 422), ("kam", 409), ("vita", 409)):
+        try:
+            main.auth_register(main.AuthIn(
+                email="Kot@Primer.RU", password="tochki123", ownerToken=browser, handle=tag))
+            raise AssertionError(f"завели аккаунт с тегом {tag!r}")
+        except HTTPException as error:
+            assert error.status_code == code, (tag, error.status_code)
+    with main.db() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM profile_auth").fetchone()[0] == 0, \
+            "отказ по тегу всё равно завёл аккаунт"
+
     reg = body(main.auth_register(main.AuthIn(
-        email="Kot@Primer.RU", password="tochki123", ownerToken=browser)))
+        email="Kot@Primer.RU", password="tochki123", ownerToken=browser, handle="@Kot_Vita")))
     assert reg["profile"]["code"] == before["code"], "регистрация увела в чужой профиль"
     assert len(reg["token"]) >= 40, "не выдан ключ устройства"
+    # выбор при регистрации не тратит замену: сменить тег можно ещё раз
+    assert reg["profile"]["handle"] == "kot_vita", reg["profile"]["handle"]
+    assert reg["profile"]["handleChosen"] is True
+    assert reg["profile"]["handleLeft"] == 1 and not reg["profile"]["handleLocked"]
+
+    # чужой занятый тег не отдают, и почта на отказе не занимается
+    try:
+        main.auth_register(main.AuthIn(
+            email="drug@primer.ru", password="tochki123", ownerToken="d" * 40, handle="KOT_VITA"))
+        raise AssertionError("отдали занятый тег")
+    except HTTPException as error:
+        assert error.status_code == 409, error.status_code
+    with main.db() as conn:
+        assert conn.execute(
+            "SELECT 1 FROM profile_auth WHERE email = 'drug@primer.ru'").fetchone() is None
 
     # почта приводится к нижнему регистру, иначе один человек заведёт два аккаунта
     with main.db() as conn:
@@ -39,7 +67,7 @@ with tempfile.TemporaryDirectory(prefix="vita-auth-") as data_dir:
     # --- та же почта второй раз не проходит ---
     try:
         main.auth_register(main.AuthIn(
-            email="kot@primer.ru", password="tochki123", ownerToken="f" * 40))
+            email="kot@primer.ru", password="tochki123", ownerToken="f" * 40, handle="kot_dva"))
         raise AssertionError("почту дали занять дважды")
     except HTTPException as error:
         assert error.status_code == 409, error.status_code
@@ -47,15 +75,15 @@ with tempfile.TemporaryDirectory(prefix="vita-auth-") as data_dir:
     # --- и к одному профилю нельзя привязать вторую почту ---
     try:
         main.auth_register(main.AuthIn(
-            email="vtoraya@primer.ru", password="tochki123", ownerToken=browser))
+            email="vtoraya@primer.ru", password="tochki123", ownerToken=browser, handle="kot_tri"))
         raise AssertionError("к профилю привязали вторую почту")
     except HTTPException as error:
         assert error.status_code == 409, error.status_code
 
     # --- слабый пароль и кривая почта ---
     for bad in (
-        main.AuthIn(email="novy@primer.ru", password="123", ownerToken="a" * 40),
-        main.AuthIn(email="ne-pochta", password="tochki123", ownerToken="a" * 40),
+        main.AuthIn(email="novy@primer.ru", password="123", ownerToken="a" * 40, handle="novy"),
+        main.AuthIn(email="ne-pochta", password="tochki123", ownerToken="a" * 40, handle="novy"),
     ):
         try:
             main.auth_register(bad)
