@@ -124,7 +124,7 @@ document.getElementById('runBtn').addEventListener('click', markShortcut);
 // человек сразу видел, как обои уживутся с тем, что айфон рисует сам. Мерки
 // те же, что у слоя айфона в конструкторе (drawChrome в app.js): меняешь
 // там — поменяй и тут. Растяжку часов берём ту, что выставил человек.
-const LOCK = { W: 1179, H: 2556, CLOCK_TOP: 352, CLOCK_PX: 300, CLOCK_WIDE: 0.22, CLOCK_TALL: 2.85 };
+const LOCK = { W: 1179, H: 2556, CLOCK_TOP: 345, CLOCK_PX: 356, CLOCK_H: 260, CLOCK_WIDE: 0.16, CLOCK_TALL: 3.04 };
 const LOCK_FACE = '-apple-system, "SF Pro Display", system-ui, sans-serif';
 const TORCH = new Path2D('M8.6 3h6.8v3.4l-1.6 2.4V20a1 1 0 0 1-1 1h-1.6a1 1 0 0 1-1-1V8.8L8.6 6.4z');
 const CAMERA = new Path2D('M4 8.2a1.6 1.6 0 0 1 1.6-1.6h2.2L9.3 4.8h5.4l1.5 1.8h2.2A1.6 1.6 0 0 1 20 8.2v9.2a1.6 1.6 0 0 1-1.6 1.6H5.6A1.6 1.6 0 0 1 4 17.4zM15.4 12.8a3.4 3.4 0 1 1-6.8 0a3.4 3.4 0 1 1 6.8 0z');
@@ -163,36 +163,34 @@ function paintLock() {
   const now = new Date();
 
   // дата одной строкой
-  const day = now.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
-  c.font = font(46);
+  const day = now.toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric' });
+  c.font = font(60, 600);
   c.textAlign = 'center';
   c.textBaseline = 'middle';
   c.fillStyle = ink(0.88);
-  c.fillText(day.charAt(0).toUpperCase() + day.slice(1), LOCK.W / 2, 282);
+  c.fillText(day.charAt(0).toUpperCase() + day.slice(1), LOCK.W / 2, 236);
 
   // часы: тянутся вниз, верх стоит на месте — как clockGeom в конструкторе
   const time = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
   const t = (tall - 1) / LOCK.CLOCK_TALL;
   const px = LOCK.CLOCK_PX * (1 + LOCK.CLOCK_WIDE * t), w8 = Math.round(500 + 260 * t);
   c.textBaseline = 'alphabetic';
-  c.font = font(LOCK.CLOCK_PX, 500);
-  const asc0 = c.measureText('00:00').actualBoundingBoxAscent || LOCK.CLOCK_PX * 0.72;
   c.font = font(px, w8);
-  const asc = c.measureText('00:00').actualBoundingBoxAscent || px * 0.72;
+  const asc = c.measureText('00:00').actualBoundingBoxAscent || px * 0.73;
   c.save();
   c.translate(LOCK.W / 2, LOCK.CLOCK_TOP);
-  c.scale(1, asc0 * tall / asc);
+  c.scale(1, LOCK.CLOCK_H * tall / asc);
   c.fillStyle = ink(0.62);
   c.fillText(time, 0, asc);
   c.restore();
 
   // фонарик и камера в нижних углах, полоска «домой» между ними
-  for (const [cx, glyph, rule] of [[215, TORCH, 'nonzero'], [964, CAMERA, 'evenodd']]) {
-    c.beginPath(); c.arc(cx, 2365, 75, 0, 7);
+  for (const [cx, glyph, rule] of [[225, TORCH, 'nonzero'], [954, CAMERA, 'evenodd']]) {
+    c.beginPath(); c.arc(cx, 2322, 86, 0, 7);
     c.fillStyle = ink(0.16); c.fill();
     c.save();
-    c.translate(cx - 33, 2365 - 33);
-    c.scale(2.75, 2.75);
+    c.translate(cx - 66, 2322 - 66);
+    c.scale(5.5, 5.5);
     c.fillStyle = ink(0.92);
     c.fill(glyph, rule);
     c.restore();

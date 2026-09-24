@@ -2962,10 +2962,14 @@ const PLACE_COLS = {
 // не уезжает, поэтому и живёт отдельно от state.place.
 const CHROME_FACE = '-apple-system, "SF Pro Display", system-ui, sans-serif';
 const chromeFont = (px, w = 500) => `${w} ${Math.round(px)}px ${CHROME_FACE}`;
-const CLOCK_TOP = 352;      // верх цифр у обычных часов
-const CLOCK_PX = 300;       // их кегль
-const CLOCK_WIDE = 0.22;    // растянутые часы ещё и шире
-const CLOCK_TALL = 2.85;    // предел растяжки по высоте, как в iOS 26
+// Мерки сняты 24.09.2026 со скринов редактора экрана блокировки владельца
+// (iOS 26): верх цифр на 345, высота 260, «11:39» шириной 838; растянутые до
+// упора — высота 1051 (низ на 55 % экрана) и ширина 1033.
+const CLOCK_TOP = 345;      // верх цифр у обычных часов
+const CLOCK_PX = 356;       // их кегль: SF Pro Display 500 даёт ровно 260 в высоту
+const CLOCK_H = 260;        // высота цифр у обычных часов (айфон 15 Pro, 1179×2556)
+const CLOCK_WIDE = 0.16;    // растянутые часы ещё и шире
+const CLOCK_TALL = 3.04;    // предел растяжки по высоте, как в iOS 26
 // значки фонарика и камеры внизу экрана блокировки (поле 24×24)
 const TORCH = new Path2D('M8.6 3h6.8v3.4l-1.6 2.4V20a1 1 0 0 1-1 1h-1.6a1 1 0 0 1-1-1V8.8L8.6 6.4z');
 const CAMERA = new Path2D('M4 8.2a1.6 1.6 0 0 1 1.6-1.6h2.2L9.3 4.8h5.4l1.5 1.8h2.2A1.6 1.6 0 0 1 20 8.2v9.2a1.6 1.6 0 0 1-1.6 1.6H5.6A1.6 1.6 0 0 1 4 17.4zM15.4 12.8a3.4 3.4 0 1 1-6.8 0a3.4 3.4 0 1 1 6.8 0z');
@@ -3025,19 +3029,23 @@ function chromeInk(c = ctx) {
 
 // Часы: ползунок тянет их вверх ровно так, как это делает айфон — цифры
 // становятся выше и немного шире, а верх остаётся на месте.
+// На часах — сейчашнее время, как на айфоне: «00:00» шире почти любого
+// настоящего времени, и растянутые до упора часы вылезали за края.
+const clockText = () => new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+
 function clockGeom() {
   const t = Math.min(1, Math.max(0, (clockH - 1) / CLOCK_TALL));
   const px = CLOCK_PX * (1 + CLOCK_WIDE * t);
   const w8 = Math.round(500 + 260 * t);
   ctx.save();
   ctx.textBaseline = 'alphabetic';   // мерка ascent считается от текущей линии
-  ctx.font = chromeFont(CLOCK_PX, 500);
-  const asc0 = ctx.measureText('00:00').actualBoundingBoxAscent || CLOCK_PX * 0.72;
   ctx.font = chromeFont(px, w8);
-  const m = ctx.measureText('00:00');
+  const m = ctx.measureText(clockText());
   ctx.restore();
-  const asc = m.actualBoundingBoxAscent || px * 0.72;
-  const h = asc0 * clockH;
+  const asc = m.actualBoundingBoxAscent || px * 0.73;
+  // высоту берём из мерки айфона, а не из шрифта: где нет SF, цифры другой
+  // высоты, а часы всё равно должны встать ровно туда, куда их ставит iOS
+  const h = CLOCK_H * clockH;
   return { px, w8, asc, ky: h / asc, w: m.width, h, top: CLOCK_TOP };
 }
 
@@ -3056,22 +3064,25 @@ function drawChrome() {
   // дата с погодой одной строкой, как на экране блокировки
   const day = new Date().toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric' });
   const left = day.charAt(0).toUpperCase() + day.slice(1), right = '14°';
-  ctx.font = chromeFont(46, 500);
+  ctx.font = chromeFont(60, 600);
   const wL = ctx.measureText(left).width, wR = ctx.measureText(right).width;
-  const gap = 18, cloudW = 54;
+  const gap = 22, cloudW = 66, dy = 236;
   let x = (W - (wL + gap + cloudW + gap + wR)) / 2;
   ctx.fillStyle = ink(0.88);
   ctx.textBaseline = 'middle';
-  ctx.fillText(left, x, 282);
+  ctx.fillText(left, x, dy);
   x += wL + gap;
-  ctx.beginPath();                       // облачко: три шапки на общем основании
-  ctx.arc(x + 20, 281, 13, 0, 7);
-  ctx.arc(x + 34, 285, 10, 0, 7);
-  ctx.arc(x + 12, 288, 9, 0, 7);
-  ctx.roundRect(x + 4, 283, 44, 14, 7);
-  ctx.fillStyle = ink(0.88);
+  ctx.save();                            // облачко: три шапки на общем основании
+  ctx.translate(x, dy - 1);
+  ctx.scale(1.22, 1.22);
+  ctx.beginPath();
+  ctx.arc(20, -1, 13, 0, 7);
+  ctx.arc(34, 3, 10, 0, 7);
+  ctx.arc(12, 6, 9, 0, 7);
+  ctx.roundRect(4, 1, 44, 14, 7);
   ctx.fill();
-  ctx.fillText(right, x + cloudW + gap, 282);
+  ctx.restore();
+  ctx.fillText(right, x + cloudW + gap, dy);
 
   // часы
   const g = clockGeom();
@@ -3082,43 +3093,42 @@ function drawChrome() {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = ink(0.62);
-  ctx.fillText('00:00', 0, g.asc);
+  ctx.fillText(clockText(), 0, g.asc);
   ctx.restore();
 
   // виджеты снизу: список слева и две круглые кнопки справа
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
-  box(84, 1958, 500, 220, 46); ctx.fillStyle = ink(0.14); ctx.fill();
-  ctx.lineWidth = 5;
-  for (const [cy, barW] of [[2018, 260], [2118, 302]]) {
-    ctx.beginPath(); ctx.arc(146, cy, 24, 0, 7);
+  ctx.lineWidth = 4;
+  for (const [cy, barW] of [[1962, 300], [2047, 300]]) {
+    ctx.beginPath(); ctx.arc(125, cy, 18, 0, 7);
     ctx.strokeStyle = ink(0.5); ctx.stroke();
-    box(190, cy - 14, barW, 28, 14); ctx.fillStyle = ink(0.5); ctx.fill();
+    box(180, cy - 13, barW, 26, 13); ctx.fillStyle = ink(0.5); ctx.fill();
   }
-  for (const cx of [712, 960]) {
-    ctx.beginPath(); ctx.arc(cx, 2068, 104, 0, 7);
+  for (const cx of [725, 995]) {
+    ctx.beginPath(); ctx.arc(cx, 2005, 87, 0, 7);
     ctx.fillStyle = ink(0.14); ctx.fill();
   }
-  ctx.strokeStyle = ink(0.72);          // будильник
-  ctx.lineWidth = 6;
-  ctx.beginPath(); ctx.arc(712, 2042, 32, 0, 7); ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(712, 2024); ctx.lineTo(712, 2042); ctx.lineTo(726, 2042);
-  ctx.stroke();
-  box(672, 2094, 80, 20, 10); ctx.fillStyle = ink(0.5); ctx.fill();
   ctx.beginPath();                      // воспроизведение
-  ctx.moveTo(942, 2042); ctx.lineTo(942, 2094); ctx.lineTo(986, 2068);
+  ctx.moveTo(706, 1976); ctx.lineTo(706, 2034); ctx.lineTo(754, 2005);
   ctx.closePath();
   ctx.fillStyle = ink(0.72); ctx.fill();
+  ctx.strokeStyle = ink(0.72);          // будильник
+  ctx.lineWidth = 6;
+  ctx.beginPath(); ctx.arc(995, 1984, 24, 0, 7); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(995, 1970); ctx.lineTo(995, 1984); ctx.lineTo(1006, 1984);
+  ctx.stroke();
+  box(955, 2022, 80, 18, 9); ctx.fillStyle = ink(0.5); ctx.fill();
 
   // фонарик и камера в нижних углах — они стоят на любом экране блокировки,
   // и точки под ними не видно. Те же мерки у setup.html (страница установки).
-  for (const [cx, glyph, rule] of [[215, TORCH, 'nonzero'], [964, CAMERA, 'evenodd']]) {
-    ctx.beginPath(); ctx.arc(cx, 2365, 75, 0, 7);
+  for (const [cx, glyph, rule] of [[225, TORCH, 'nonzero'], [954, CAMERA, 'evenodd']]) {
+    ctx.beginPath(); ctx.arc(cx, 2322, 86, 0, 7);
     ctx.fillStyle = ink(0.16); ctx.fill();
     ctx.save();
-    ctx.translate(cx - 33, 2365 - 33);
-    ctx.scale(2.75, 2.75);
+    ctx.translate(cx - 66, 2322 - 66);
+    ctx.scale(5.5, 5.5);
     ctx.fillStyle = ink(0.92);
     ctx.fill(glyph, rule);
     ctx.restore();
