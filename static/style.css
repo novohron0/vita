@@ -1081,7 +1081,6 @@ html.gate body { min-height: 100dvh; }
 /* На установке обои показываются в том же корпусе, что и на главной: человек
    должен узнать свой телефон, а не увидеть вырезанную картинку. */
 .phone-still { width: 208px; align-self: center; }
-.phone-still .wp-preview { display: block; width: 100%; height: auto; border: 0; border-radius: 45px; }
 .step {
   display: flex;
   gap: 14px;
@@ -3806,15 +3805,42 @@ body.dim .phone-glow { opacity: 0; }
 .tag-hint.err { color: #ff6b81; }
 .login-lead { margin: 0; color: var(--text-2); font-size: 15px; line-height: 1.45; text-align: center; }
 
-/* Установка: поверх картинки — экран блокировки (дата, часы, фонарик, камера) */
-.phone-still .lock-ui {
-  position: absolute;
-  inset: 9px;
-  width: calc(100% - 18px);
-  height: calc(100% - 18px);
+/* Установка: разблокировка на экране телефона. Снизу — «Домой» (обои,
+   тень поверх них, иконки), сверху — лист блокировки с обоями и слоем айфона.
+   Лист уезжает вверх, как под пальцем; двигает его скрипт в setup.html.
+   Без скрипта виден экран блокировки — как было. */
+.phone .unlock {
+  position: relative;
+  z-index: 1;                     /* под «островом», над свечением */
+  isolation: isolate;
+  aspect-ratio: 1179 / 2556;      /* место под экран есть ещё до загрузки картинок */
+  overflow: hidden;
   border-radius: 45px;
+  clip-path: inset(0 round 45px); /* сафари режет и слои, которые двигает видеокарта */
+  background: #000;
+}
+.phone .unlock > *,
+.phone .unlock-sheet > * {
+  position: absolute;
+  inset: 0;
+  z-index: auto;
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
   pointer-events: none;
 }
+.phone .unlock img { object-fit: cover; }
+.phone .unlock-home-bg { transform: scale(1.07); }
+.phone .unlock-dim { background: #000; opacity: .5; }
+.phone .unlock-sheet {
+  background: #000;
+  box-shadow: 0 22px 56px rgba(0, 0, 0, 0.55);
+}
+.phone .unlock.run .unlock-sheet,
+.phone .unlock.run .unlock-top { will-change: transform, opacity; }
+.phone .unlock.run .unlock-home-bg { will-change: transform; }
 .setup .access:empty { display: none; }
 .auto-path { line-height: 1.6; }
 .prof-tag > i { display: inline-flex; align-items: center; color: var(--text); font-size: 15px; }

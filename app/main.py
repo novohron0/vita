@@ -2557,6 +2557,9 @@ def setup_page(code: str, request: Request):
     _, fetches, review_at, owner_code = row
     base = str(request.base_url).rstrip("/")
     url = base + f"/w/{code}.png"
+    # картинки для самой страницы (блокировка и «Домой» в анимации) — с view=1:
+    # просмотр страницы не скачивание, счётчик ярлыка он не трогает
+    view_url, home_url = url + "?view=1", url + "?home=1&view=1"
     # в ярлык отдаём постоянный адрес: сделал новый дизайн — нажал «Поставить»,
     # и ночная копия ярлыка принесёт его сама, без перенастройки автоматизации
     wall_url = base + f"/w/{wall}.png" if wall else url
@@ -2591,7 +2594,8 @@ def setup_page(code: str, request: Request):
     return HTMLResponse(
         html.replace("{{WALL_URL}}", wall_url)
         .replace("{{OWNED}}", "1" if wall else "")
-        .replace("{{URL}}", url)
+        .replace("{{HOME_URL}}", home_url)
+        .replace("{{URL}}", view_url)
         .replace("{{SHORTCUT_BTN}}", btn)
         .replace("{{ACCESS}}", access)
         .replace("{{BUY}}", buy)
@@ -2646,18 +2650,20 @@ def _wallpaper_png(config: str, until: date | None, day: date, home: bool = Fals
 
 
 @app.get("/w/{code}.png")
-def wallpaper(code: str, home: int = 0):
+def wallpaper(code: str, home: int = 0, view: int = 0):
     """Картинка обоев. Код дизайна и постоянный адрес профиля — один и тот же путь.
 
     По постоянному адресу отдаём дизайн, который человек выбрал последним:
     ссылка в ярлыке настраивается один раз, а «Поставить» на сайте меняет вид.
+    view=1 — картинку показывает сама страница установки: такое скачивание не
+    считаем, иначе по fetches и last_fetch не понять, ходил ли за обоями ярлык.
     """
     with db() as conn:
         row = _link_for_wall(conn, code)
         effective_until = (
             _effective_access_until(conn, row[2], row[3]) if row is not None else None
         )
-        if row is not None:
+        if row is not None and not view:
             conn.execute(
                 "UPDATE links SET fetches = fetches + 1, last_fetch = datetime('now') WHERE code = ?",
                 (row[0],),
