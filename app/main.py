@@ -3,6 +3,7 @@ import io
 import hashlib
 import hmac
 import json
+import mimetypes
 import os
 import re
 import secrets
@@ -26,6 +27,12 @@ from PIL import Image, ImageOps
 
 from . import billing
 from .render import SHAPES, home_cfg, place_cfg, render_goal, render_home, render_wallpaper
+
+# В тонком образе python нет /etc/mime.types, и статика в webp и шрифтах уходила
+# как application/octet-stream (да ещё при nosniff). Браузеры такие картинки и
+# шрифты узнают и сами, но угадывать им незачем — тип отдаём честный.
+for _mime, _ext in (("image/webp", ".webp"), ("font/woff2", ".woff2"), ("font/woff", ".woff")):
+    mimetypes.add_type(_mime, _ext)
 
 ROOT = Path(__file__).resolve().parent.parent
 # VITA_DATA — переопределение каталога данных (dev/тесты не трогают боевую БД)
