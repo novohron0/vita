@@ -234,6 +234,47 @@ const lum = hx => {
   return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
 };
 
+// Сцены-фоны приходят готовыми картинками с того же рисунка, что у сервера
+// (scripts/scene-images.py). Свой рисунок в браузере стоил 30–165 мс на каждый
+// тап по фону, и в памяти держались только две сцены. Картинки грузим заранее,
+// когда страница освободится; не успела прийти — пока лежит ровный цвет сцены,
+// не пришла вовсе — рисуем сцену сами, как раньше.
+const SCENE_IMG_V = 1;
+const sceneImgs = {};
+function sceneImg(key) {
+  let im = sceneImgs[key];
+  if (im) return im;
+  im = sceneImgs[key] = new Image();
+  im.decoding = 'async';
+  im.src = `/static/img/scenes/${key}.webp?v=${SCENE_IMG_V}`;
+  (im.decode ? im.decode() : new Promise((ok, no) => { im.onload = ok; im.onerror = no; }))
+    .then(() => {
+      im.ready = true;
+      if (state.bg !== key) return;
+      animKey = '';          // слои анимации и цвет значков собирались на заглушке
+      inkCache.clear();
+      draw();
+    })
+    .catch(() => {
+      im.failed = true;
+      if (state.bg === key) draw();
+    });
+  return im;
+}
+function preloadScenes() {
+  // по одной, чтобы не спорить за сеть с тем, что нужно странице сейчас
+  const left = VitaScenes.SCENES.filter(k => !sceneImgs[k]);
+  if (!left.length) return;
+  const im = sceneImg(left[0]);
+  const next = () => setTimeout(preloadScenes, 120);
+  if (im.complete) next(); else { im.addEventListener('load', next, { once: true }); im.addEventListener('error', next, { once: true }); }
+}
+// сцены-фоны — заранее, когда страница уже встала и сеть свободна
+{
+  const idle = () => (window.requestIdleCallback || (f => setTimeout(f, 1500)))(preloadScenes, { timeout: 4000 });
+  if (document.readyState === 'complete') idle(); else addEventListener('load', idle, { once: true });
+}
+
 // фон: сплошной цвет, сцена или своё фото (cover-crop 1:1 с render.py)
 function paintBG(c) {
   if (state.bg === 'owncolor') {
@@ -252,7 +293,13 @@ function paintBG(c) {
     return;
   }
   if (VitaScenes.SCENES.includes(state.bg)) {
-    c.drawImage(VitaScenes.scene(state.bg), 0, 0, W, H);
+    const im = sceneImg(state.bg);
+    if (im.ready) c.drawImage(im, 0, 0, W, H);
+    else if (im.failed) c.drawImage(VitaScenes.scene(state.bg), 0, 0, W, H);
+    else {
+      c.fillStyle = VitaScenes.SCENE_BASE[state.bg] || '#000';
+      c.fillRect(0, 0, W, H);
+    }
     return;
   }
   const key = state.bg, base = BGS[key], stops = SCENE_GRADS[key];
@@ -570,7 +617,52 @@ function classicDot(c, x, y, d, color, mode = 'filled', pulse = 0, isLead = fals
   }
 }
 
+// Штамп точки. Стеклянная точка — шесть градиентов и два клипа, у «тона» —
+// сотня крошечных кружков; в «Жизни» таких точек 4680, и кадр стоил от 30 до
+// 185 мс, а смена темы или режима с каждым тапом дёргала экран. Мелкие точки
+// одного вида одинаковы: рисуем такую один раз в маленькую канву и дальше
+// только штампуем. Штампов по четыре на пиксель в каждую сторону — точка
+// встаёт с точностью до восьмой доли пикселя, и ряды не гуляют. Крупные точки
+// (их на экране десятки) рисуются как раньше. false — штамп не подошёл.
+const dotSprites = new Map();
+function stampDot(c, x, y, d, key, pad, paint) {
+  const t = c.getTransform();
+  const k = t.a;
+  if (t.b || t.c || Math.abs(t.d - k) > 1e-9 || k <= 0 || d * k > 64) return false;
+  const X = x * k + t.e, Y = y * k + t.f;
+  let ix = Math.floor(X), iy = Math.floor(Y);
+  let fx = Math.round((X - ix) * 4), fy = Math.round((Y - iy) * 4);
+  if (fx === 4) { fx = 0; ix++; }
+  if (fy === 4) { fy = 0; iy++; }
+  const id = `${key}|${(d * k).toFixed(2)}|${fx}${fy}`;
+  let sprite = dotSprites.get(id);
+  if (!sprite) {
+    const px = Math.ceil(pad * k) + 2;
+    sprite = document.createElement('canvas');
+    sprite.width = sprite.height = Math.ceil(d * k) + 2 * px + 1;
+    const sc = sprite.getContext('2d');
+    sc.setTransform(k, 0, 0, k, px + fx / 4, px + fy / 4);
+    paint(sc);
+    sprite.pad = px;
+    if (dotSprites.size > 240) dotSprites.clear();
+    dotSprites.set(id, sprite);
+  }
+  c.setTransform(1, 0, 0, 1, 0, 0);
+  c.drawImage(sprite, ix - sprite.pad, iy - sprite.pad);
+  c.setTransform(t);
+  return true;
+}
+
+// Дышащая «сегодняшняя» (с ореолом) и фигурные формы — всегда рисунком.
 function glassDot(c, x, y, d, color, mode = 'filled', pulse = 0, i = 0) {
+  if ((pulse > 0 && mode === 'ring') || NEW_SHAPES.has(state.shape)
+      || !stampDot(c, x, y, d, `glass|${state.shape}|${mode}|${color}`, Math.max(2, d * 0.09),
+        sc => glassDotDraw(sc, 0, 0, d, color, mode, 0, 0))) {
+    glassDotDraw(c, x, y, d, color, mode, pulse, i);
+  }
+}
+
+function glassDotDraw(c, x, y, d, color, mode = 'filled', pulse = 0, i = 0) {
   const cx = x + d / 2, cy = y + d / 2;
   const [cr, cg, cb] = rgb(color);
   // ромашка и ёлка выходят за коробку точки — заливки тянем с запасом
@@ -636,7 +728,11 @@ function glassDot(c, x, y, d, color, mode = 'filled', pulse = 0, i = 0) {
 function drawDot(c, x, y, d, color, mode, pulse = 0, isLead = false, i = 0) {
   const bgHex = effectiveBgHex();
   if (state.shape === 'tone') {
-    VitaScenes.tone(c, x, y, d, color, VitaScenes.toneInk(bgHex, color), mode, isLead ? 1 : pulse);
+    const ink = VitaScenes.toneInk(bgHex, color), p = isLead ? 1 : pulse;
+    if ((p > 0 && mode === 'ring')
+        || !stampDot(c, x, y, d, `tone|${mode}|${color}|${ink}`, 2, sc => VitaScenes.tone(sc, 0, 0, d, color, ink, mode, 0))) {
+      VitaScenes.tone(c, x, y, d, color, ink, mode, p);
+    }
     return;
   }
   if (state.shape === 'ink' && mode === 'ring') {   // «сегодня» у туши — энсо
@@ -655,10 +751,13 @@ function drawDot(c, x, y, d, color, mode, pulse = 0, isLead = false, i = 0) {
 function drawStats(statDone, total) {
   const fmt = n => n.toLocaleString('ru-RU');
   const [l1, l2] = STAT_LABELS[state.mode];
-  $('stat1').textContent = fmt(statDone);
-  $('stat1l').textContent = l1;
-  $('stat2').textContent = fmt(total - statDone);
-  $('stat2l').textContent = l2;
+  // пишем, только если поменялось: запись текста пересчитывает раскладку, а
+  // draw идёт и на каждом вдохе «сегодняшней» точки — пятнадцать раз в секунду
+  const put = (id, v) => { const el = $(id); if (el.textContent !== v) el.textContent = v; };
+  put('stat1', fmt(statDone));
+  put('stat1l', l1);
+  put('stat2', fmt(total - statDone));
+  put('stat2l', l2);
 }
 
 function drawWallText(g, text, total, statDone) {
@@ -1089,7 +1188,7 @@ const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 let revealRAF = null, fillRAF = null;
 function animateReveal(dur = 1150) {
   cancelAnimationFrame(revealRAF);
-  cancelAnimationFrame(pulseRAF);
+  stopPulse();
   cancelAnimationFrame(fillRAF);
   if (reduceMotion || homeOn || (!DEMO && counts().done <= 0)) { draw(); startPulse(); return; }
   const fast = animLayersReady();
@@ -1105,21 +1204,31 @@ function animateReveal(dur = 1150) {
 }
 
 // «сегодняшняя» точка-кольцо мягко дышит — сразу видно, что обои живые
-let pulseRAF = null, pulseLast = 0;
-function startPulse() {
+let pulseRAF = null, pulseTimer = 0, pulseLast = 0;
+function stopPulse() {
   cancelAnimationFrame(pulseRAF);
+  clearTimeout(pulseTimer);
+  pulseRAF = null;
+  pulseTimer = 0;
+}
+function startPulse() {
+  stopPulse();
   // на «Домой» кольца «сегодня» не видно: дышать нечему, а размывать кадр
   // пятнадцать раз в секунду — впустую жечь батарею
   if (reduceMotion || homeOn) return;
+  // ~15 кадров/с хватает. Раньше цикл просыпался на каждый кадр экрана (60,
+  // а на айфоне и 120 раз в секунду) и сам себе отвечал «рано» — теперь спит
+  // до следующего вдоха и будит кадр только тогда
   const loop = now => {
-    pulseRAF = requestAnimationFrame(loop);
-    if (document.hidden || now - pulseLast < 66) return; // ~15 кадров/с хватает
+    pulseRAF = null;
     // телефон не виден и мини-превью скрыто — не жжём батарею. Видимость
     // считает прокрутка (updateMini), а не сам кадр: getBoundingClientRect
     // заставляет браузер пересчитать раскладку, и делать это по кадрам вредно
-    if (!phoneOnScreen && !miniShown) return;
-    pulseLast = now;
-    draw(1, 0.5 + 0.5 * Math.sin(now / 620));
+    if (!document.hidden && (phoneOnScreen || miniShown)) {
+      pulseLast = now;
+      draw(1, 0.5 + 0.5 * Math.sin(now / 620));
+    }
+    pulseTimer = setTimeout(() => { pulseTimer = 0; pulseRAF = requestAnimationFrame(loop); }, 58);
   };
   pulseRAF = requestAnimationFrame(loop);
 }
@@ -1131,7 +1240,7 @@ const FILL_MIN = 8, FILL_MAX = 15, FILL_MS = 520;
 const fillLimit = () => FILL_MIN + Math.floor(Math.random() * (FILL_MAX - FILL_MIN + 1));
 function animateFill(limit, dur = FILL_MS) {
   cancelAnimationFrame(revealRAF);
-  cancelAnimationFrame(pulseRAF);
+  stopPulse();
   cancelAnimationFrame(fillRAF);
   const { done } = counts();
   const N = Math.min(done, Math.max(1, limit));
@@ -1735,11 +1844,9 @@ function pickTheme(key, redraw = true) {
   // тема встаёт сразу; по тапу рисовать нечего — сетку тут же заливает animateFill,
   // и лишний полный кадр мелькнул бы всеми точками разом
   if (redraw) draw();
-  // следующую сцену рисуем заранее, пока человек смотрит на эту
+  // следующую сцену берём заранее, пока человек смотрит на эту
   const next = THEME_ORDER[(THEME_ORDER.indexOf(key) + 1) % THEME_ORDER.length];
-  if (VitaScenes.SCENES.includes(VitaScenes.THEMES[next].bg)) {
-    (window.requestIdleCallback || (f => setTimeout(f, 400)))(() => VitaScenes.scene(VitaScenes.THEMES[next].bg));
-  }
+  if (VitaScenes.SCENES.includes(VitaScenes.THEMES[next].bg)) sceneImg(VitaScenes.THEMES[next].bg);
 }
 
 $('themes').addEventListener('click', e => {
@@ -2101,7 +2208,7 @@ async function reelPlay() {
   for (;;) {
     // сцена 0: ХУК — на чёрном набегает число «Твоя жизнь — 4 000 недель»,
     // держится и гаснет. Рифмуется со следующей фразой «Твоя жизнь — в точках».
-    cancelAnimationFrame(pulseRAF);
+    stopPulse();
     state.mode = 'month'; state.title = TITLES.month;
     state.bg = 'black'; state.color = '#f2f2f2'; state.shape = 'circle';
     phoneBox.style.transition = 'none';
@@ -2253,7 +2360,7 @@ async function reelLife() {
   if (born && /^\d{4}-\d{2}-\d{2}$/.test(born)) state.birth = born;
   const fmt = n => n.toLocaleString('ru-RU');
   for (;;) {
-    cancelAnimationFrame(pulseRAF);
+    stopPulse();
     state.mode = 'life'; state.title = TITLES.life;
     state.bg = 'black'; state.color = '#f2f2f2'; state.shape = 'square';
     // life-сетка плотная — сразу показываем весь телефон (камера не близко)
@@ -2306,7 +2413,7 @@ async function reelLife() {
     // граница прожито/осталось — гут-панч; подпись на канвасе уже её показывает
     await rafSleep(2600);
     // сцена 2: финал — тайтл про «не слей остальные»
-    cancelAnimationFrame(pulseRAF);
+    stopPulse();
     const end = document.createElement('div');
     end.className = 'reel-end';
     end.innerHTML = born
@@ -2978,7 +3085,9 @@ function chromeInk(c = ctx) {
   const key = [state.bg, state.bgColor,
     customBgImg ? customBgImg.width + 'x' + customBgImg.height : '',
     // на «Домой» фон другой: цвет, фото или размытые обои — ключ это помнит
-    homeOn ? [state.home.mode, state.home.color, state.home.blur,
+    // силу размытия — ступенями по 20 %: иначе каждый шаг ползунка читал бы
+    // пиксели с видеокарты, а цвет значков от неё почти не меняется
+    homeOn ? [state.home.mode, state.home.color, Math.round(state.home.blur / 20),
       customHomeImg ? 'photo' : ''].join(',') : ''].join('|');
   const known = inkCache.get(key);
   if (known) return known;
@@ -2995,26 +3104,95 @@ function chromeInk(c = ctx) {
 // совпадать с render.render_home, иначе превью соврёт.
 const HOME_BLUR_R = 0.9;   // 100 % — радиус 90 точек на ширину 1179
 const HOME_SHADE = 0.10;   // и картинка темнеет на десятую, как в iOS
-const homeBuf = document.createElement('canvas');
+// Холсты размытия: лесенка сжатия (видеокарта) и маленькая картинка, которую
+// читаем и размываем сами.
+const blurBufs = [document.createElement('canvas'), document.createElement('canvas')];
+const blurSmall = document.createElement('canvas');
 
-// Размытие канвы уменьшением и растяжкой. ctx.filter есть не в каждом сафари, а
-// где есть — тянет с краёв прозрачность и оставляет светлую кайму, которой у
-// Pillow нет. Уменьшение краёв не трогает и одинаково работает везде.
+// Размытие канвы — гауссово, как у сервера (Pillow). Картинку уменьшаем
+// лесенкой пополам — каждый шаг честно усредняет четыре точки, поэтому ряды
+// точек не рябят полосами, — на маленькой размываем по-настоящему (три
+// прохода «ящиком» дают Гаусса, края повторяются, как у Pillow) и растягиваем
+// обратно. Сжимаем не до предела: на маленькой картинке сигма остаётся в
+// четыре точки, и растяжка не рисует клеток. Раньше тут было одно сжатие в
+// 1,8 сигмы — на сильном размытии обои сжимались до 14×30 точек и
+// возвращались квадратами и полосами. ctx.filter не берём: его нет в старых
+// сафари, а где есть, размывает слабее обещанного и по-разному в разных
+// браузерах — свой счёт одинаков везде и совпадает с сервером.
 function blurCanvas(c, cw, ch, sigma) {
   if (sigma < 0.6) return;
-  // Шаг в 1,8 сигмы: уменьшение усредняет квадрат, растяжка добавляет свой
-  // треугольник. Множитель подобран сверкой с сервером по точкам — на силе
-  // 40 % средняя разница 5 единиц из 255, глазом не видно.
-  const f = Math.min(400, Math.max(2, sigma * 1.8));
-  const sw = Math.max(1, Math.round(cw / f)), sh = Math.max(1, Math.round(ch / f));
-  if (homeBuf.width !== sw || homeBuf.height !== sh) { homeBuf.width = sw; homeBuf.height = sh; }
-  const b = homeBuf.getContext('2d');
-  b.imageSmoothingQuality = 'high';
-  b.clearRect(0, 0, sw, sh);
-  b.drawImage(c.canvas, 0, 0, cw, ch, 0, 0, sw, sh);
+  // не мельче сигмы/4 и не крупнее 320 точек в ширину — дальше дорого
+  const f = Math.max(1, sigma / 4, cw / 320);
+  const tw = Math.max(1, Math.round(cw / f)), th = Math.max(1, Math.round(ch / f));
+  let src = c.canvas, sw = cw, sh = ch, n = 0;
+  const shrink = (w, h, b, opts) => {
+    if (b.width !== w || b.height !== h) { b.width = w; b.height = h; }
+    const bc = b.getContext('2d', opts);
+    bc.imageSmoothingEnabled = true;
+    // ровно вдвое простая выборка и есть среднее четырёх точек — «high» тут
+    // только тратил время (20 мс вместо 5); шаг больше вдвое — нужен фильтр
+    bc.imageSmoothingQuality = sw / w > 2.01 ? 'high' : 'low';
+    bc.drawImage(src, 0, 0, sw, sh, 0, 0, w, h);
+    src = b; sw = w; sh = h;
+    return bc;
+  };
+  while (sw / 2 >= tw) shrink(Math.round(sw / 2), Math.round(sh / 2), blurBufs[n++ % 2]);
+  const bc = shrink(tw, th, blurSmall, { willReadFrequently: true });
+  // вся дисперсия, кроме той, что уже дали сжатие (ящик в точку) и растяжка
+  // (треугольник в две точки): 1/12 + 1/6 = 1/4 в точках маленькой картинки
+  const s = Math.sqrt(Math.max(0, (sigma / f) ** 2 - 0.25));
+  if (s > 0.3) {
+    const img = bc.getImageData(0, 0, tw, th);
+    gaussRGB(img.data, tw, th, s);
+    bc.putImageData(img, 0, 0);
+  }
+  c.imageSmoothingEnabled = true;
   c.imageSmoothingQuality = 'high';
   c.clearRect(0, 0, cw, ch);
-  c.drawImage(homeBuf, 0, 0, sw, sh, 0, 0, cw, ch);
+  c.drawImage(blurSmall, 0, 0, tw, th, 0, 0, cw, ch);
+}
+
+// Гаусс тремя проходами «ящика» по строкам и столбцам (как GaussianBlur в
+// Pillow): ширины ящиков — по Ковеси, края повторяют крайнюю точку.
+function gaussRGB(px, w, h, sigma) {
+  const ideal = Math.sqrt(12 * sigma * sigma / 3 + 1);
+  let wl = Math.floor(ideal);
+  if (wl % 2 === 0) wl--;
+  const m = Math.round((12 * sigma * sigma - 3 * wl * wl - 12 * wl - 9) / (-4 * wl - 4));
+  const a = new Float32Array(w * h * 3), b = new Float32Array(w * h * 3);
+  for (let i = 0, j = 0; i < px.length; i += 4, j += 3) { a[j] = px[i]; a[j + 1] = px[i + 1]; a[j + 2] = px[i + 2]; }
+  for (let pass = 0; pass < 3; pass++) {
+    const r = ((pass < m ? wl : wl + 2) - 1) / 2;
+    boxLine(a, b, w, h, r, 3, w * 3);       // по строкам
+    boxLine(b, a, h, w, r, w * 3, 3);       // по столбцам
+  }
+  for (let i = 0, j = 0; i < px.length; i += 4, j += 3) { px[i] = a[j]; px[i + 1] = a[j + 1]; px[i + 2] = a[j + 2]; }
+}
+
+// Ящик радиуса r вдоль линий длиной len: step — шаг между точками линии,
+// stride — между линиями. Скользящая сумма сразу по трём цветам, края
+// повторяют крайнюю точку.
+function boxLine(src, dst, len, lines, r, step, stride) {
+  const inv = 1 / (2 * r + 1), end = (len - 1) * step;
+  for (let l = 0; l < lines; l++) {
+    const o = l * stride;
+    const f0 = src[o], f1 = src[o + 1], f2 = src[o + 2];
+    const e0 = src[o + end], e1 = src[o + end + 1], e2 = src[o + end + 2];
+    let a0 = (r + 1) * f0, a1 = (r + 1) * f1, a2 = (r + 1) * f2;
+    for (let k = 1; k <= r; k++) {
+      const i = o + Math.min(k, len - 1) * step;
+      a0 += src[i]; a1 += src[i + 1]; a2 += src[i + 2];
+    }
+    for (let x = 0; x < len; x++) {
+      const d = o + x * step;
+      dst[d] = a0 * inv; dst[d + 1] = a1 * inv; dst[d + 2] = a2 * inv;
+      const ai = x + r + 1, si = x - r;
+      if (ai < len) { const i = o + ai * step; a0 += src[i]; a1 += src[i + 1]; a2 += src[i + 2]; }
+      else { a0 += e0; a1 += e1; a2 += e2; }
+      if (si > 0) { const i = o + si * step; a0 -= src[i]; a1 -= src[i + 1]; a2 -= src[i + 2]; }
+      else { a0 -= f0; a1 -= f1; a2 -= f2; }
+    }
+  }
 }
 
 function paintHome(c) {
